@@ -32,6 +32,9 @@
   --stanga: max(env(safe-area-inset-left, 0px), var(--safe-area-inset-left, 0px));
   --dreapta: max(env(safe-area-inset-right, 0px), var(--safe-area-inset-right, 0px));
   --tab-h: 64px;
+  /* mini-playerul: alb pe maro (contrast ≈ 7,3:1) */
+  --mini-fundal: #7a4a38;
+  --mini-text: #ffffff;
   color-scheme: light;
 }
 
@@ -51,6 +54,9 @@
     --buton: #c9483b;
     --buton-apasat: #b03c30;
     --umbra: 0 1px 2px rgba(0, 0, 0, 0.3), 0 6px 20px rgba(0, 0, 0, 0.25);
+    /* pe piersica deschisă din modul întunecat: text închis (contrast ≈ 9,4:1) */
+    --mini-fundal: #f0b796;
+    --mini-text: #2a1b14;
     color-scheme: dark;
   }
 }
@@ -528,6 +534,7 @@ a {
   color: var(--accent-2);
 }
 .pas output {
+  font-variant-numeric: lining-nums;
   min-width: 56px;
   text-align: center;
   font-family: var(--serif-2);
@@ -669,8 +676,8 @@ a {
   gap: 12px;
   padding: 8px 8px 8px 8px;
   border-radius: 20px;
-  background: var(--accent-2);
-  color: #fff;
+  background: var(--mini-fundal);
+  color: var(--mini-text);
   box-shadow: 0 8px 28px rgba(78, 61, 52, 0.28);
 }
 .mini .coperta {
@@ -703,7 +710,7 @@ a {
   font-size: 13px;
 }
 .mini .icon-buton {
-  color: #fff;
+  color: var(--mini-text);
 }
 .mini .linie {
   position: absolute;
@@ -712,13 +719,13 @@ a {
   bottom: 3px;
   height: 2px;
   border-radius: 2px;
-  background: rgba(255, 255, 255, 0.25);
+  background: color-mix(in srgb, var(--mini-text) 25%, transparent);
   overflow: hidden;
 }
 .mini .linie span {
   display: block;
   height: 100%;
-  background: #fff;
+  background: var(--mini-text);
 }
 
 /* ---- player ---- */

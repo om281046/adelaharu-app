@@ -85,7 +85,7 @@ Revocă tokenul curent. `{"ok":true}`
   }]
 }
 ```
-- Meditațiile fără acces apar (cu `poate_asculta:false`) DOAR dacă `acces=="gratuita"` sau dacă femeia are deja ceva; aplicația le arată cu lacăt și textul „Disponibilă în Inner Temple. Detalii pe adelaharu.ro.” FĂRĂ link și fără preț (regula Apple 3.1.1/3.1.3(a)).
+- Meditațiile fără acces apar (cu `poate_asculta:false`) DOAR dacă `acces=="gratuita"` sau dacă femeia are deja ceva; aplicația le arată cu lacăt și textul neutru „Această meditație nu e inclusă în accesul tău.” FĂRĂ link, fără preț și fără trimitere spre site (regula Apple 3.1.1/3.1.3(a)).
 - `noua`: publicată în ultimele 14 zile.
 
 ### `GET /meditatii/{id}/redare`
@@ -114,12 +114,14 @@ Lista din `/eu.cursuri`, cu `module_total` și `module_terminate`.
       "player":"https://www.adelaharu.ro/app/player?…",
       "fisier":"https://www.adelaharu.ro/?ah_app_media=…",
       "text":"<html simplu>",
+      "deschisa":true,
       "terminata":false
     }]
   }]
 }
 ```
 - `deschis/se_deschide_la`: respectă eliberarea pe săptămâni din sală, dacă există.
+- `lectie.deschisa`: `false` pentru lecțiile care se deschid pe rând (de ex. Wild Love); atunci `player` și `fisier` sunt `null`.
 - **Vimeo**: videourile au restricție de domeniu. De aceea aplicația NU încarcă direct `player.vimeo.com`; încarcă `player` = o pagină minimală găzduită pe adelaharu.ro (`/app/player?l=<cheie>&exp=…&sig=…`), care conține iframe-ul Vimeo (referrerul e adelaharu.ro). Semnat, valabil 6 ore, legat de email.
 - PDF/audio: `fisier` semnat ca la meditații.
 

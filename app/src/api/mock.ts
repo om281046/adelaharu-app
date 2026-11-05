@@ -47,7 +47,7 @@ const CATEGORII = [
 ];
 
 const MEDITATII: Meditatie[] = [
-  { id: 330, titlu: 'Curățarea pântecului', text: 'O meditație ghidată pentru zilele tale de răgaz, în care doar asculți și respiri. Lași să plece ce nu-ți mai folosește și faci loc pentru ce vine.', poza: '', durata: 1260, categorie: 'pantec', acces: 'abonament', poate_asculta: true, video: { tip: 'vimeo', embed: paginaVideo('Curățarea pântecului: explicația Adelei') }, pozitie: 312, noua: false },
+  { id: 330, titlu: 'Curățarea pântecului', text: 'O meditație ghidată pentru zilele tale de răgaz, în care doar asculți și respiri. Lași să plece ce nu-ți mai folosește și faci loc pentru ce vine.', poza: '', durata: 1260, categorie: 'pantec', acces: 'abonament', poate_asculta: true, video: { tip: 'vimeo', embed: paginaVideo('Curățarea pântecului: explicația Adelei') }, pozitie: 14, noua: false },
   { id: 328, titlu: 'Relaxare și reconectare cu energia feminină', text: 'Pentru toamna ta: o meditație de relaxare și reconectare cu energia feminină din corp.', poza: '', durata: 1080, categorie: 'relaxare', acces: 'abonament', poate_asculta: true, video: null, pozitie: 0, noua: false },
   { id: 401, titlu: 'Respirația care te liniștește', text: 'Zece minute de respirație lentă, pentru momentele în care simți că alergi prea repede. O poți face oriunde, cu ochii închiși.', poza: '', durata: 600, categorie: 'respiratie', acces: 'gratuita', poate_asculta: true, video: null, pozitie: 0, noua: true },
   { id: 402, titlu: 'Respirația pântecului', text: 'Cobori respirația în pântec și simți cum corpul se înmoaie. Bună dimineața sau seara, înainte de somn.', poza: '', durata: 900, categorie: 'respiratie', acces: 'abonament', poate_asculta: true, video: { tip: 'vimeo', embed: paginaVideo('Respirația pântecului: cum se face') }, pozitie: 0, noua: true },
@@ -158,7 +158,7 @@ export const apiMock: Api = {
     await asteapta(150);
     const m = MEDITATII.find((x) => x.id === id);
     if (!m) throw new ApiError('negasit', MESAJE_IMPLICITE.negasit, 404);
-    if (!m.poate_asculta) throw new ApiError('fara_acces', 'Disponibilă în Inner Temple. Detalii pe adelaharu.ro.', 403);
+    if (!m.poate_asculta) throw new ApiError('fara_acces', 'Această meditație nu e inclusă în accesul tău.', 403);
     return { url: sunetDemo(), expira: new Date(Date.now() + 6 * 3600e3).toISOString() };
   },
   async pozitie(id, secunde, terminat) {

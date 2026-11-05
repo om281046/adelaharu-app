@@ -65,7 +65,7 @@ function IcoanaTip({ tip }: { tip: TLectie['tip'] }) {
 const NUME_TIP: Record<TLectie['tip'], string> = { video: 'Video', audio: 'Audio', pdf: 'PDF', text: 'Text' };
 
 function useCurs(slug: string) {
-  return useIncarca(() => api.curs(slug), [slug], 'ah_cache_curs_' + slug);
+  return useIncarca(() => api.curs(slug), [slug], CHEI.cacheCursPrefix + slug);
 }
 
 function ModulCard({ m, slug, deschisImplicit }: { m: Modul; slug: string; deschisImplicit: boolean }) {
@@ -152,7 +152,7 @@ export function Lectie({ slug, cheie }: { slug: string; cheie: string }) {
 
   useEffect(() => {
     if (!c || !gasit) return;
-    void scrie(CHEI.ultima + '_lectie', { slug, cheie, titlu: gasit.l.titlu, curs: c.nume, la: Date.now() });
+    void scrie(CHEI.ultimaLectie, { slug, cheie, titlu: gasit.l.titlu, curs: c.nume, la: Date.now() });
   }, [c, gasit, slug, cheie]);
 
   if (!c || !gasit) {

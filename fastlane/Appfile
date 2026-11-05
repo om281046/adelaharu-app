@@ -1,0 +1,4 @@
+# Identificatorii aplicației. Echipa și cheile vin din variabile de mediu (secretele GitHub).
+app_identifier("ro.adelaharu.app")
+team_id(ENV["APPLE_TEAM_ID"]) if ENV["APPLE_TEAM_ID"]
+package_name("ro.adelaharu.app")

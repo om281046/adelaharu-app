@@ -9,7 +9,7 @@ import { mergi } from '../lib/ruta';
 import { useSesiune } from '../lib/sesiune';
 
 /** Textul din contract pentru meditațiile fără acces: FĂRĂ link și fără preț (Apple 3.1.1 / 3.1.3(a)). */
-export const TEXT_LACAT = 'Disponibilă în Inner Temple. Detalii pe adelaharu.ro.';
+export const TEXT_LACAT = 'Această meditație nu e inclusă în accesul tău.';
 
 export function useDescarcate(): Set<number> {
   const [s, setS] = useState<Set<number>>(new Set());

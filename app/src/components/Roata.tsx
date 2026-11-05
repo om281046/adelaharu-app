@@ -43,7 +43,7 @@ export function Roata({ S, u, azi }: { S: StareCiclu; u: Unde; azi: string }) {
         <text y="-14" textAnchor="middle" fontFamily="Figtree, sans-serif" fontSize="12" fontWeight="600" letterSpacing="1.6" fill="var(--accent)">
           ZIUA
         </text>
-        <text y="30" textAnchor="middle" fontFamily="Cormorant Garamond, Georgia, serif" fontSize="58" fill="var(--titlu)">
+        <text y="30" textAnchor="middle" fontFamily="Cormorant Garamond, Georgia, serif" fontSize="58" fill="var(--titlu)" style={{ fontVariantNumeric: 'lining-nums' }}>
           {u.zi}
         </text>
         <text y="54" textAnchor="middle" fontFamily="Figtree, sans-serif" fontSize="13" fill="currentColor">

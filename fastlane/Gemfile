@@ -1,0 +1,4 @@
+# Folosit cu BUNDLE_GEMFILE=fastlane/Gemfile (vezi workflow-urile din .github/workflows).
+source "https://rubygems.org"
+
+gem "fastlane", "~> 2.241"

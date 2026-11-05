@@ -49,7 +49,10 @@ function trateaza(url: string) {
   const r = analizeaza(url);
   if (r.cod) {
     if (laCod) laCod(r.cod);
-    else codInAsteptare = r.cod;
+    else {
+      codInAsteptare = r.cod;
+      window.dispatchEvent(new Event('ah-cod'));
+    }
   } else if (r.ruta) {
     mergi(r.ruta);
   }

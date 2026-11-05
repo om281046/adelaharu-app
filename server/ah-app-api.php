@@ -34,11 +34,15 @@ if ( ! defined( 'AH_APP' ) ) :
 define( 'AH_APP', 1 );
 
 define( 'AH_APP_NS', 'ah-app/v1' );
-define( 'AH_APP_VERSIUNE_TABEL', '1' );
+define( 'AH_APP_VERSIUNE_TABEL', '2' );
 define( 'AH_APP_PACHET', 'ro.adelaharu.app' );
 define( 'AH_APP_MAX_DISP', 5 );          // telefoane pe adresă (aplicația mobilă)
 define( 'AH_APP_LINK_ORE', 6 );          // cât ține un link semnat (media, player)
 define( 'AH_APP_COD_MIN', 15 );          // cât ține codul din email
+define( 'AH_APP_PUSH_LOT', 100 );         // telefoane pe lot de notificări (un eveniment cron)
+define( 'AH_APP_COD_INCERCARI', 5 );     // încercări pe un cod
+define( 'AH_APP_COD_ZI', 10 );           // încercări greșite pe adresă în 24 de ore, peste coduri
+define( 'AH_APP_MESAJ_BLOCAT_ZI', 'Ai încercat de mai multe ori un cod greșit pentru adresa aceasta. Ca să o păstrăm în siguranță, te rog să mai încerci mâine.' ); // CIORNĂ
 define( 'AH_APP_CONTACT', 'contact@adelaharu.ro' );
 
 /* ==================================================================
@@ -166,6 +170,10 @@ function ah_app_tabel_push() {
 	global $wpdb;
 	return $wpdb->prefix . 'ah_app_push';
 }
+function ah_app_tabel_coduri() {
+	global $wpdb;
+	return $wpdb->prefix . 'ah_app_coduri';
+}
 
 add_action( 'init', function () {
 	if ( get_option( 'ah_app_tabel' ) === AH_APP_VERSIUNE_TABEL ) {
@@ -207,6 +215,20 @@ add_action( 'init', function () {
 		UNIQUE KEY fcm_h (fcm_h),
 		KEY token_id (token_id),
 		KEY email (email)
+		) {$cs};"
+	);
+	// Codurile din email: un rând pe adresă. Încercările se numără atomic (UPDATE … WHERE n < 5),
+	// ca cererile trimise în paralel să nu primească fiecare încercarea ei.
+	$c = ah_app_tabel_coduri();
+	dbDelta(
+		"CREATE TABLE {$c} (
+		email varchar(190) NOT NULL,
+		hash char(64) NOT NULL DEFAULT '',
+		n tinyint(3) unsigned NOT NULL DEFAULT 0,
+		exp int(10) unsigned NOT NULL DEFAULT 0,
+		zi_n smallint(5) unsigned NOT NULL DEFAULT 0,
+		zi_start int(10) unsigned NOT NULL DEFAULT 0,
+		PRIMARY KEY  (email)
 		) {$cs};"
 	);
 	update_option( 'ah_app_tabel', AH_APP_VERSIUNE_TABEL, true );
@@ -348,44 +370,67 @@ function ah_app_revoca( $id ) {
    4. CODUL DE 6 CIFRE
    ================================================================== */
 
-function ah_app_cheie_cod( $email ) {
-	return 'ah_app_c_' . md5( $email );
-}
-
 function ah_app_hash_cod( $cod, $email ) {
 	return hash_hmac( 'sha256', (string) $cod . '|' . $email, wp_salt( 'auth' ) . 'ah_app_cod' );
 }
 
-/** Un cod nou pentru adresă (îl înlocuiește pe cel vechi). Întoarce codul în clar. */
+/**
+ * Un cod nou pentru adresă (îl înlocuiește pe cel vechi). Întoarce codul în clar.
+ * Încercările pe cod pornesc de la 0, dar cele din ultimele 24 de ore (zi_n) rămân.
+ */
 function ah_app_cod_nou( $email ) {
+	global $wpdb;
+	$t   = ah_app_tabel_coduri();
 	$cod = (string) random_int( 100000, 999999 );
-	set_transient( ah_app_cheie_cod( $email ), array( 'h' => ah_app_hash_cod( $cod, $email ), 'n' => 0, 'exp' => time() + AH_APP_COD_MIN * MINUTE_IN_SECONDS ), AH_APP_COD_MIN * MINUTE_IN_SECONDS );
+	$d   = array( 'hash' => ah_app_hash_cod( $cod, $email ), 'n' => 0, 'exp' => time() + AH_APP_COD_MIN * MINUTE_IN_SECONDS );
+	$are = $wpdb->get_row( $wpdb->prepare( "SELECT email FROM {$t} WHERE email = %s", $email ), ARRAY_A );
+	if ( $are || ! $wpdb->insert( $t, $d + array( 'email' => $email, 'zi_n' => 0, 'zi_start' => 0 ) ) ) {
+		$wpdb->update( $t, $d, array( 'email' => $email ) ); // și dacă o cerere paralelă a apucat să-l insereze
+	}
 	return $cod;
 }
 
+/** True dacă adresa a consumat cele AH_APP_COD_ZI încercări din ultimele 24 de ore. */
+function ah_app_cod_blocat( $email ) {
+	global $wpdb;
+	$r = $wpdb->get_row( $wpdb->prepare( 'SELECT zi_n, zi_start FROM ' . ah_app_tabel_coduri() . ' WHERE email = %s', $email ), ARRAY_A );
+	return $r && (int) $r['zi_start'] >= time() - DAY_IN_SECONDS && (int) $r['zi_n'] >= AH_APP_COD_ZI;
+}
+
 /**
- * Verifică codul: 'ok', 'cod_gresit' sau 'cod_expirat'.
- * La a 5-a încercare greșită codul se anulează. Comparația e în timp constant (hash_equals).
+ * Verifică codul: 'ok', 'cod_gresit', 'cod_expirat' sau 'prea_multe'.
+ * Întâi rezervă o încercare cu un singur UPDATE atomic (n < 5 pe cod, zi_n < 10 pe adresă în 24 h),
+ * abia apoi compară. Așa, cererile paralele nu pot primi mai multe încercări decât e voie.
+ * Încercarea bună șterge rândul (cu tot cu numărătoarea pe zi); a 5-a greșită anulează codul.
+ * Comparația e în timp constant (hash_equals).
  */
 function ah_app_cod_verifica( $email, $cod ) {
-	$k = ah_app_cheie_cod( $email );
-	$t = get_transient( $k );
-	if ( ! is_array( $t ) || empty( $t['exp'] ) || $t['exp'] < time() || (int) $t['n'] >= 5 ) {
-		delete_transient( $k );
+	global $wpdb;
+	$t    = ah_app_tabel_coduri();
+	$acum = time();
+	$prag = $acum - DAY_IN_SECONDS;
+	// Expresiile nu depind de ordinea atribuirilor (MySQL le face de la stânga la dreapta, SQL standard nu).
+	$rez = $wpdb->query( $wpdb->prepare(
+		"UPDATE {$t} SET n = n + 1,
+			zi_n = CASE WHEN zi_start < %d THEN 1 ELSE zi_n + 1 END,
+			zi_start = CASE WHEN zi_start < %d THEN %d ELSE zi_start END
+		WHERE email = %s AND hash <> '' AND n < %d AND exp >= %d AND ( zi_n < %d OR zi_start < %d )",
+		$prag, $prag, $acum, $email, AH_APP_COD_INCERCARI, $acum, AH_APP_COD_ZI, $prag
+	) );
+	if ( ! $rez ) {
+		return ah_app_cod_blocat( $email ) ? 'prea_multe' : 'cod_expirat';
+	}
+	$r   = $wpdb->get_row( $wpdb->prepare( "SELECT hash, n FROM {$t} WHERE email = %s", $email ), ARRAY_A );
+	$cod = preg_replace( '/\D/', '', (string) $cod );
+	if ( $r && 6 === strlen( $cod ) && hash_equals( (string) $r['hash'], ah_app_hash_cod( $cod, $email ) ) ) {
+		// O singură cerere câștigă, chiar și cu același cod trimis de două ori deodată.
+		return $wpdb->delete( $t, array( 'email' => $email, 'hash' => $r['hash'] ) ) ? 'ok' : 'cod_expirat';
+	}
+	if ( ! $r || (int) $r['n'] >= AH_APP_COD_INCERCARI ) {
+		$wpdb->update( $t, array( 'hash' => '' ), array( 'email' => $email ) ); // codul nu mai merge; zi_n rămâne
 		return 'cod_expirat';
 	}
-	$cod = preg_replace( '/\D/', '', (string) $cod );
-	if ( 6 !== strlen( $cod ) || ! hash_equals( (string) $t['h'], ah_app_hash_cod( $cod, $email ) ) ) {
-		$t['n'] = (int) $t['n'] + 1;
-		if ( $t['n'] >= 5 ) {
-			delete_transient( $k );
-			return 'cod_expirat';
-		}
-		set_transient( $k, $t, max( 60, $t['exp'] - time() ) );
-		return 'cod_gresit';
-	}
-	delete_transient( $k );
-	return 'ok';
+	return 'cod_gresit';
 }
 
 /** Emailul, în rama emailurilor din „Meditațiile mele” (snippetul 51), dacă e activ. */
@@ -705,7 +750,7 @@ function ah_app_lectii_libere( $n, $gata, $pe_rand ) {
 	return $o;
 }
 
-/** Durata în secunde din textul sălii („30 min”, „cam 2 ore și jumătate”, „1 oră”); null dacă nu se poate. */
+/** Durata în secunde din textul sălii („30 min”, „29 de minute”, „cam 2 ore și jumătate”, „o oră și 45 de minute”); null dacă nu se poate. */
 function ah_app_durata_secunde( $t ) {
 	$t = mb_strtolower( trim( (string) $t ) );
 	if ( '' === $t ) {
@@ -723,8 +768,11 @@ function ah_app_durata_secunde( $t ) {
 	if ( $gasit && false !== strpos( $t, 'jumătate' ) ) {
 		$s += 1800;
 	}
-	if ( preg_match( '/(\d+)\s*(?:min|minute)/u', $t, $m ) ) {
-		$s += (int) $m[1] * 60;
+	// „29 de minute”, „cam 2 ore și 40 de minute”, „4 min + meditația de 33 min” (se adună).
+	if ( preg_match_all( '/(\d+)\s*(?:de\s+)?(?:min|minute)\b/u', $t, $m ) ) {
+		foreach ( $m[1] as $x ) {
+			$s += (int) $x * 60;
+		}
 		$gasit = true;
 	}
 	return $gasit ? $s : null;
@@ -1301,6 +1349,7 @@ function ah_app_ciclu_scrie( $email, $d ) {
 		'zile_sangerare' => $d['zile_sangerare'],
 		'zile_ciclu'     => $d['zile_ciclu'],
 		'acord'          => gmdate( 'Y-m-d H:i:s' ),
+		'actualizat'     => time(), // ca în snippetul 41: după 12 luni fără actualizare, se șterge singur
 	), false );
 	return false;
 }
@@ -1312,6 +1361,52 @@ function ah_app_ciclu_sterge( $email ) {
 	}
 	delete_option( ah_app_cheie_ciclu( $email ) );
 }
+
+/**
+ * Aceeași păstrare ca rândurile din snippetul 41 (ah_ciclu_trimite_zilnic): datele de ciclu
+ * ținute doar pentru sincronizare se șterg după 365 de zile fără nicio actualizare.
+ * Întoarce câte s-au șters.
+ */
+function ah_app_ciclu_curata( $acum = null ) {
+	global $wpdb;
+	$prag = ( null === $acum ? time() : (int) $acum ) - 365 * DAY_IN_SECONDS;
+	$nume = $wpdb->get_col( $wpdb->prepare( "SELECT option_name FROM {$wpdb->options} WHERE option_name LIKE %s", $wpdb->esc_like( 'ah_app_ciclu_' ) . '%' ) );
+	$n    = 0;
+	foreach ( (array) $nume as $k ) {
+		if ( ! preg_match( '/^ah_app_ciclu_[0-9a-f]{32}$/', (string) $k ) ) {
+			continue;
+		}
+		$o = get_option( $k );
+		// Rândurile scrise înainte de câmpul „actualizat”: data acordului, care se rescria la fiecare salvare.
+		$t = is_array( $o ) ? (int) ( $o['actualizat'] ?? strtotime( (string) ( $o['acord'] ?? '' ) . ' UTC' ) ) : 0;
+		if ( $t < $prag ) {
+			delete_option( $k );
+			$n++;
+		}
+	}
+	return $n;
+}
+
+/** Codurile vechi (expirate de o zi și fără încercări în ultimele 24 h) nu mai trebuie ținute. */
+function ah_app_coduri_curata() {
+	global $wpdb;
+	$prag = time() - DAY_IN_SECONDS;
+	$wpdb->query( $wpdb->prepare( 'DELETE FROM ' . ah_app_tabel_coduri() . ' WHERE exp < %d AND zi_start < %d', $prag, $prag ) );
+}
+
+function ah_app_zilnic() {
+	$n = ah_app_ciclu_curata();
+	if ( $n ) {
+		ah_app_jurnal( 'ciclu: ' . $n . ' înregistrări neactualizate de 12 luni, șterse' );
+	}
+	ah_app_coduri_curata();
+}
+add_action( 'ah_app_zilnic', 'ah_app_zilnic' );
+add_action( 'init', function () {
+	if ( ! wp_next_scheduled( 'ah_app_zilnic' ) ) {
+		wp_schedule_event( time() + HOUR_IN_SECONDS, 'daily', 'ah_app_zilnic' );
+	}
+} );
 
 /* ==================================================================
    10. NOTIFICĂRILE PUSH (Firebase Cloud Messaging, HTTP v1)
@@ -1391,53 +1486,154 @@ function ah_app_fcm_mesaj( $fcm, $titlu, $text, $date ) {
 }
 
 /**
- * Trimite o notificare la rândurile din tabelul push. Fără cheie în setări: doar jurnal.
- * Tokenurile pe care Firebase nu le mai recunoaște se șterg.
+ * Trimite o notificare la rândurile din tabelul push (un lot; loturile le face ah_app_push_lot).
+ * Fără cheie în setări: doar jurnal. Tokenurile pe care Firebase nu le mai recunoaște se șterg.
+ * $dupa( $r ) se cheamă după fiecare telefon (cursorul lotului).
+ * Întoarce câte au plecat, sau null dacă Google nu a dat tokenul de acces (lotul se reia mai târziu).
  */
-function ah_app_trimite_push( $randuri, $titlu, $text, $date = array() ) {
-	$randuri = array_slice( (array) $randuri, 0, 1000 );
+function ah_app_trimite_push( $randuri, $titlu, $text, $date = array(), $dupa = null ) {
+	$randuri = array_values( (array) $randuri );
 	if ( ! $randuri ) {
 		return 0;
 	}
 	$sa = ah_app_fcm_cont();
 	if ( ! $sa ) {
 		ah_app_jurnal( 'push OPRIT (fără cheie), ar fi plecat la ' . count( $randuri ) . ' telefoane: ' . $titlu );
+		if ( $dupa ) {
+			call_user_func( $dupa, end( $randuri ) );
+		}
 		return 0;
 	}
 	$at = ah_app_fcm_acces( $sa );
 	if ( '' === $at ) {
-		return 0;
+		return null;
 	}
 	global $wpdb;
 	$url = 'https://fcm.googleapis.com/v1/projects/' . rawurlencode( $sa['project_id'] ) . '/messages:send';
 	$ok  = 0;
 	foreach ( $randuri as $r ) {
 		$res = wp_remote_post( $url, array(
-			'timeout' => 10,
+			'timeout' => 5,
 			'headers' => array( 'Authorization' => 'Bearer ' . $at, 'Content-Type' => 'application/json; charset=utf-8' ),
 			'body'    => wp_json_encode( ah_app_fcm_mesaj( $r['fcm'], $titlu, $text, $date ) ),
 		) );
 		$cod = is_wp_error( $res ) ? 0 : (int) wp_remote_retrieve_response_code( $res );
 		if ( 200 === $cod ) {
 			$ok++;
-			continue;
+		} else {
+			$corp = is_wp_error( $res ) ? '' : (string) wp_remote_retrieve_body( $res );
+			if ( 404 === $cod || false !== strpos( $corp, 'UNREGISTERED' ) || ( 400 === $cod && false !== strpos( $corp, 'registration token' ) ) ) {
+				$wpdb->delete( ah_app_tabel_push(), array( 'id' => (int) $r['id'] ) );
+			}
 		}
-		$corp = is_wp_error( $res ) ? '' : (string) wp_remote_retrieve_body( $res );
-		if ( 404 === $cod || false !== strpos( $corp, 'UNREGISTERED' ) || ( 400 === $cod && false !== strpos( $corp, 'registration token' ) ) ) {
-			$wpdb->delete( ah_app_tabel_push(), array( 'id' => (int) $r['id'] ) );
+		if ( $dupa ) {
+			call_user_func( $dupa, $r );
 		}
 	}
 	ah_app_jurnal( 'push: ' . $titlu . ' — ' . $ok . ' din ' . count( $randuri ) );
 	return $ok;
 }
 
-/** Rândurile push abonate la un subiect ('meditatii' sau 'cursuri'). */
-function ah_app_push_abonati( $subiect ) {
+/** Următoarele rânduri push abonate la un subiect ('meditatii' sau 'cursuri'), după id-ul $dupa_id. */
+function ah_app_push_abonati( $subiect, $dupa_id = 0, $cate = AH_APP_PUSH_LOT ) {
 	global $wpdb;
 	$col = 'cursuri' === $subiect ? 'cursuri' : 'meditatii';
-	$r   = $wpdb->get_results( 'SELECT id, email, fcm FROM ' . ah_app_tabel_push() . " WHERE {$col} = 1 ORDER BY id ASC LIMIT 5000", ARRAY_A );
+	$r   = $wpdb->get_results( $wpdb->prepare( 'SELECT id, email, fcm FROM ' . ah_app_tabel_push() . " WHERE {$col} = %d AND id > %d ORDER BY id ASC LIMIT %d", 1, (int) $dupa_id, (int) $cate ), ARRAY_A );
 	return is_array( $r ) ? $r : array();
 }
+
+/*
+ * Trimiterea în loturi. O trimitere („lucrare”) stă într-o opțiune: titlul, textul, cui (meditația
+ * sau cursul) și cursorul (ultimul id push trimis). Fiecare lot e un eveniment cron separat, cu
+ * AH_APP_PUSH_LOT telefoane; cursorul se scrie după fiecare telefon. Dacă un lot cade la jumătate
+ * (timeout, memorie), o reîncercare programată la începutul lotului îl reia de unde a rămas.
+ */
+
+/** Pornește o trimitere în loturi. Întoarce id-ul lucrării. */
+function ah_app_push_porneste( $subiect, $cui, $titlu, $text, $date ) {
+	$id = 'ah_app_pj_' . strtolower( wp_generate_password( 12, false, false ) );
+	update_option( $id, array(
+		'subiect'   => $subiect,
+		'cui'       => $cui,
+		'titlu'     => $titlu,
+		'text'      => $text,
+		'date'      => $date,
+		'cursor'    => 0,
+		'incercari' => 0,
+		'creat'     => time(),
+	), false );
+	wp_schedule_single_event( time(), 'ah_app_push_lot', array( $id ) );
+	return $id;
+}
+
+/** Are adresa acces la ce anunță lucrarea? (o dată pe adresă și lot) */
+function ah_app_push_are_acces( $cui, $email ) {
+	if ( 'meditatie' === ( $cui['tip'] ?? '' ) ) {
+		return function_exists( 'ah_med_poate' ) && ah_med_poate( (int) $cui['id'], ah_app_acces( $email ) );
+	}
+	if ( 'curs' === ( $cui['tip'] ?? '' ) ) {
+		$cu = ah_app_cursuri_email( $email );
+		return isset( $cu[ (string) $cui['slug'] ] );
+	}
+	return false;
+}
+
+/** Un lot. Întoarce câte notificări au plecat (0 fără cheie). */
+function ah_app_push_lot( $id ) {
+	$id = (string) $id;
+	$j  = get_option( $id );
+	if ( 0 !== strpos( $id, 'ah_app_pj_' ) || ! is_array( $j ) ) {
+		return 0;
+	}
+	// Reîncercarea, dacă lotul acesta nu ajunge la capăt. După 3 căderi la rând, lucrarea se oprește.
+	if ( (int) $j['incercari'] >= 3 ) {
+		ah_app_jurnal( 'push: oprit după 3 încercări, la id ' . (int) $j['cursor'] . ': ' . $j['titlu'] );
+		delete_option( $id );
+		return 0;
+	}
+	$j['incercari'] = (int) $j['incercari'] + 1;
+	update_option( $id, $j, false );
+	wp_schedule_single_event( time() + 15 * MINUTE_IN_SECONDS, 'ah_app_push_lot', array( $id ) );
+	if ( function_exists( 'set_time_limit' ) ) {
+		@set_time_limit( 600 ); // phpcs:ignore — cel mult 100 × 5 s; reîncercarea vine abia după 15 minute
+	}
+
+	$rand = ah_app_push_abonati( $j['subiect'], (int) $j['cursor'] );
+	$cine = array();
+	$acc  = array(); // aceeași adresă pe mai multe telefoane: accesul se calculează o dată
+	foreach ( $rand as $r ) {
+		$e = (string) $r['email'];
+		if ( ! isset( $acc[ $e ] ) ) {
+			$acc[ $e ] = ah_app_push_are_acces( $j['cui'], $e );
+		}
+		if ( $acc[ $e ] ) {
+			$cine[] = $r;
+		}
+	}
+	$ultim = $rand ? (int) end( $rand )['id'] : (int) $j['cursor'];
+	$ok    = ah_app_trimite_push( $cine, $j['titlu'], $j['text'], $j['date'], function ( $r ) use ( $id, &$j ) {
+		$j['cursor'] = (int) $r['id'];
+		update_option( $id, $j, false );
+	} );
+	if ( null === $ok ) {
+		return 0; // fără token de acces: rămâne reîncercarea programată mai sus, de la același cursor
+	}
+
+	wp_clear_scheduled_hook( 'ah_app_push_lot', array( $id ) ); // lotul a ajuns la capăt: fără reîncercare
+	if ( count( $rand ) < AH_APP_PUSH_LOT ) {
+		delete_option( $id ); // gata
+	} else {
+		$j['cursor']    = $ultim; // și telefoanele fără acces de la capătul lotului
+		$j['incercari'] = 0;
+		update_option( $id, $j, false );
+		wp_schedule_single_event( time() + 30, 'ah_app_push_lot', array( $id ) );
+	}
+	if ( function_exists( 'wp_cache_flush_runtime' ) ) {
+		wp_cache_flush_runtime(); // comenzile citite pentru acces nu mai trebuie ținute în memorie
+	}
+	return $ok;
+}
+add_action( 'ah_app_push_lot', 'ah_app_push_lot' );
 
 /* Declanșatorul 1: o meditație nouă publicată (după 2 minute, ca să fie salvate și câmpurile ei). */
 add_action( 'transition_post_status', function ( $nou, $vechi, $post ) {
@@ -1449,25 +1645,17 @@ add_action( 'transition_post_status', function ( $nou, $vechi, $post ) {
 	}
 }, 10, 3 );
 
-add_action( 'ah_app_push_meditatie', function ( $id ) {
+function ah_app_push_meditatie( $id ) {
 	$id = (int) $id;
 	if ( 'publish' !== get_post_status( $id ) || get_post_meta( $id, '_ah_app_push', true ) || ! function_exists( 'ah_med_poate' ) ) {
-		return;
-	}
-	update_post_meta( $id, '_ah_app_push', time() ); // o singură dată pe meditație
-	$cine = array();
-	$acc  = array();
-	foreach ( ah_app_push_abonati( 'meditatii' ) as $r ) {
-		if ( ! isset( $acc[ $r['email'] ] ) ) {
-			$acc[ $r['email'] ] = ah_med_poate( $id, ah_app_acces( $r['email'] ) );
-		}
-		if ( $acc[ $r['email'] ] ) {
-			$cine[] = $r;
-		}
+		return '';
 	}
 	$titlu = html_entity_decode( get_the_title( $id ), ENT_QUOTES, 'UTF-8' );
-	ah_app_trimite_push( $cine, 'O meditație nouă te așteaptă', '„' . $titlu . '” e acum în aplicație.', array( 'tip' => 'meditatie', 'id' => $id ) );
-} );
+	$job   = ah_app_push_porneste( 'meditatii', array( 'tip' => 'meditatie', 'id' => $id ), 'O meditație nouă te așteaptă', '„' . $titlu . '” e acum în aplicație.', array( 'tip' => 'meditatie', 'id' => $id ) );
+	update_post_meta( $id, '_ah_app_push', time() ); // o singură dată pe meditație, după ce trimiterea e pusă la coadă
+	return $job;
+}
+add_action( 'ah_app_push_meditatie', 'ah_app_push_meditatie' );
 
 /* Declanșatorul 2: o parte nouă deschisă într-un curs (verificat din oră în oră). */
 add_action( 'init', function () {
@@ -1507,33 +1695,28 @@ function ah_app_grupuri_noi( $vechi, $acum ) {
 	return $noi;
 }
 
-add_action( 'ah_app_orar', function () {
-	$acum  = ah_app_grupuri_vizibile();
+/** Ora: cursurile cu părți noi primesc câte o trimitere în loturi; apoi se notează ce s-a văzut. */
+function ah_app_orar( $acum = null ) {
+	$acum = null === $acum ? ah_app_grupuri_vizibile() : $acum;
 	if ( ! $acum ) {
-		return;
+		return array();
 	}
 	$vechi = get_option( 'ah_app_grupuri_vazute' );
 	$prima = ! is_array( $vechi );
 	$noi   = $prima ? array() : ah_app_grupuri_noi( $vechi, $acum );
-	$st    = array();
+	$joburi = array();
+	foreach ( $noi as $slug => $g ) {
+		$joburi[] = ah_app_push_porneste( 'cursuri', array( 'tip' => 'curs', 'slug' => (string) $slug ), 'S-a deschis o parte nouă', 'În „' . $acum[ $slug ]['nume'] . '” te așteaptă lecții noi.', array( 'tip' => 'curs', 'slug' => $slug ) );
+	}
+	$st = array();
 	foreach ( $acum as $s => $x ) {
 		$st[ $s ] = array_values( array_unique( array_merge( (array) ( $vechi[ $s ] ?? array() ), $x['grupuri'] ) ) );
 	}
-	update_option( 'ah_app_grupuri_vazute', $st, false );
-	if ( ! $noi ) {
-		return;
-	}
-	$ab = ah_app_push_abonati( 'cursuri' );
-	foreach ( $noi as $slug => $g ) {
-		$cine = array();
-		foreach ( $ab as $r ) {
-			$cu = ah_app_cursuri_email( $r['email'] );
-			if ( isset( $cu[ $slug ] ) ) {
-				$cine[] = $r;
-			}
-		}
-		ah_app_trimite_push( $cine, 'S-a deschis o parte nouă', 'În „' . $acum[ $slug ]['nume'] . '” te așteaptă lecții noi.', array( 'tip' => 'curs', 'slug' => $slug ) );
-	}
+	update_option( 'ah_app_grupuri_vazute', $st, false ); // după ce trimiterile sunt la coadă
+	return $joburi;
+}
+add_action( 'ah_app_orar', function () {
+	ah_app_orar();
 } );
 
 /* ==================================================================
@@ -1602,6 +1785,9 @@ function ah_app_r_cod( WP_REST_Request $r ) {
 	if ( ! $email ) {
 		return ah_app_eroare( 'invalid', 'Adresa de email nu pare completă. Verifică-o, te rog.' );
 	}
+	if ( ah_app_cod_blocat( $email ) ) {
+		return ah_app_eroare( 'prea_multe', AH_APP_MESAJ_BLOCAT_ZI ); // codul nu ar mai putea fi folosit azi
+	}
 	if ( ah_app_limita( 'ip_cod|' . ah_app_ip(), 20 ) || ah_app_limita( 'email_cod|' . $email, 5 ) ) {
 		return ah_app_eroare( 'prea_multe' );
 	}
@@ -1624,7 +1810,7 @@ function ah_app_r_verifica( WP_REST_Request $r ) {
 	}
 	$rez = ah_app_cod_verifica( $email, (string) ( $p['cod'] ?? '' ) );
 	if ( 'ok' !== $rez ) {
-		return ah_app_eroare( $rez );
+		return ah_app_eroare( $rez, 'prea_multe' === $rez ? AH_APP_MESAJ_BLOCAT_ZI : '' );
 	}
 	$token = ah_app_inregistreaza( $email, strtolower( $disp ), mb_substr( sanitize_text_field( (string) ( $d['nume'] ?? '' ) ), 0, 80 ), $plat );
 	if ( '' === $token ) {
@@ -1646,7 +1832,7 @@ function ah_app_r_sterge_cont( WP_REST_Request $r, $u ) {
 	$wpdb->delete( ah_app_tabel_tokenuri(), array( 'email' => $e ) );
 	ah_app_ciclu_sterge( $e );
 	delete_option( ah_app_cheie_poz( $e ) );
-	delete_transient( ah_app_cheie_cod( $e ) );
+	$wpdb->delete( ah_app_tabel_coduri(), array( 'email' => $e ) );
 	ah_app_jurnal( 'cont șters din aplicație: ' . substr( md5( $e ), 0, 8 ) );
 	return array( 'ok' => true );
 }
@@ -2148,10 +2334,10 @@ add_action( 'wp_loaded', function () {
 }, 6 );
 
 /** Pagina simplă (player, intra), în culorile site-ului. */
-function ah_app_pagina( $titlu, $corp, $stil = '' ) {
+function ah_app_pagina( $titlu, $corp, $stil = '', $status = 200 ) {
 	ah_app_fara_cache();
 	if ( ! headers_sent() ) {
-		status_header( 200 );
+		status_header( $status );
 		nocache_headers();
 		header( 'Content-Type: text/html; charset=utf-8' );
 		header( 'X-LiteSpeed-Cache-Control: no-cache' );
@@ -2203,8 +2389,7 @@ function ah_app_player() {
 		}
 	}
 	if ( '' === $src ) {
-		status_header( 403 );
-		ah_app_pagina( 'Linkul a expirat', '<div class="ahapp"><h1>Linkul a expirat</h1><p>Întoarce-te în aplicație și deschide din nou videoul.</p></div>' );
+		ah_app_pagina( 'Linkul a expirat', '<div class="ahapp"><h1>Linkul a expirat</h1><p>Întoarce-te în aplicație și deschide din nou videoul.</p></div>', '', 403 );
 	}
 	ah_app_pagina( $titlu,
 		'<iframe id="v" src="' . esc_url( $src ) . '" allow="autoplay; fullscreen; picture-in-picture; encrypted-media" allowfullscreen title="' . esc_attr( $titlu ) . '"></iframe>'
@@ -2235,19 +2420,27 @@ function ah_app_intra() {
 		. '<p style="margin-top:28px;font-size:15px">Ai nevoie de ajutor? Scrie-ne la <a href="mailto:' . AH_APP_CONTACT . '" style="color:#96593F">' . AH_APP_CONTACT . '</a>.</p></div>' );
 }
 
-/** apple-app-site-association (JSON, fără extensie). */
+/**
+ * apple-app-site-association (JSON, fără extensie).
+ * /app/player nu e link universal: aplicația îl deschide în browser (Vimeo), iar iOS nu trebuie să-l
+ * trimită înapoi în aplicație. Excluderea stă înaintea lui /app/* (regulile se citesc în ordine).
+ */
 function ah_app_aasa() {
 	$team = strtoupper( preg_replace( '/[^A-Za-z0-9]/', '', (string) get_option( 'ah_app_ios_team', '' ) ) );
 	$cai  = array( '/app/*', '/meditatiile-mele/*', '/sala-de-curs/*', '/cursurile-mele/*' );
 	$id   = $team ? $team . '.' . AH_APP_PACHET : '';
+	$fara = '/app/player*';
 	return array(
 		'applinks' => array(
 			'apps'    => array(),
 			'details' => $id ? array( array(
 				'appID'      => $id,
 				'appIDs'     => array( $id ),
-				'paths'      => $cai,
-				'components' => array_map( function ( $c ) { return array( '/' => $c ); }, $cai ),
+				'paths'      => array_merge( array( 'NOT ' . $fara ), $cai ),
+				'components' => array_merge(
+					array( array( '/' => $fara, 'exclude' => true ) ),
+					array_map( function ( $c ) { return array( '/' => $c ); }, $cai )
+				),
 			) ) : array(),
 		),
 	);

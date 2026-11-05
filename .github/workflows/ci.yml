@@ -1,0 +1,87 @@
+# Verificări la fiecare pull request: aplicația (lint, tipuri, teste, build) și serverul (php -l + teste).
+name: CI
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  aplicatia:
+    name: Aplicația (lint, typecheck, test, build)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - run: npm ci
+
+      - name: Lint (dacă există scriptul)
+        run: npm run lint --if-present
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Teste
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Build cu datele de probă (mock)
+        run: npm run build:mock --if-present
+
+  serverul:
+    name: Serverul PHP ${{ matrix.php }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        # De confirmat versiunea PHP de pe găzduire; testăm minimul probabil și cea mai nouă.
+        php: ["8.1", "8.4"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
+        with:
+          php-version: ${{ matrix.php }}
+          tools: none
+          coverage: none
+
+      - name: php -l
+        run: |
+          shopt -s nullglob
+          fisiere=(server/*.php server/tests/*.php)
+          [ ${#fisiere[@]} -gt 0 ] || { echo "Niciun fișier PHP în server/"; exit 0; }
+          for f in "${fisiere[@]}"; do php -l "$f"; done
+
+      - name: Testele serverului
+        run: |
+          if [ -f server/tests/run.php ]; then php server/tests/run.php; else echo "Fără teste."; fi
+
+  workflows:
+    name: actionlint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: actionlint
+        run: |
+          bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/914e7df21a07ef503a81201c76d2b11c789d3fca/scripts/download-actionlint.bash) 1.7.12
+          ./actionlint -color

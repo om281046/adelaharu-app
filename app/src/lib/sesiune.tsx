@@ -2,11 +2,14 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { api } from '../api';
 import { candExpiraSesiunea, seteazaToken } from '../api/client';
 import type { Config, Eu, Utilizatoare } from '../api/types';
-import { citesteCiclu, scrieAcord } from './ciclu-local';
+import { citesteCiclu, potrivesteAcordCuSite, reincearcaCuSite, scrieAcord, uitaAcordul } from './ciclu-local';
+import { codPrimit } from './legaturi';
+import { App as CapApp } from '@capacitor/app';
+import { Capacitor } from '@capacitor/core';
 import { dezinregistreazaPush } from './push';
 import { stergeToateDescarcarile } from './offline';
 import { uitaTot } from './player';
-import { CHEI, citeste, scrie, sterge } from './stocare';
+import { CHEI, citeste, scrie, sterge, stergePrefix } from './stocare';
 import { anuleazaToate } from './notificari';
 
 interface Sesiune {
@@ -46,7 +49,17 @@ async function curataLocal() {
   await sterge(CHEI.utilizatoare);
   await sterge(CHEI.cacheMeditatii);
   await sterge(CHEI.cacheCursuri);
+  await stergePrefix(CHEI.cacheCursPrefix);
+  await sterge(CHEI.ultimaLectie);
+  // acordul pentru datele de sănătate ține de cont: următoarea persoană de pe telefon nu îl moștenește
+  await uitaAcordul();
   seteazaToken(null);
+}
+
+/** Ce am primit de la /eu: acordul ciclului se aliniază cu contul, apoi reîncercăm ce a rămas în așteptare. */
+async function dupaEu(e: Eu) {
+  await potrivesteAcordCuSite(e.ciclu);
+  await reincearcaCuSite(true);
 }
 
 export function SesiuneProvider({ children }: { children: ReactNode }) {
@@ -59,7 +72,9 @@ export function SesiuneProvider({ children }: { children: ReactNode }) {
 
   const reincarcaEu = useCallback(async () => {
     try {
-      setEu(await api.eu());
+      const e = await api.eu();
+      setEu(e);
+      await dupaEu(e);
     } catch {
       /* fără internet: rămâne ce aveam */
     }
@@ -76,18 +91,31 @@ export function SesiuneProvider({ children }: { children: ReactNode }) {
     (async () => {
       const t = await citeste<string | null>(CHEI.token, null);
       const u = await citeste<Utilizatoare | null>(CHEI.utilizatoare, null);
-      const fc = await citeste<boolean>('ah_fara_cont', false);
+      const fc = await citeste<boolean>(CHEI.faraCont, false);
       if (t) {
         seteazaToken(t);
         setToken(t);
         setU(u);
       }
-      setFaraCont(fc);
+      // dacă a venit un cod din linkul din email, nu ne întoarcem la „fără cont”: ecranul de intrare îl folosește
+      setFaraCont(fc && !codPrimit());
       setGata(true);
       api.config().then(setConfig).catch(() => {});
       if (t) void reincarcaEu();
     })();
   }, [reincarcaEu]);
+
+  // la revenirea în aplicație (și când revine internetul) reîncercăm sincronizarea / ștergerea ciclului
+  useEffect(() => {
+    if (!token) return;
+    const f = () => void reincarcaEu();
+    window.addEventListener('online', f);
+    const asc = Capacitor.isNativePlatform() ? CapApp.addListener('resume', f) : null;
+    return () => {
+      window.removeEventListener('online', f);
+      void asc?.then((a) => a.remove());
+    };
+  }, [token, reincarcaEu]);
 
   const intra = useCallback(async (t: string, u: Utilizatoare) => {
     seteazaToken(t);
@@ -96,7 +124,9 @@ export function SesiuneProvider({ children }: { children: ReactNode }) {
     setToken(t);
     setU(u);
     setFaraCont(false);
-    await scrie('ah_fara_cont', false);
+    await scrie(CHEI.faraCont, false);
+    // acordul altei persoane nu trece la contul ăsta (ar trebui să fie deja șters la ieșire; aici pentru siguranță)
+    await uitaAcordul();
     try {
       const e = await api.eu();
       setEu(e);
@@ -108,6 +138,8 @@ export function SesiuneProvider({ children }: { children: ReactNode }) {
           await scrieAcord({ sanatate: true, emailuri: c.emailuri_faze, sincronizatLa: Date.now() });
         }
       }
+      // altfel (telefonul are deja date): acordul se ia tot din /eu.ciclu.salvat_pe_site
+      await potrivesteAcordCuSite(e.ciclu);
     } catch {
       /* nimic */
     }
@@ -115,15 +147,17 @@ export function SesiuneProvider({ children }: { children: ReactNode }) {
 
   const continuaFaraCont = useCallback(() => {
     setFaraCont(true);
-    void scrie('ah_fara_cont', true);
+    void scrie(CHEI.faraCont, true);
   }, []);
 
   const vreiSaIntri = useCallback(() => {
     setFaraCont(false);
-    void scrie('ah_fara_cont', false);
+    void scrie(CHEI.faraCont, false);
   }, []);
 
   const iesi = useCallback(async () => {
+    // o ultimă încercare pentru ce a rămas în așteptare (de ex. ștergerea ciclului de pe site), cât încă e în cont
+    await reincearcaCuSite(true);
     await dezinregistreazaPush();
     try {
       await api.iesire();

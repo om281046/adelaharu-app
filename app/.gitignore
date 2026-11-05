@@ -4,3 +4,9 @@ dist-mock/
 .env
 android/app/google-services.json
 ios/App/App/GoogleService-Info.plist
+tsconfig.tsbuildinfo
+android/.gradle/
+android/build/
+android/app/build/
+ios/App/App/public/
+android/app/src/main/assets/public/

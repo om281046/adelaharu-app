@@ -1,0 +1,130 @@
+# fastlane pentru aplicația Adela Haru (ro.adelaharu.app).
+# Rulat din rădăcina repo-ului:  bundle exec fastlane ios testflight_beta  |  bundle exec fastlane android interna
+# (BUNDLE_GEMFILE=fastlane/Gemfile). Variabilele vin din secretele GitHub, vezi docs/release.md.
+
+require 'json'
+require 'base64'
+
+skip_docs # nu generăm fastlane/README.md
+
+APP_ID = 'ro.adelaharu.app'.freeze
+
+# Dir.pwd e folderul fastlane/ în timpul rulării lane-urilor.
+ROOT = ENV['GITHUB_WORKSPACE'] || File.expand_path(File.basename(Dir.pwd) == 'fastlane' ? '..' : '.')
+APP_DIR = File.join(ROOT, 'app')
+IOS_DIR = File.join(APP_DIR, 'ios', 'App')
+OUT_DIR = File.join(ROOT, 'build', 'ios')
+
+def versiune_aplicatie
+  JSON.parse(File.read(File.join(APP_DIR, 'package.json'))).fetch('version')
+end
+
+def cheie_asc
+  continut = ENV.fetch('ASC_KEY_P8')
+  # Acceptăm și textul .p8 lipit direct, și varianta base64.
+  base64 = !continut.include?('BEGIN PRIVATE KEY')
+  app_store_connect_api_key(
+    key_id: ENV.fetch('ASC_KEY_ID'),
+    issuer_id: ENV.fetch('ASC_ISSUER_ID'),
+    key_content: continut,
+    is_key_content_base64: base64,
+    duration: 1200,
+    in_house: false
+  )
+end
+
+platform :ios do
+  desc 'Semnează cu match, construiește și încarcă în TestFlight'
+  lane :testflight_beta do
+    setup_ci # keychain temporar pe runner
+    api_key = cheie_asc
+    team_id = ENV.fetch('APPLE_TEAM_ID')
+
+    match(
+      type: 'appstore',
+      app_identifier: APP_ID,
+      team_id: team_id,
+      api_key: api_key,
+      storage_mode: 'git',
+      git_url: ENV.fetch('MATCH_GIT_URL'),
+      git_basic_authorization: ENV['MATCH_GIT_BASIC_AUTHORIZATION'],
+      readonly: ENV['MATCH_READONLY'] != 'false',
+      # La "creează certificate" regenerăm și profilul (ex. după ce am adăugat Push / Associated Domains).
+      force: ENV['MATCH_READONLY'] == 'false'
+    )
+    profil = ENV.fetch("sigh_#{APP_ID}_appstore_profile-name")
+
+    xcodeproj = File.join(IOS_DIR, 'App.xcodeproj')
+    workspace = File.join(IOS_DIR, 'App.xcworkspace') # doar dacă proiectul folosește CocoaPods
+    UI.user_error!("Nu găsesc #{xcodeproj}") unless File.directory?(xcodeproj)
+
+    update_code_signing_settings(
+      path: xcodeproj,
+      use_automatic_signing: false,
+      team_id: team_id,
+      targets: ['App'],
+      build_configurations: ['Release'],
+      code_sign_identity: 'Apple Distribution',
+      profile_name: profil,
+      bundle_identifier: APP_ID
+    )
+
+    versiune = versiune_aplicatie
+    build = latest_testflight_build_number(
+      api_key: api_key,
+      app_identifier: APP_ID,
+      version: nil,
+      initial_build_number: 0
+    ).to_i + 1
+    build = [build, ENV['GITHUB_RUN_NUMBER'].to_i].max
+    UI.message("Versiunea #{versiune} (#{build})")
+
+    proiect = File.directory?(workspace) ? { workspace: workspace } : { project: xcodeproj }
+    build_app(
+      **proiect,
+      scheme: 'App',
+      configuration: 'Release',
+      export_method: 'app-store',
+      export_options: {
+        provisioningProfiles: { APP_ID => profil },
+        signingStyle: 'manual',
+        teamID: team_id
+      },
+      xcargs: "CURRENT_PROJECT_VERSION=#{build} MARKETING_VERSION=#{versiune}",
+      output_directory: OUT_DIR,
+      output_name: "AdelaHaru-#{versiune}-#{build}.ipa",
+      clean: true
+    )
+
+    if ENV['AH_UPLOAD'] == '1'
+      upload_to_testflight(
+        api_key: api_key,
+        app_identifier: APP_ID,
+        # Conformitatea la export: cheia ITSAppUsesNonExemptEncryption=NO în Info.plist (doar HTTPS).
+        skip_waiting_for_build_processing: true
+      )
+    else
+      UI.important('AH_UPLOAD≠1: IPA-ul rămâne doar ca artefact, nu se încarcă.')
+    end
+  end
+end
+
+platform :android do
+  desc 'Încarcă AAB-ul (construit de workflow) în Google Play, testare internă'
+  lane :interna do
+    aab = ENV.fetch('AAB_PATH')
+    UI.user_error!("Nu găsesc AAB-ul: #{aab}") unless File.exist?(aab)
+    upload_to_play_store(
+      package_name: APP_ID,
+      track: 'internal',
+      aab: aab,
+      json_key_data: ENV.fetch('PLAY_SERVICE_ACCOUNT_JSON'),
+      release_status: ENV['PLAY_RELEASE_STATUS'] || 'completed',
+      # Textele și pozele din magazin se completează în Play Console (docs/store/), nu de aici.
+      skip_upload_metadata: true,
+      skip_upload_changelogs: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true
+    )
+  end
+end

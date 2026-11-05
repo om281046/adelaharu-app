@@ -133,7 +133,7 @@ export function Meditatie({ id }: { id: number }) {
                 </button>
               ) : (
                 <button type="button" className="buton secundar lat" onClick={() => void descarcaAcum()}>
-                  <IcDescarca marime={20} /> Descarcă pentru ascultare fără internet
+                  <IcDescarca marime={20} /> Descarcă pe telefon
                 </button>
               )}
             </div>

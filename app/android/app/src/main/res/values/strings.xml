@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Adela Haru</string>
+    <string name="title_activity_main">Adela Haru</string>
+    <string name="package_name">ro.adelaharu.app</string>
+    <string name="custom_url_scheme">ro.adelaharu.app</string>
+</resources>

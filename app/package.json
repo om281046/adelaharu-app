@@ -11,7 +11,7 @@
     "typecheck": "tsc -b --noEmit",
     "test": "vitest run",
     "preview:mock": "vite preview --outDir dist-mock",
-    "screenshots": "node scripts/screenshots.mjs",
+    "screenshots": "npm run build:mock && node scripts/screenshots.cjs",
     "cap:sync": "npm run build && cap sync"
   },
   "dependencies": {

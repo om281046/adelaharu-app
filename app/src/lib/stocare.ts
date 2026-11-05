@@ -30,6 +30,16 @@ export async function sterge(cheie: string): Promise<void> {
   }
 }
 
+/** Șterge toate cheile care încep cu prefixul dat (de ex. cache-urile cursurilor). */
+export async function stergePrefix(prefix: string): Promise<void> {
+  try {
+    const { keys } = await Preferences.keys();
+    await Promise.all(keys.filter((k) => k.startsWith(prefix)).map((k) => Preferences.remove({ key: k })));
+  } catch {
+    /* nimic */
+  }
+}
+
 export const CHEI = {
   token: 'ah_token',
   utilizatoare: 'ah_utilizatoare',
@@ -39,8 +49,16 @@ export const CHEI = {
   setari: 'ah_setari',
   pozitii: 'ah_pozitii',
   ultima: 'ah_ultima_redare',
+  ultimaLectie: 'ah_ultima_redare_lectie',
   descarcari: 'ah_descarcari',
   pushToken: 'ah_push_token',
   cacheMeditatii: 'ah_cache_meditatii',
   cacheCursuri: 'ah_cache_cursuri',
+  /** + slug */
+  cacheCursPrefix: 'ah_cache_curs_',
+  faraCont: 'ah_fara_cont',
+  /** sincronizarea ciclului cu site-ul a eșuat: reîncercăm la pornire / revenire / intrare */
+  cicluDeSincronizat: 'ah_ciclu_de_sincronizat',
+  /** ștergerea ciclului de pe site a eșuat: reîncercăm la pornire / revenire / intrare */
+  cicluDeSters: 'ah_ciclu_de_sters',
 } as const;
