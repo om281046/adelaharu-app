@@ -16,7 +16,7 @@ function verifica( $c, $nume ) {
 function egal( $a, $b, $nume ) {
 	verifica( $a === $b, $nume . ( $a === $b ? '' : ' (am ' . var_export( $a, true ) . ', așteptam ' . var_export( $b, true ) . ')' ) );
 }
-function cerere( $json = null, $param = array() ) { return new WP_REST_Request( array(), $json, $param ); }
+function cerere( $json = null, $param = array(), $antet = array( 'x_ah_spp' => '1' ) ) { return new WP_REST_Request( $antet, $json, $param ); }
 function date_r( $raspuns ) { return $raspuns->get_data(); }
 function zi( $n ) { return date( 'Y-m-d', strtotime( date( 'Y-m-d' ) . ' 12:00:00' ) - $n * 86400 ); } // acum n zile
 function ea( $email ) { $GLOBALS['ah_test_email'] = $email; }
@@ -35,7 +35,7 @@ function randuri() { global $wpdb; return $wpdb->get_results( 'SELECT * FROM wp_
 function la( $uri, $get = array() ) { $_SERVER['REQUEST_URI'] = $uri; $_GET = $get; }
 
 /* ---------- 0. încărcarea ---------- */
-egal( AH_SPP, '1.2.0', 'versiunea fragmentului' );
+egal( AH_SPP, '1.3.0', 'versiunea fragmentului' );
 verifica( ah_spp_gata(), 'dependențele din 235 sunt găsite' );
 $n_hooks = count( $GLOBALS['ah_test_hooks'], COUNT_RECURSIVE );
 require __DIR__ . '/../../ah-sp-partener.php';
@@ -52,6 +52,9 @@ ah_test_actiune( 'init' );
 egal( $GLOBALS['ah_test_cron'][0][1] ?? '', 'ah_spp_zilnic', 'cronul zilnic e programat' );
 verifica( ( $GLOBALS['ah_test_cron'][0][0] ?? 0 ) > time() && ( $GLOBALS['ah_test_cron'][0][0] ?? 0 ) <= time() + 86400, 'cronul pornește în următoarele 24 de ore' );
 egal( date( 'H:i', $GLOBALS['ah_test_cron'][0][0] ?? 0 ), '08:10', 'cronul: 8:10, ora site-ului' );
+egal( $GLOBALS['ah_test_cron'][0][3] ?? null, null, 'cronul: eveniment unic (lanț), nu „daily” (86400 s alunecă la schimbarea orei)' );
+ah_test_actiune( 'init' );
+egal( count( $GLOBALS['ah_test_cron'] ), 1, 'cronul: un al doilea init nu-l programează din nou' );
 
 /* ---------- 1. criptarea, amprentele, tokenurile ---------- */
 $c1 = ah_spp_cripteaza( 'el@exemplu.ro' );
@@ -61,6 +64,9 @@ egal( ah_spp_decripteaza( $c1 ), 'el@exemplu.ro', 'decriptarea' );
 $b = base64_decode( $c1 ); $b[ strlen( $b ) - 1 ] = chr( ord( $b[ strlen( $b ) - 1 ] ) ^ 1 );
 egal( ah_spp_decripteaza( base64_encode( $b ) ), null, 'un text atins nu se decriptează (GCM)' );
 egal( ah_sp_ciclu_decripteaza( $c1 ), null, 'cheia e separată de a ciclului din 235' );
+egal( get_option( 'ah_spp_secret' ), false, 'cheia NU e în baza de date (nicio opțiune ah_spp_secret)' );
+egal( ah_spp_secret(), hash_hmac( 'sha256', 'ah-spp|cheie', wp_salt( 'auth' ) . '|' . wp_salt( 'secure_auth' ) ), 'cheia: derivată din sărurile WordPress (fără AH_SPP_CHEIE)' );
+egal( ah_spp_decripteaza( $c1, 'alta-cheie' ), null, 'cu altă cheie nu se decriptează' );
 egal( ah_spp_hash_email( ' El@Exemplu.RO ' ), ah_spp_hash_email( 'el@exemplu.ro' ), 'amprenta nu ține cont de majuscule și spații' );
 verifica( 64 === strlen( ah_spp_hash_email( 'el@exemplu.ro' ) ) && false === strpos( ah_spp_hash_email( 'el@exemplu.ro' ), 'el' ), 'amprenta e HMAC (64 hex)' );
 list( $t1, $h1 ) = ah_spp_token_nou();
@@ -168,7 +174,8 @@ egal( $A['urmatoarea']['faza'] . '|' . $A['urmatoarea']['de_la'], 'vara|' . zi( 
 egal( $A['nume_ea'], 'Ana', 'prenumele ei, cum l-a ales ea' );
 $CHEI = array( 'ok', 'nume_ea', 'nume', 'stare', 'faza', 'pana_la', 'urmatoarea', 'inceputuri', 'texte', 'setari' );
 egal( array_keys( $A ), $CHEI, 'azi: doar cheile din contract (fără zi, lungime, harta: pagina nu mai are inelul)' );
-egal( array_keys( $A['urmatoarea'] ), array( 'faza', 'de_la', 'sprijin', 'arhetip' ), 'urmatoarea: doar ce arată „Ce urmează”' );
+egal( array_keys( $A['urmatoarea'] ), array( 'faza', 'de_la', 'pana_la', 'sprijin', 'arhetip' ), 'urmatoarea: doar ce arată „Ce urmează”' );
+egal( $A['urmatoarea']['pana_la'], null, 'urmatoarea: fereastră doar pentru iarnă' );
 egal( $A['urmatoarea']['sprijin'], ah_sp_partener_texte()['vara']['sprijin'][0], '„Ce urmează”: primul rând din „cum o poți sprijini” (235)' );
 egal( array_keys( $A['texte'] ), array( 'ce', 'sprijin', 'citate', 'arhetip', 'luna' ), 'texte: doar ale Adelei' );
 $JA = json_encode( $A, JSON_UNESCAPED_UNICODE );
@@ -178,43 +185,84 @@ foreach ( array( 'NOTITA-SECRETA', '"sit"', 'natural', 'note', '"tri"', '"cra"',
 verifica( false === strpos( $JA, '"' . zi( 9 ) . '"' ), 'azi nu conține ziua notată de ea (prima zi a menstruației)' );
 egal( $A['texte']['ce'], ah_sp_partener_texte()['primavara']['ce'], '„ce trăiește” din Harta ciclului (41)' );
 egal( $A['texte']['citate'], ah_sp_partener_texte()['primavara']['citate'], 'citatele din Magia Ciclului Feminin (235)' );
-$prima = $A['inceputuri'][0] ?? array();
-egal( $prima, array( 'faza' => 'vara', 'data' => zi( -2 ) ), 'începuturile: prima fază viitoare' );
-verifica( count( $A['inceputuri'] ) >= 4 && count( $A['inceputuri'] ) <= 6, 'începuturile: ~5 săptămâni (' . count( $A['inceputuri'] ) . ')' );
-$ultima = end( $A['inceputuri'] );
-verifica( $ultima['data'] <= date( 'Y-m-d', strtotime( '+35 days' ) ), 'începuturile: cel mult 35 de zile înainte' );
+egal( $A['inceputuri'], array( array( 'faza' => 'vara', 'data' => zi( -2 ), 'pana' => null ), array( 'faza' => 'toamna', 'data' => zi( -7 ), 'pana' => null ), array( 'faza' => 'iarna', 'data' => zi( -17 ), 'pana' => zi( -21 ) ) ), 'începuturile: fazele până la iarna următoare, iar ea ca fereastră (ziua 29 ± 2), nimic după ea' );
 verifica( ! array_filter( $A['inceputuri'], function ( $x ) { return $x['data'] <= date( 'Y-m-d' ); } ), 'începuturile: doar în viitor' );
 
-/* pauza și situațiile */
+/* pauza și situațiile: hormonal/sarcină ajung la el ca pauză după 1–3 zile (sau la granița fazei), nu pe loc */
+$RA = ah_spp_rand( $R1['id'] );
+$NAT = date_r( ah_spp_r_azi( cerere() ) );
 $sit = array( 'natural' => 'ok', 'alaptare' => 'ok', 'perimenopauza' => 'ok', 'hormonal' => 'pauza', 'sarcina' => 'pauza', 'altceva' => 'ok', null => 'ok' );
 foreach ( $sit as $s => $st ) {
-	$c = array( 'starturi' => array( zi( 9 ) ), 'lung' => 28, 'men' => 5 );
+	$c = array( 'starturi' => array( zi( 9 ), zi( 37 ), zi( 65 ) ), 'lung' => 28, 'men' => 5 );
 	if ( '' !== (string) $s ) { $c['sit'] = $s; }
 	ciclu_in_cont( $ANA, $c );
 	$A = date_r( ah_spp_r_azi( cerere() ) );
-	egal( $A['stare'], $st, 'situația ' . var_export( $s, true ) . ' → ' . $st );
-	if ( 'pauza' === $st ) {
-		egal( array_keys( $A ), array( 'ok', 'nume_ea', 'nume', 'stare', 'mesaj', 'sub', 'setari' ), 'pauza: fără faze, fără date' );
-		egal( $A['mesaj'], 'Pentru moment, aici nu e nicio estimare.', 'pauza: textul neutru (nu spune de ce)' );
-		verifica( false === strpos( json_encode( $A, JSON_UNESCAPED_UNICODE ), $s ), 'pauza: situația ei nu apare' );
+	if ( 'ok' === $st ) {
+		egal( $A, $NAT, 'situația ' . var_export( $s, true ) . ' → la fel ca natural' );
+		continue;
 	}
+	egal( $A, $NAT, 'situația ' . $s . ': în ziua schimbării el vede încă faza, ca înainte (nu află momentul)' );
+	$rr = ah_spp_rand( $R1['id'] );
+	verifica( (bool) preg_match( '/^\d{4}-\d{2}-\d{2}$/', $rr['pauza_de_la'] ), $s . ': ziua pauzei e păstrată pe server (pauza_de_la)' );
+	$k = ah_spp_zi0( $rr['pauza_de_la'] ) - ah_spp_azi0();
+	verifica( $k >= 1 && $k <= 2, $s . ': pauza vine în 1–3 zile sau la granița fazei (aici primăvara se termină mâine: ' . $k . ')' );
+	egal( ah_spp_azi_pentru( $rr )['stare'], 'ok', $s . ': a doua cerere în aceeași zi, la fel' );
+	egal( ah_spp_rand( $R1['id'] )['pauza_de_la'], $rr['pauza_de_la'], $s . ': ziua nu se trage din nou la fiecare cerere' );
+	$A = ah_spp_azi_pentru( $rr, ah_spp_zi0( $rr['pauza_de_la'] ) );
+	egal( array_keys( $A ), array( 'nume_ea', 'nume', 'stare', 'mesaj', 'sub' ), $s . ': din ziua aceea, pauza: fără faze, fără date' );
+	egal( $A['mesaj'], 'Pentru moment, aici nu e nicio estimare.', 'pauza: textul neutru (nu spune de ce)' );
+	verifica( false === strpos( json_encode( $A, JSON_UNESCAPED_UNICODE ), $s ), 'pauza: situația ei nu apare' );
+	egal( ah_spp_azi_pentru( $rr, ah_spp_zi0( $rr['pauza_de_la'] ) - 1 )['stare'], 'ok', $s . ': cu o zi înainte, încă faza' );
+	ciclu_in_cont( $ANA, array( 'starturi' => array( zi( 9 ), zi( 37 ), zi( 65 ) ), 'lung' => 28, 'men' => 5, 'sit' => 'natural' ) );
+	egal( date_r( ah_spp_r_azi( cerere() ) ), $NAT, $s . ' → natural: faza, pe loc' );
+	egal( ah_spp_rand( $R1['id'] )['pauza_de_la'], '', $s . ' → natural: ziua pauzei se golește' );
 }
+// amânarea: 1–3 zile, aceeași pentru același partener și aceeași zi, diferită între parteneri sau zile
+$am = array();
+for ( $i = 1; $i <= 60; $i++ ) { $am[ ah_spp_amanare( array( 'id' => $i, 'ea' => 'x' ), 20000 ) ] = 1; }
+ksort( $am );
+egal( array_keys( $am ), array( 1, 2, 3 ), 'amânarea pauzei: 1, 2 sau 3 zile' );
+egal( ah_spp_amanare( array( 'id' => 7, 'ea' => 'x' ), 20000 ), ah_spp_amanare( array( 'id' => 7, 'ea' => 'x' ), 20000 ), 'amânarea: deterministă pentru aceeași schimbare' );
+// în toamnă, granița următoare e iarna (ziua estimată a menstruației): nu se folosește, doar amânarea
+ciclu_in_cont( $ANA, array( 'starturi' => array( zi( 26 ) ), 'lung' => 28, 'men' => 5, 'sit' => 'sarcina' ) );
+date_r( ah_spp_r_azi( cerere() ) );
+$rr = ah_spp_rand( $R1['id'] );
+egal( ah_spp_zi0( $rr['pauza_de_la'] ) - ah_spp_azi0(), ah_spp_amanare( $rr, ah_spp_azi0() ), 'toamna: pauza după amânare, nu în ziua estimată a menstruației' );
+ciclu_in_cont( $ANA, array( 'starturi' => array( zi( 26 ) ), 'lung' => 28, 'men' => 5, 'sit' => 'natural' ) );
+date_r( ah_spp_r_azi( cerere() ) );
 ciclu_in_cont( $ANA, array( 'starturi' => array( zi( -3 ) ), 'lung' => 28, 'men' => 5 ) );
 egal( date_r( ah_spp_r_azi( cerere() ) )['stare'], 'pauza', 'prima zi în viitor → pauza' );
 ciclu_in_cont( $ANA, array( 'starturi' => array( 'nu-e-data' ), 'lung' => 28 ) );
 egal( date_r( ah_spp_r_azi( cerere() ) )['stare'], 'pauza', 'fără date valide → pauza' );
-ciclu_in_cont( $ANA, array( 'starturi' => array( zi( 30 ) ), 'lung' => 28, 'men' => 5 ) );
-$A = date_r( ah_spp_r_azi( cerere() ) );
-egal( array_keys( $A ), array( 'ok', 'nume_ea', 'nume', 'stare', 'mesaj', 'sub', 'setari' ), 'menstruația întârzie o zi (ziua 31 din 28): pauza, fără zi, fază sau date' );
+$GLOBALS['wpdb']->update( 'wp_ah_spp_parteneri', array( 'pauza_de_la' => '' ), array( 'id' => $R1['id'] ) );
+
+/* ziua estimată a menstruației: nimic nu se schimbă la el (ziua dinainte, ziua estimată, ziua de după, capătul ferestrei) */
+ciclu_in_cont( $ANA, array( 'starturi' => array( zi( 27 ), zi( 55 ) ), 'lung' => 28, 'men' => 5, 'sit' => 'natural' ) ); // azi = ziua 28
+$P28 = date_r( ah_spp_r_azi( cerere() ) );
+egal( array( $P28['stare'], $P28['faza'], $P28['pana_la'] ), array( 'ok', 'toamna', null ), 'ziua 28 din 28: toamna, „până la următoarea menstruație” (fără dată de sfârșit)' );
+egal( array( $P28['urmatoarea']['faza'], $P28['urmatoarea']['de_la'], $P28['urmatoarea']['pana_la'] ), array( 'iarna', zi( 1 ), zi( -3 ) ), 'iarna următoare: fereastra ziua estimată ± 2 (nu o zi)' );
+egal( $P28['inceputuri'], array( array( 'faza' => 'iarna', 'data' => zi( 1 ), 'pana' => zi( -3 ) ) ), 'în toamnă, începuturile: doar fereastra iernii' );
+// cu ziua fixată (aceleași starturi, alt „azi”): răspunsul e identic, octet cu octet, în ziua dinainte, în ziua estimată și după
+$rr = ah_spp_rand( $R1['id'] );
+ciclu_in_cont( $ANA, array( 'starturi' => array( zi( 28 ) ), 'lung' => 28, 'men' => 5, 'sit' => 'natural' ) );
+$a0 = ah_spp_azi0();
+$V = array_map( function ( $d ) use ( $rr, $a0 ) { return json_encode( ah_spp_azi_pentru( $rr, $a0 + $d ) ); }, array( -1, 0, 1, 2 ) );
+egal( count( array_unique( $V ) ), 1, 'ziua dinainte / ziua estimată / ziua de după / +2: răspunsuri identice' );
+egal( json_decode( $V[0], true )['urmatoarea']['de_la'] . '|' . json_decode( $V[0], true )['urmatoarea']['pana_la'], zi( 2 ) . '|' . zi( -2 ), 'fereastra: ziua estimată (azi) ± 2' );
+verifica( json_encode( ah_spp_azi_pentru( $rr, $a0 - 3 ) ) === $V[0], 'și cu 3 zile înainte (tot în toamnă), același răspuns' );
+verifica( json_encode( ah_spp_azi_pentru( $rr, $a0 + 3 ) ) !== $V[0], 'după capătul ferestrei (+3) fereastra dispare' );
+$A = ah_spp_azi_pentru( $rr, $a0 + 3 );
+egal( array( $A['stare'], $A['faza'], $A['pana_la'], $A['urmatoarea']['de_la'], $A['urmatoarea']['pana_la'], $A['inceputuri'] ), array( 'ok', 'toamna', null, null, null, array() ), 'întârziere: toamna, fără nicio dată a iernii' );
+$Q = array_map( function ( $d ) use ( $rr, $a0 ) { return json_encode( ah_spp_azi_pentru( $rr, $a0 + $d ) ); }, array( 3, 5, 8, 10 ) );
+egal( count( array_unique( $Q ) ), 1, 'întârziere de 3, 5, 8, 10 zile: același răspuns (el nu poate număra zilele)' );
+egal( ah_spp_azi_pentru( $rr, $a0 + 10 )['stare'], 'ok', 'a 10-a zi după ziua estimată: încă toamna' );
+$A = ah_spp_azi_pentru( $rr, $a0 + 11 );
+egal( array_keys( $A ), array( 'nume_ea', 'nume', 'stare', 'mesaj', 'sub' ), 'peste 10 zile de întârziere: pauza, fără zi, fază sau date' );
 $P = $A;
-ciclu_in_cont( $ANA, array( 'starturi' => array( zi( 27 ) ), 'lung' => 28, 'men' => 5 ) );
-$A = date_r( ah_spp_r_azi( cerere() ) );
-egal( array( $A['stare'], $A['faza'], $A['urmatoarea']['de_la'] ), array( 'ok', 'toamna', zi( -1 ) ), 'ultima zi estimată (ziua 28 din 28): încă toamna, iarna din jurul zilei de mâine' );
-ciclu_in_cont( $ANA, array( 'starturi' => array( zi( 35 ) ), 'lung' => 28, 'men' => 5 ) );
-$A = date_r( ah_spp_r_azi( cerere() ) );
-egal( $A, $P, 'întârziere de 1 zi și de 8 zile: același răspuns, deci el nu poate număra zilele' );
 ciclu_in_cont( $ANA, array( 'starturi' => array( zi( 9 ) ), 'lung' => 28, 'men' => 5, 'sit' => 'hormonal' ) );
-egal( date_r( ah_spp_r_azi( cerere() ) ), $P, 'întârzierea arată exact ca orice altă pauză (aici: situația hormonal)' );
+$GLOBALS['wpdb']->update( 'wp_ah_spp_parteneri', array( 'pauza_de_la' => zi( 1 ) ), array( 'id' => $R1['id'] ) );
+egal( ah_spp_azi_pentru( ah_spp_rand( $R1['id'] ) ), $P, 'întârzierea lungă arată exact ca orice altă pauză (aici: situația hormonal)' );
+$GLOBALS['wpdb']->update( 'wp_ah_spp_parteneri', array( 'pauza_de_la' => '' ), array( 'id' => $R1['id'] ) );
 $GLOBALS['wpdb']->delete( 'wp_ah_sp_ciclu', array( 'cheie' => ah_sp_ciclu_cheie( $ANA ) ) );
 egal( date_r( ah_spp_r_azi( cerere() ) )['stare'], 'pauza', 'ea a șters ciclul → pauza' );
 ciclu_in_cont( $ANA, array( 'starturi' => array( zi( 9 ), zi( 37 ), zi( 65 ) ), 'lung' => 28, 'men' => 5, 'sit' => 'natural' ) );
@@ -347,7 +395,7 @@ verifica( false !== strpos( $m['a']['dezabonare'], 'fara-emailuri=' ), 'emailul 
 verifica( false === strpos( json_encode( $m, JSON_UNESCAPED_UNICODE ), 'NOTITA' ) && false === strpos( json_encode( $m ), zi( 11 ) ), 'emailul fazei: fără notițe, fără date notate' );
 egal( ah_spp_verifica_toti()[ (int) $R1['id'] ], '', 'a doua rulare în aceeași zi: nimic' );
 // modulul aplicație activ (funcțiile FCM ale lui ah-sp-aplicatie.php)
-eval( 'function ah_spa_fcm_cont(){ return array( "project_id" => "adela-haru", "client_email" => "x@y", "private_key" => "k" ); } function ah_spa_fcm_acces( $sa ){ return "jeton"; } function ah_spa_fcm_mesaj( $t, $ti, $tx, $d ){ return array( "message" => array( "token" => $t, "notification" => array( "title" => $ti, "body" => $tx ), "data" => $d ) ); }' );
+eval( 'function ah_spa_fcm_cont(){ return array( "project_id" => "adela-haru", "client_email" => "x@y", "private_key" => "k" ); } function ah_spa_fcm_acces( $sa ){ return empty( $GLOBALS["ah_test_fcm_fara"] ) ? "jeton" : ""; } function ah_spa_fcm_mesaj( $t, $ti, $tx, $d ){ return array( "message" => array( "token" => $t, "notification" => array( "title" => $ti, "body" => $tx ), "data" => $d ) ); }' );
 $GLOBALS['ah_test_http_raspuns'] = function ( $url, $a ) use ( $PT2 ) {
 	$b = json_decode( $a['body'], true );
 	return $b['message']['token'] === $PT2 ? array( 'response' => array( 'code' => 404 ), 'body' => '{"error":{"status":"NOT_FOUND","details":[{"errorCode":"UNREGISTERED"}]}}' ) : array( 'response' => array( 'code' => 200 ), 'body' => '{}' );
@@ -385,6 +433,11 @@ egal( json_decode( $GLOBALS['ah_test_http'][0][1]['body'], true )['message']['no
 // situația devine „hormonal”: nimic, iar la revenire nu „anunțăm” faza din mijloc
 ciclu_in_cont( $ANA, array( 'starturi' => array( zi( 0 ), zi( 28 ) ), 'lung' => 28, 'men' => 5, 'sit' => 'hormonal' ) );
 $GLOBALS['ah_test_http'] = array();
+$semn0 = ah_spp_rand( $R1['id'] )['faza_trimisa'];
+egal( ah_spp_verifica_toti()[ (int) $R1['id'] ], '', 'hormonal, în zilele de amânare: nimic trimis' );
+egal( ah_spp_rand( $R1['id'] )['faza_trimisa'], $semn0, 'hormonal, în zilele de amânare: semnul fazei rămâne' );
+verifica( '' !== ah_spp_rand( $R1['id'] )['pauza_de_la'], 'cronul notează și el ziua pauzei' );
+$GLOBALS['wpdb']->update( 'wp_ah_spp_parteneri', array( 'pauza_de_la' => zi( 0 ) ), array( 'id' => $R1['id'] ) );
 egal( ah_spp_verifica_toti()[ (int) $R1['id'] ], '', 'pauza: nimic trimis' );
 egal( ah_spp_rand( $R1['id'] )['faza_trimisa'], '', 'pauza: semnul fazei se golește' );
 ciclu_in_cont( $ANA, array( 'starturi' => array( zi( 0 ), zi( 28 ) ), 'lung' => 28, 'men' => 5, 'sit' => 'natural' ) );
@@ -558,6 +611,142 @@ $src = file_get_contents( __DIR__ . '/../../ah-sp-partener.php' );
 foreach ( array( 'ah_spp_template_redirect', 'ah_spp_head_ea', 'ah_spp_verifica_toti', 'ah_spp_curata' ) as $f ) {
 	verifica( (bool) preg_match( '/function ' . $f . '\([^)]*\) \{\n(\t[^\n]*\n){0,3}?\tif \( ! ah_spp_gata\(\)/', $src ), $f . ' întreabă întâi ah_spp_gata()' );
 }
+
+/* ---------- 13. antetul X-AH-SPP (apărare CSRF în plus față de SameSite=Lax) ---------- */
+global $wpdb;
+$wpdb->query( 'DELETE FROM wp_ah_spp_parteneri' );
+fara_limite();
+ciclu_in_cont( $ANA, array( 'starturi' => array( zi( 9 ), zi( 37 ) ), 'lung' => 28, 'men' => 5, 'sit' => 'natural' ) );
+ea( $ANA );
+$fara = array();
+foreach ( array( 'ah_spp_r_invita' => array( 'nume' => 'Mihai', 'email' => 'mihai@exemplu.ro', 'acord' => true ), 'ah_spp_r_opreste' => array( 'id' => 1 ), 'ah_spp_r_retrimite' => array( 'id' => 1 ) ) as $f => $corp ) {
+	$r = $f( cerere( $corp, array(), array() ) );
+	$fara[] = $r->get_status() . ':' . ( date_r( $r )['motiv'] ?? '' );
+}
+egal( $fara, array( '403:antet', '403:antet', '403:antet' ), 'ea: invita/opreste/retrimite fără antetul X-AH-SPP → 403' );
+egal( count( randuri() ), 0, 'fără antet: nimic salvat' );
+$r = ah_spp_r_invita( cerere( array( 'nume' => 'Mihai', 'email' => 'mihai@exemplu.ro', 'nume_ea' => 'Ana', 'acord' => true ), array(), array( 'X-AH-SPP' => '1' ) ) );
+egal( date_r( $r )['ok'] ?? false, true, 'ea: cu antetul X-AH-SPP: 1, merge' );
+$RM = ultim_rand();
+ea( '' );
+$_COOKIE['ah_spp'] = ah_spp_valoare_cookie( $RM, time() + 1000 );
+$fara = array();
+foreach ( array( 'ah_spp_r_email' => array( 'on' => true ), 'ah_spp_r_push' => array( 'token' => 'fcm-' . str_repeat( 'q', 40 ), 'platforma' => 'ios' ), 'ah_spp_r_iesi' => array(), 'ah_spp_r_sterge' => array( 'confirmare' => true ) ) as $f => $corp ) {
+	$fara[] = $f( cerere( $corp, array(), array( 'x_ah_spp' => '0' ) ) )->get_status();
+}
+egal( $fara, array( 403, 403, 403, 403 ), 'el: email/push/iesi/sterge fără antet (sau cu altă valoare) → 403' );
+verifica( null !== ah_spp_din_cookie() && null !== ah_spp_rand( $RM['id'] ) && 0 === (int) ah_spp_rand( $RM['id'] )['email_faze'], 'el, fără antet: nimic schimbat, rămâne conectat' );
+egal( ah_spp_r_azi( cerere( null, array(), array() ) )->get_status(), 200, 'GET /azi nu cere antetul (nu schimbă nimic)' );
+$src = file_get_contents( __DIR__ . '/../../ah-sp-partener.php' );
+verifica( false !== strpos( $src, "h['X-AH-SPP']='1'" ) && false !== strpos( $src, "'X-AH-SPP':'1'" ), 'paginile (a lui și cardul ei) trimit antetul X-AH-SPP' );
+
+/* ---------- 14. cronul: 8:10 ora site-ului și după schimbarea orei (lanț de evenimente unice) ---------- */
+$GLOBALS['ah_test_cron'] = array();
+$t = strtotime( '2026-10-23 12:00:00' ); // ora de vară se termină duminică, 25 oct. 2026, la Bucureşti
+$ore = array();
+for ( $i = 0; $i < 5; $i++ ) { $t = ah_spp_urmatoarea_rulare( $t ); $ore[] = date( 'Y-m-d H:i T', $t ); }
+egal( $ore, array( '2026-10-24 08:10 EEST', '2026-10-25 08:10 EET', '2026-10-26 08:10 EET', '2026-10-27 08:10 EET', '2026-10-28 08:10 EET' ), 'cronul: 8:10 în fiecare zi, și după trecerea la ora de iarnă' );
+$t = strtotime( '2027-03-27 09:00:00' );
+egal( date( 'Y-m-d H:i T', ah_spp_urmatoarea_rulare( $t ) ), '2027-03-28 08:10 EEST', 'cronul: 8:10 și în ziua trecerii la ora de vară' );
+egal( date( 'Y-m-d H:i', ah_spp_urmatoarea_rulare( strtotime( '2026-11-18 08:10:00' ) ) ), '2026-11-19 08:10', 'cronul: exact la 8:10 → mâine' );
+egal( date( 'Y-m-d H:i', ah_spp_urmatoarea_rulare( strtotime( '2026-11-18 08:09:59' ) ) ), '2026-11-18 08:10', 'cronul: înainte de 8:10 → azi' );
+// o rulare se reprogramează pe ea însăși; WordPress scoate evenimentul unic înainte să-l ruleze
+ah_test_actiune( 'ah_spp_zilnic' );
+egal( count( $GLOBALS['ah_test_cron'] ), 1, 'rularea zilnică programează următoarea' );
+egal( date( 'H:i', $GLOBALS['ah_test_cron'][0][0] ), '08:10', 'următoarea: la 8:10' );
+ah_test_actiune( 'init' );
+ah_test_actiune( 'ah_spp_zilnic' );
+egal( count( $GLOBALS['ah_test_cron'] ), 1, 'fără programare dublă (init + rularea, cu una deja programată)' );
+set_transient( 'ah_spp_lacat', 1, 120 );
+$GLOBALS['ah_test_cron'] = array();
+ah_test_actiune( 'ah_spp_zilnic' );
+egal( count( $GLOBALS['ah_test_cron'] ), 1, 'și cu lacătul pus (altă rulare în curs), lanțul nu se rupe' );
+delete_transient( 'ah_spp_lacat' );
+// evenimentul recurent din 1.2.0 („daily”) e înlocuit
+$GLOBALS['ah_test_cron'] = array( array( time() + 3600, 'ah_spp_zilnic', array(), 'daily' ) );
+ah_test_actiune( 'init' );
+egal( array( count( $GLOBALS['ah_test_cron'] ), $GLOBALS['ah_test_cron'][0][3] ?? null, date( 'H:i', $GLOBALS['ah_test_cron'][0][0] ) ), array( 1, null, '08:10' ), 'evenimentul „daily” din 1.2.0 → lanțul la 8:10' );
+
+/* ---------- 15. notificarea fazei: semnul se notează doar după o trimitere reușită ---------- */
+$wpdb->update( 'wp_ah_spp_parteneri', array( 'intrat' => date( 'Y-m-d H:i:s' ), 'email_faze' => 0 ), array( 'id' => $RM['id'] ) );
+$wpdb->query( 'DELETE FROM wp_ah_spp_push' );
+$wpdb->insert( 'wp_ah_spp_push', array( 'partener' => $RM['id'], 'token' => 'fcm-bun-' . str_repeat( 'b', 40 ), 'token_h' => hash( 'sha256', 'fcm-bun-' . str_repeat( 'b', 40 ) ), 'platforma' => 'ios', 'creat' => date( 'Y-m-d H:i:s' ), 'vazut' => date( 'Y-m-d H:i:s' ) ) );
+ciclu_in_cont( $ANA, array( 'starturi' => array( zi( 1 ), zi( 29 ) ), 'lung' => 28, 'men' => 5, 'sit' => 'natural' ) );
+ah_spp_verifica_toti( ah_sp_ciclu_cheie( $ANA ) );
+$semn_vechi = ah_spp_rand( $RM['id'] )['faza_trimisa'];
+verifica( 0 === strpos( $semn_vechi, 'iarna:' ), 'notificări: semnul iernii, notat' );
+ciclu_in_cont( $ANA, array( 'starturi' => array( zi( 5 ), zi( 33 ) ), 'lung' => 28, 'men' => 5, 'sit' => 'natural' ) ); // primăvara începe azi
+$GLOBALS['ah_test_fcm_fara'] = true; // Google nu dă jetonul de acces
+$GLOBALS['ah_test_http'] = array();
+egal( ah_spp_verifica_toti( ah_sp_ciclu_cheie( $ANA ) )[ (int) $RM['id'] ], 'reincearca', 'FCM fără jeton de acces: nimic n-a plecat → se reîncearcă' );
+egal( ah_spp_rand( $RM['id'] )['faza_trimisa'], $semn_vechi, 'FCM fără jeton: semnul vechi rămâne (notificarea nu se pierde)' );
+$GLOBALS['ah_test_fcm_fara'] = false;
+$GLOBALS['ah_test_http_raspuns'] = function () { return new WP_Error( 'http_request_failed', 'timeout' ); };
+egal( ah_spp_verifica_toti( ah_sp_ciclu_cheie( $ANA ) )[ (int) $RM['id'] ], 'reincearca', 'eroare de rețea la FCM: se reîncearcă' );
+$GLOBALS['ah_test_http_raspuns'] = null;
+$GLOBALS['ah_test_http'] = array();
+egal( ah_spp_verifica_toti( ah_sp_ciclu_cheie( $ANA ) )[ (int) $RM['id'] ], 'push', 'rularea următoare: push trimis' );
+egal( count( $GLOBALS['ah_test_http'] ), 1, 'o singură notificare' );
+verifica( 0 === strpos( ah_spp_rand( $RM['id'] )['faza_trimisa'], 'primavara:' ), 'semnul primăverii, notat după trimitere' );
+egal( ah_spp_verifica_toti( ah_sp_ciclu_cheie( $ANA ) )[ (int) $RM['id'] ], '', 'încă o rulare: nimic (fără dubluri)' );
+egal( count( $GLOBALS['ah_test_http'] ), 1, 'tot o singură notificare' );
+// două rulări care citiseră același rând: doar prima trimite
+ciclu_in_cont( $ANA, array( 'starturi' => array( zi( 11 ), zi( 39 ) ), 'lung' => 28, 'men' => 5, 'sit' => 'natural' ) ); // vara începe azi
+$rv = ah_spp_rand( $RM['id'] );
+$cv = ah_spp_ciclul_ei( $rv['ea'], ah_spp_azi0() );
+$GLOBALS['ah_test_http'] = array();
+egal( array( ah_spp_verifica_partener( $rv, $cv, ah_spp_azi0() ), ah_spp_verifica_partener( $rv, $cv, ah_spp_azi0() ) ), array( 'push', '' ), 'două rulări simultane: o singură notificare' );
+egal( count( $GLOBALS['ah_test_http'] ), 1, 'două rulări simultane: o singură cerere FCM' );
+
+/* ---------- 16. migrarea cheii din baza de date (opțiunea ah_spp_secret, până la 1.2.0) ---------- */
+$VECHI = str_repeat( 'ab12', 16 );
+$wpdb->query( 'DELETE FROM wp_ah_spp_parteneri' );
+$wpdb->query( 'DELETE FROM wp_ah_spp_push' );
+ciclu_in_cont( $ANA, array( 'starturi' => array( zi( 9 ), zi( 37 ) ), 'lung' => 28, 'men' => 5, 'sit' => 'natural' ) );
+$zv = ah_spp_ciclul_ei( ah_sp_ciclu_cheie( $ANA ), ah_spp_azi0() )['z'];
+$rand_vechi = function ( $email, $tok ) use ( $wpdb, $VECHI, $zv, $ANA ) {
+	$wpdb->insert( 'wp_ah_spp_parteneri', array( 'ea' => ah_sp_ciclu_cheie( $ANA ), 'nume' => 'Vechi', 'nume_ea' => 'Ana', 'email_c' => ah_spp_cripteaza( $email, $VECHI ), 'email_h' => ah_spp_hash_email( $email, $VECHI ), 'token_h' => hash( 'sha256', $tok ), 'ses' => str_repeat( 'c', 32 ), 'acord' => '2026-11-18 10:00:00', 'acord_v' => AH_SPP_ACORD_V, 'creat' => '2026-11-18 10:00:00', 'invitat' => '2026-11-18 10:00:00', 'intrat' => '2026-11-18 10:00:00', 'email_faze' => 1, 'faza_trimisa' => ah_spp_semn_faza( $zv, $VECHI ) ) );
+	return ah_spp_rand( $wpdb->insert_id );
+};
+$V1 = $rand_vechi( 'vlad@exemplu.ro', str_repeat( 'v', 43 ) );
+$V2 = $rand_vechi( 'ion@exemplu.ro', str_repeat( 'i', 43 ) );
+$wpdb->update( 'wp_ah_spp_parteneri', array( 'email_c' => base64_encode( random_bytes( 40 ) ) ), array( 'id' => $V2['id'] ) ); // un rând stricat
+update_option( 'ah_spp_secret', $VECHI );
+$exp = time() + 5000;
+$COOKIE_VECHI = $V1['id'] . '.' . $exp . '.' . ah_spp_semn_cookie( $V1['id'], $exp, $V1['ses'], ah_spp_cheie( 'cookie', $VECHI ) );
+$STOP_VECHI = $V1['id'] . '.' . substr( hash_hmac( 'sha256', 'stop|' . (int) $V1['id'], ah_spp_cheie( 'stop', $VECHI ) ), 0, 24 );
+$_COOKIE['ah_spp'] = $COOKIE_VECHI;
+egal( ah_spp_din_cookie(), null, 'înainte de migrare: cookie-ul semnat cu cheia veche nu e cunoscut (cheia nouă e alta)' );
+ah_test_actiune( 'init' );
+egal( get_option( 'ah_spp_secret' ), false, 'migrarea: opțiunea cu cheia veche a fost ștearsă' );
+$V1n = ah_spp_rand( $V1['id'] );
+egal( ah_spp_decripteaza( $V1n['email_c'] ), 'vlad@exemplu.ro', 'migrarea: emailul lui, criptat acum cu cheia nouă' );
+egal( ah_spp_decripteaza( $V1n['email_c'], $VECHI ), null, '…și nu mai merge cu cheia veche' );
+egal( $V1n['email_h'], ah_spp_hash_email( 'vlad@exemplu.ro' ), 'migrarea: amprenta emailului refăcută (căutarea merge)' );
+egal( $V1n['faza_trimisa'], ah_spp_semn_faza( $zv ), 'migrarea: semnul fazei refăcut (cronul nu crede că s-a schimbat faza)' );
+egal( ah_spp_verifica_toti( ah_sp_ciclu_cheie( $ANA ) )[ (int) $V1['id'] ], '', 'după migrare: nicio notificare falsă' );
+egal( ah_spp_rand( $V2['id'] )['email_h'], $V2['email_h'], 'rândul care nu se decripta: lăsat cum era' );
+verifica( false !== strpos( json_encode( get_option( 'ah_spp_jurnal' ), JSON_UNESCAPED_UNICODE ), '1 rânduri mutate, 1 care nu se puteau decripta' ), 'migrarea: în jurnal, fără adrese' );
+$tr = get_option( 'ah_spp_tranzitie' );
+verifica( is_array( $tr ) && array_keys( $tr ) === array( 'cookie', 'stop', 'pana' ) && false === strpos( json_encode( $tr ), $VECHI ), 'tranziția: doar subcheile cookie/stop, nu cheia veche' );
+verifica( $tr['pana'] > time() + 29 * 86400 && $tr['pana'] <= time() + 30 * 86400, 'tranziția: 30 de zile' );
+$_COOKIE['ah_spp'] = $COOKIE_VECHI;
+egal( (int) ( ah_spp_din_cookie()['id'] ?? 0 ), (int) $V1['id'], 'tranziția: cookie-ul semnat cu cheia veche e primit' );
+egal( $_COOKIE['ah_spp'], ah_spp_valoare_cookie( $V1n, $exp ), '…și semnat din nou cu cheia nouă, cu aceeași expirare' );
+la( '/pentru-el/', array( 'fara-emailuri' => $STOP_VECHI ) );
+egal( array( ah_spp_proceseaza_el(), (int) ah_spp_rand( $V1['id'] )['email_faze'] ), array( array( 'mesaj' => 'fara_emailuri' ), 0 ), 'tranziția: linkul „Oprește emailurile” dintr-un email vechi merge' );
+egal( ah_spp_migreaza_cheia(), 0, 'migrarea: o singură dată' );
+update_option( 'ah_spp_secret', $VECHI ); // o rulare întreruptă: rândurile deja mutate sunt sărite
+egal( ah_spp_migreaza_cheia(), 0, 'migrarea din nou: rândurile deja mutate nu se ating' );
+egal( ah_spp_decripteaza( ah_spp_rand( $V1['id'] )['email_c'] ), 'vlad@exemplu.ro', '…și se decriptează în continuare' );
+$tr['pana'] = time() - 1;
+update_option( 'ah_spp_tranzitie', $tr );
+$_COOKIE['ah_spp'] = $COOKIE_VECHI;
+egal( ah_spp_din_cookie(), null, 'după 30 de zile: semnătura veche nu mai e primită' );
+egal( get_option( 'ah_spp_tranzitie' ), false, 'după 30 de zile: subcheile vechi au plecat din baza de date' );
+la( '/pentru-el/', array( 'fara-emailuri' => $STOP_VECHI ) );
+egal( ah_spp_proceseaza_el(), array( 'mesaj' => 'link' ), 'după 30 de zile: linkul de oprire vechi nu mai merge' );
+la( '/pentru-el/', array() );
 
 echo "\n" . $GLOBALS['ok'] . ' verificări trecute, ' . $GLOBALS['rau'] . " picate.\n";
 exit( $GLOBALS['rau'] ? 1 : 0 );

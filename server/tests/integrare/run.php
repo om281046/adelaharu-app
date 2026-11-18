@@ -35,6 +35,8 @@ eval( '?>' . $src ); // __DIR__ rămâne server/tests/integrare (aceeași adânc
 if ( ! function_exists( 'is_robots' ) ) { function is_robots() { return false; } }
 if ( ! function_exists( 'is_favicon' ) ) { function is_favicon() { return false; } }
 
+// cheia contului pentru el din wp-config.php (AH_SPP_CHEIE): aici definită, ca pe un site care o are
+define( 'AH_SPP_CHEIE', 'cheie-de-test-din-wp-config-0123456789abcdef' );
 require __DIR__ . '/../../ah-sp-aplicatie.php';
 require __DIR__ . '/../../ah-sp-partener.php';
 
@@ -46,7 +48,7 @@ function verifica( $c, $nume ) {
 function egal( $a, $b, $nume ) {
 	verifica( $a === $b, $nume . ( $a === $b ? '' : ' (am ' . var_export( $a, true ) . ', așteptam ' . var_export( $b, true ) . ')' ) );
 }
-function cerere( $json = null, $param = array(), $antet = array( 'x_ah_app' => '1' ) ) { return new WP_REST_Request( $antet, $json, $param ); }
+function cerere( $json = null, $param = array(), $antet = array( 'x_ah_app' => '1', 'x_ah_spp' => '1' ) ) { return new WP_REST_Request( $antet, $json, $param ); }
 function ea( $e ) { $GLOBALS['ah_test_email'] = $e; }
 function aplicatie( $da ) {
 	$_SERVER['HTTP_USER_AGENT'] = $da ? 'Mozilla/5.0 (iPhone) AppleWebKit/605.1.15 Mobile/15E148 AdelaHaruApp/2.0.0 (ios)' : 'Mozilla/5.0 (iPhone) Safari/604.1';
@@ -85,6 +87,8 @@ verifica( ah_spp_gata(), 'contul pentru el găsește funcțiile lui 235' );
 update_option( 'ah_spa_tabel', AH_SPA_TABEL_VER ); // tabelul ei e deja în $wpdb-ul de test (țin locul lui dbDelta)
 ah_test_actiune( 'init' );
 ah_test_actiune( 'rest_api_init' );
+egal( ah_spp_secret(), hash_hmac( 'sha256', 'ah-spp|cheie', AH_SPP_CHEIE ), 'contul pentru el: cheia din AH_SPP_CHEIE (wp-config), nu din baza de date' );
+verifica( false === get_option( 'ah_spp_secret' ), 'contul pentru el: nicio cheie în opțiuni' );
 
 /* ---------- 1. lista permisă, redirecționări, AASA = App Links ---------- */
 verifica( in_array( '/pentru-el/', ah_spa_permise(), true ), 'ah_spa_permise() conține /pentru-el/ (prin filtrul partenerului)' );

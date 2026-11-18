@@ -4,7 +4,8 @@
  *   sp-ea.html       Spațiul meu (CSS/JS din 235 și 266, citite din reference/v2) + partea ei din ah-sp-partener.php, cu contul ei
  *   sp-intrare.html  același, fără cont (ecranul de intrare, cu „Sunt partenerul ei”)
  *   el-*.html        pagina lui (/pentru-el/), tipărită de fragment cu date reale (ciclul ei criptat în $wpdb-ul de test):
- *                    ok (browser), ok (aplicație), ok (aplicație, cu ea intrată pe telefon), pauza, oprit, fără cont, link expirat
+ *                    ok (browser), ok (aplicație), ok (aplicație, cu ea intrată pe telefon), toamna (fereastra iernii), pauza,
+ *                    oprit, fără cont, link expirat
  * Rulare: php construieste.php <dosar>   (o face poze.cjs)
  */
 $dir = rtrim( $argv[1] ?? '', '/' );
@@ -65,7 +66,7 @@ $ciclu = function ( $c ) use ( $wpdb ) {
 };
 $ciclu( array( 'starturi' => array( $zi( 8 ), $zi( 36 ), $zi( 64 ) ), 'lung' => 28, 'men' => 5, 'sit' => 'natural' ) );
 $GLOBALS['ah_test_email'] = 'ana@exemplu.ro';
-ah_spp_r_invita( new WP_REST_Request( array(), array( 'nume' => 'Mihai', 'email' => 'mihai@exemplu.ro', 'nume_ea' => 'Ana', 'acord' => true ) ) );
+ah_spp_r_invita( new WP_REST_Request( array( 'x_ah_spp' => '1' ), array( 'nume' => 'Mihai', 'email' => 'mihai@exemplu.ro', 'nume_ea' => 'Ana', 'acord' => true ) ) );
 $GLOBALS['ah_test_email'] = '';
 $r = $wpdb->get_row( 'SELECT * FROM wp_ah_spp_parteneri ORDER BY id DESC LIMIT 1', ARRAY_A );
 $_COOKIE['ah_spp'] = ah_spp_valoare_cookie( $r, time() + 3600 );
@@ -82,7 +83,11 @@ $GLOBALS['ah_test_email'] = 'ana@exemplu.ro';
 $scrie( 'aplicatie-ea', ah_spp_cfg_el() );
 $GLOBALS['ah_test_email'] = '';
 $GLOBALS['ah_test_app'] = false;
-$ciclu( array( 'starturi' => array( $zi( 8 ) ), 'lung' => 28, 'men' => 5, 'sit' => 'hormonal' ) );
+// ziua 28 din 28: toamna, iarna următoare ca fereastră (aceeași în ziua estimată și după ea)
+$ciclu( array( 'starturi' => array( $zi( 27 ), $zi( 55 ) ), 'lung' => 28, 'men' => 5, 'sit' => 'natural' ) );
+$scrie( 'toamna', ah_spp_cfg_el() );
+// întârziere peste 10 zile: pauza (la fel arată și hormonal/sarcină, după amânare)
+$ciclu( array( 'starturi' => array( $zi( 45 ) ), 'lung' => 28, 'men' => 5, 'sit' => 'natural' ) );
 $scrie( 'pauza', ah_spp_cfg_el() );
 $wpdb->update( 'wp_ah_spp_parteneri', array( 'oprit' => date( 'Y-m-d H:i:s' ) ), array( 'id' => $r['id'] ) );
 $scrie( 'oprit', ah_spp_cfg_el() );

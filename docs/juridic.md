@@ -67,11 +67,19 @@ Ce face deja codul și trebuie păstrat la orice schimbare:
 - **Ce primește el:** doar faza de azi, până când ține și datele estimate ale fazelor următoare. Nu primește
   notițe, simptome, situația ei (anticoncepționale, sarcină), zilele notate de ea și nici „ziua N din L”, din care
   s-ar deduce data menstruației.
-- **Întârzierea menstruației, oricât de mică, nu i se arată.** El vede același mesaj neutru ca la orice altă pauză,
-  fără motiv. O întârziere poate indica o sarcină, iar ea nu și-a dat acordul pentru asta. Același mesaj apare și
-  pentru contracepție hormonală, sarcină sau date vechi, ca să nu se poată deduce motivul.
-- **Datele lui:** emailul e criptat (AES-256-GCM, cheie separată de cea a ciclului). Linkul e păstrat doar ca
-  sha256. Ea e identificată printr-o cheie HMAC, nu prin email.
+- **Întârzierea menstruației nu i se arată.** El nu vede o zi a menstruației următoare, ci o fereastră de ±2 zile
+  în jurul zilei estimate. În ziua dinainte, în ziua estimată și după ea, pagina lui arată exact la fel (testat).
+  Dacă menstruația întârzie, el vede mai departe faza de toamnă, „până la următoarea menstruație”, fără nicio dată,
+  la fel pentru oricâte zile, până la 10 zile după ziua estimată; apoi vede mesajul neutru al pauzei, fără motiv.
+  O întârziere poate indica o sarcină, iar ea nu și-a dat acordul pentru asta.
+- **Schimbarea situației ei nu i se arată pe loc.** Când ea alege contracepție hormonală sau sarcină, el vede pauza
+  abia la următoarea schimbare de fază sau după 1–3 zile, alese aleatoriu și păstrate pe server. Așa nu poate lega
+  pauza de un moment anume. Același mesaj neutru apare pentru orice motiv al pauzei.
+- **Datele lui:** emailul e criptat (AES-256-GCM, cheie separată de cea a ciclului). Din versiunea 1.3.0 cheia nu
+  mai stă în baza de date: e în `wp-config.php` (constanta `AH_SPP_CHEIE`) sau derivată din sărurile WordPress de
+  acolo. Linkul e păstrat doar ca sha256. Ea e identificată printr-o cheie HMAC, nu prin email.
+- **Cererile care schimbă ceva** (invitația, oprirea, ștergerea, notificările) vin doar din paginile site-ului:
+  pe lângă cookie-urile SameSite, cer un antet pe care alt site nu-l poate trimite.
 - **Retrimiterea linkului:** răspunde la fel, în același timp, pentru orice adresă. Așa nu se poate afla cine a
   fost invitat.
 
@@ -137,11 +145,11 @@ conțin deja materialul ei.
 
 | Risc | Probabilitate / gravitate | Măsură |
 |---|---|---|
-| El află ceva ce ea nu a vrut să știe (întârziere, sarcină) | mică / mare | pauză neutră la orice întârziere și situație; fără „ziua N” |
+| El află ceva ce ea nu a vrut să știe (întârziere, sarcină) | mică / mare | fereastră în loc de ziua menstruației; nimic nu se schimbă în ziua estimată; întârzierea de până la 10 zile arată ca toamna, apoi pauză neutră; situația nouă ajunge la el cu 1–3 zile întârziere; fără „ziua N” |
 | Ea e presată să-i dea acces sau nu-l poate opri | mică / mare | oprire dintr-un buton, pe loc, fără să-l anunțe; ea vede cine a intrat |
 | Un link trimis mai departe ajunge la altcineva | medie / medie | link personal; retrimiterea deconectează toate sesiunile vechi; ea vede ultima vizită |
 | Cineva află cine e invitat | mică / medie | aceeași răspuns și același timp pentru orice adresă; limite pe IP și pe adresă |
-| Scurgere din baza de date | mică / mare | ciclul și emailul lui criptate; linkuri doar ca sha256; backup criptat la găzduire (de verificat) |
+| Scurgere din baza de date | mică / mare | emailul lui criptat cu o cheie ținută în afara bazei de date (`wp-config.php`); linkuri doar ca sha256. **Ciclul ei e criptat, dar cheia lui (opțiunea `ah_sp_ciclu_secret` a fragmentului 235) stă în aceeași bază de date**, deci o copie a bazei de date ajunge pentru a-l citi. Recomandare: mutarea acestei chei în `wp-config.php`, ca la contul lui (de hotărât de Mircea; 235 nu a fost schimbat). Backup criptat la găzduire (de verificat) |
 | Tracker pus mai târziu pe site rulează în aplicație | medie / medie | listă de trackere în fragment; verificare la fiecare versiune (secțiunea 5) |
 
 **Rezultat:** riscul rămas e acceptabil cu măsurile de mai sus.

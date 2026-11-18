@@ -63,7 +63,7 @@ async function ruta(ctx) {
     const p = u.pathname;
     if (FONTS[p]) return route.fulfill({ status: 200, contentType: 'text/css', body: fontCss(FONTS[p]) });
     if (p.startsWith('/fonts/')) { const f = path.join(FONT, p.slice(7)); return fs.existsSync(f) ? route.fulfill({ status: 200, path: f, headers: { 'Access-Control-Allow-Origin': '*' } }) : route.fulfill({ status: 404, body: '' }); }
-    if (p.startsWith('/wp-json/')) S.cereri.push({ m: req.method(), p, corp: req.postData() ? JSON.parse(req.postData()) : null });
+    if (p.startsWith('/wp-json/')) S.cereri.push({ m: req.method(), p, corp: req.postData() ? JSON.parse(req.postData()) : null, antet: req.headers()['x-ah-spp'] || '' });
     if (p === '/spatiul-meu/') return route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: fs.readFileSync(path.join(TMP, S.cont === false ? 'sp-intrare.html' : 'sp-ea.html')) });
     if (p === '/pentru-el/') return route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: fs.readFileSync(path.join(TMP, `el-${S.el}.html`)) });
     if (p === '/wp-json/ah-sp/v1/ciclu-date') { if (req.method() === 'POST') { S.ciclu = true; return json({ ok: true, actualizat: zi(0) + ' 10:00:00' }); } return json({ ok: true, acord: S.ciclu }); }
@@ -100,7 +100,7 @@ const CAP2 = (o) => `(() => { if (window.top !== window) return; const asc = {};
     Preferences: { get: async ({ key }) => ({ value: key in ss('h_prefs') ? ss('h_prefs')[key] : null }),
       set: async ({ key, value }) => { const p = ss('h_prefs'); p[key] = value; ss('h_prefs', p); },
       remove: async ({ key }) => { const p = ss('h_prefs'); delete p[key]; ss('h_prefs', p); rec('Preferences', 'remove:' + key); } },
-    App: { addListener: (n, f) => Promise.resolve({ remove() {} }) },
+    App: { addListener: (n, f) => { (asc['app:' + n] = asc['app:' + n] || []).push(f); return Promise.resolve({ remove() {} }); }, minimizeApp: async () => { rec('App', 'minimizeApp'); } },
     AhApp: { info: async () => (${JSON.stringify(o.info || { push: true, token: 'fcm' })}) } } }; })();`;
 const hPrefs = (page) => page.evaluate(() => JSON.parse(sessionStorage.getItem('h_prefs') || '{}'));
 const hApel = (page) => page.evaluate(() => JSON.parse(sessionStorage.getItem('h_apel') || '[]'));
@@ -131,8 +131,13 @@ const hApel = (page) => page.evaluate(() => JSON.parse(sessionStorage.getItem('h
     egal(await page.locator('#spp-acord-t').innerText(), 'Sunt de acord ca Mihai să vadă faza mea de azi și datele estimate ale fazelor următoare. Pot opri oricând.', 'ea: textul exact al acordului, cu prenumele lui');
     egal(await page.inputValue('#spp-nume-ea'), 'Ana', 'ea: numele ei, din cont, de schimbat dacă vrea');
     S.cereri = [];
+    await page.evaluate(() => { document.getElementById('spp-msg').__acelasi = 1; });
     await page.click('#spp-trimite'); await asteapta(300);
     egal(await page.locator('#spp-msg').innerText(), 'Bifează acordul, ca să putem trimite invitația.', 'ea: fără bifă nu pleacă nimic');
+    egal(await page.evaluate(() => [document.getElementById('spp-acord').getAttribute('aria-invalid'), document.activeElement && document.activeElement.id]), ['true', 'spp-acord'], 'ea: câmpul greșit: aria-invalid și focus');
+    egal(await page.evaluate(() => { const m = document.getElementById('spp-msg'); return [m.getAttribute('role'), m.getAttribute('aria-live'), !!m.closest('.spp-a')]; }), ['status', 'polite', false], 'ea: un singur rând de mesaj, role=status, în afara părții redesenate');
+    verifica(await page.evaluate(() => { const m = document.getElementById('spp-msg'), f = document.getElementById('spp-form'); return !!(f && (f.compareDocumentPosition(m) & Node.DOCUMENT_POSITION_FOLLOWING)); }), 'ea: mesajul stă sub formular');
+    egal(await page.evaluate(() => { const l = ['spp-nume', 'spp-email', 'spp-nume-ea'].map((i) => document.getElementById(i)); return [l[0].getAttribute('autocapitalize'), l[1].getAttribute('autocapitalize'), l[1].getAttribute('autocorrect'), l[1].getAttribute('spellcheck'), l[2].getAttribute('autocapitalize')]; }), ['words', 'off', 'off', 'false', 'words'], 'ea: tastatura: prenumele cu majusculă, emailul fără corectare');
     verifica(!S.cereri.some((c) => c.p.endsWith('/invita')), 'ea: fără bifă, nicio cerere');
     await page.check('#spp-acord');
     await laVedere(page, '#spp-loc'); await poza(page, 'ea-2-invitatie');
@@ -140,6 +145,8 @@ const hApel = (page) => page.evaluate(() => JSON.parse(sessionStorage.getItem('h
     const inv = S.cereri.find((c) => c.p.endsWith('/invita'));
     egal(inv && inv.corp, { nume: 'Mihai', email: 'Mihai@exemplu.ro', nume_ea: 'Ana', acord: true }, 'ea: invitația trimite acordul explicit');
     verifica(/Gata\. Mihai primește acum emailul/.test(await page.locator('#spp-loc').innerText()), 'ea: confirmarea');
+    egal(await page.evaluate(() => [document.getElementById('spp-msg').__acelasi, document.getElementById('spp-msg').classList.contains('ok')]), [1, true], 'ea: același element de mesaj după redesenare; confirmarea în culoarea „ok”');
+    verifica(inv && inv.antet === '1', 'ea: invitația trimite antetul X-AH-SPP');
     verifica(/Invitat pe .* încă nu a intrat/.test(await page.locator('.spp-p').first().innerText()), 'ea: starea „invitat”');
     await laVedere(page, '#spp-loc'); await poza(page, 'ea-3-invitat');
     /* el a intrat, ea a invitat și pe Radu: limita de 2 */
@@ -149,7 +156,17 @@ const hApel = (page) => page.evaluate(() => JSON.parse(sessionStorage.getItem('h
     verifica(/A intrat · ultima vizită:/.test(txt) && /Ai invitat 2 persoane, cât se poate/.test(txt), 'ea: „a intrat”, ultima vizită și limita de 2');
     verifica(!(await page.locator('#spp-form').count()), 'ea: la limită, fără formular');
     await laVedere(page, '#spp-loc'); await poza(page, 'ea-4-doi-parteneri');
-    await page.locator('.spp-p[data-id="11"] [data-spp="opreste"]').click(); await asteapta(600);
+    egal(await page.evaluate(() => { const st = document.querySelector('.spp-st'), i = st.querySelector('i'); return [getComputedStyle(st).alignItems, getComputedStyle(i).marginTop !== '0px']; }), ['flex-start', true], 'ea: punctul de stare aliniat la primul rând');
+    const h44 = await page.evaluate(() => [...document.querySelectorAll('#spp-loc .legatura')].map((e) => Math.round(e.getBoundingClientRect().height)));
+    verifica(h44.length >= 3 && h44.every((h) => h >= 44), 'ea: „Oprește accesul” și „Oprește linkul vechi”: cel puțin 44 px (' + h44.join(', ') + ')');
+    S.cereri = [];
+    await page.locator('.spp-p[data-id="11"] [data-spp="opreste"]').click(); await asteapta(300);
+    egal(await page.evaluate(() => { const f = document.querySelector('.spp-foaie [role=dialog]'); return f ? [f.getAttribute('aria-modal'), document.getElementById(f.getAttribute('aria-labelledby')).textContent, document.activeElement.textContent] : null; }), ['true', 'Oprești accesul lui Radu?', 'Renunț'], 'ea: „Oprește accesul” deschide foaia (role=dialog, aria-labelledby), cu focusul pe „Renunț”');
+    await poza(page, 'ea-4b-foaie-opreste');
+    await page.click('.spp-foaie [data-f="nu"]'); await asteapta(200);
+    verifica(!(await page.locator('.spp-foaie').count()) && !S.cereri.some((c) => c.p.endsWith('/opreste')) && (await page.locator('.spp-p').count()) === 2, 'ea: „Renunț” închide foaia, nimic oprit');
+    await page.locator('.spp-p[data-id="11"] [data-spp="opreste"]').click(); await asteapta(250);
+    await page.click('.spp-foaie [data-f="da"]'); await asteapta(600);
     verifica(/Accesul lui Radu s-a oprit/.test(await page.locator('#spp-loc').innerText()) && (await page.locator('.spp-p').count()) === 1, 'ea: „Oprește accesul”, pe loc');
     verifica(await page.locator('[data-spp="form"]').isVisible(), 'ea: „Invită pe altcineva”');
     S.cereri = [];
@@ -183,8 +200,10 @@ const hApel = (page) => page.evaluate(() => JSON.parse(sessionStorage.getItem('h
     verifica(!(await page.locator('#ahsp-f').isVisible()) && await page.locator('#spp-cutie-el').isVisible(), 'intrare: panoul lui');
     const t = await page.locator('#spp-cutie-el').innerText();
     verifica(/Deschide linkul primit pe email/.test(t) && /Trimite-mi din nou linkul/.test(t), 'intrare: cele două drumuri');
+    egal(await page.evaluate(() => [document.getElementById('spp-lpb').classList.contains('lite'), document.getElementById('spp-lb').classList.contains('lite'), getComputedStyle(document.getElementById('spp-lm')).display]), [false, true, 'none'], 'intrare: „Deschide linkul” principal, „Trimite-mi linkul” secundar; mesajul gol nu ocupă loc');
     await page.fill('#spp-le', 'mihai@exemplu.ro'); await page.click('#spp-lb'); await asteapta(500);
     verifica(/Dacă adresa a fost invitată/.test(await page.locator('#spp-lm').innerText()), 'intrare: același răspuns, oricare ar fi adresa');
+    verifica(await page.evaluate(() => document.getElementById('spp-lm').classList.contains('ok')), 'intrare: răspunsul în culoarea „ok”');
     await poza(page, 'ea-8-intrare-el');
     await page.click('#spp-inapoi'); await asteapta(200);
     verifica(await page.locator('#ahsp-f').isVisible(), 'intrare: înapoi la formularul ei');
@@ -212,7 +231,9 @@ const hApel = (page) => page.evaluate(() => JSON.parse(sessionStorage.getItem('h
     verifica(/Azi, Ana e în/i.test(t) && /Primăvara ei interioară/.test(t) && /Fecioara · Luna în creștere/.test(t) && /până în jur de \d+ \S+/.test(t), 'el: Azi — primăvara, arhetipul, luna, până în jur de');
     verifica(!(await page.locator('svg.inel').count()) && !/Ziua \d|din 28/.test(t), 'el: fără inel și fără „Ziua N din L”');
     verifica(/Ce trăiește acum/.test(t) && /Cum o poți sprijini/.test(t) && /Ce le spune Adela femeilor, în Magia Ciclului Feminin/i.test(t), 'el: ce trăiește, sprijin, citatul');
-    verifica(/Ce urmează/.test(t) && /Vara ei interioară · Mama, din jurul datei de \d+ \S+\./.test(t) && (await page.locator('.luni .r').count()) >= 3, 'el: „Ce urmează”, cu faza următoare și începuturile următoarelor săptămâni');
+    verifica(/Ce urmează/.test(t) && /Vara ei interioară · Mama, din jurul datei de \d+ \S+\./.test(t) && (await page.locator('.luni .r').count()) === 2, 'el: „Ce urmează”, cu faza următoare și începuturile până la iarna următoare');
+    verifica(/^(\d+–\d+ \S+|\d+ \S+ – \d+ \S+)$/.test(await page.locator('.luni .r').last().locator('span').last().innerText()) && /Iarna ei interioară/.test(await page.locator('.luni .r').last().innerText()), 'el: iarna următoare ca fereastră, nu o zi');
+    verifica(/Primești un email la începutul fiecărei faze\./.test(await page.locator('#spp-anunt').innerText()), 'el (browser): „Da, anunță-mă” spune că vin emailuri');
     verifica(/Fazele sunt o estimare: nu sunt o metodă de contracepție\./.test(t), 'el: nota „estimare, nu contracepție”, cu cuvintele de pe site');
     verifica(!/NOTITA|mihai@|ana@/.test(await page.content()), 'el: nicio notiță sau adresă în pagină');
     await poza(page, 'el-1-azi');
@@ -234,12 +255,71 @@ const hApel = (page) => page.evaluate(() => JSON.parse(sessionStorage.getItem('h
     await page.click('#spp-set'); await asteapta(400);
     verifica(await page.locator('#spp-sw-email').isVisible() && !(await page.locator('#spp-sw-push').count()), 'el (browser): emailurile, fără notificări push');
     S.cereri = [];
+    egal(await page.locator('[data-a="iesi"]').innerText(), 'Ieși din cont', 'el (browser): „Ieși din cont” (fără „pe acest telefon”)');
+    egal(await page.evaluate(() => getComputedStyle(document.getElementById('spp-set-m')).display), 'none', 'el: mesajul gol din setări nu ocupă loc');
+    const h44 = await page.evaluate(() => [...document.querySelectorAll('.leg, .mic a, .inapoi')].filter((e) => e.offsetParent).map((e) => Math.round(e.getBoundingClientRect().height)));
+    verifica(h44.length >= 2 && h44.every((h) => h >= 44), 'el: legăturile din setări, cel puțin 44 px (' + h44.join(', ') + ')');
     await page.click('#spp-sw-email'); await asteapta(300);
-    verifica(S.cereri.some((c) => c.p.endsWith('/email') && c.corp.on === true), 'el: pornește emailurile fazelor');
+    verifica(S.cereri.some((c) => c.p.endsWith('/email') && c.corp.on === true && c.antet === '1'), 'el: pornește emailurile fazelor (cu antetul X-AH-SPP)');
     egal(await page.getAttribute('#spp-sw-email', 'aria-checked'), 'true', 'el: comutatorul pornit');
     await poza(page, 'el-5-setari');
     egal(erori, [], 'el (browser): fără erori JS');
     egal(S.extern.filter((u) => !u.startsWith('https://fonts.googleapis.com/')), [], 'el (browser): doar fonturile Cormorant în afara site-ului');
+    /* foaia „Șterge accesul meu” (în loc de confirm) */
+    S.cereri = [];
+    await page.click('.leg[data-a="sterge"]'); await asteapta(250);
+    verifica(await page.locator('.foaie [role=dialog][aria-labelledby="spp-foaie-t"]').isVisible(), 'el: „Șterge accesul meu” deschide foaia');
+    await poza(page, 'el-5b-foaie-sterge');
+    await page.keyboard.press('Escape'); await asteapta(150);
+    verifica(!(await page.locator('.foaie').count()) && !S.cereri.some((c) => c.p.endsWith('/sterge')), 'el: Escape închide foaia, nimic șters');
+    /* telefonul culcat: bara rămâne jos; pe tabletă / laptop, sus */
+    await page.setViewportSize({ width: 844, height: 390 }); await page.evaluate(() => { location.hash = '#azi'; }); await asteapta(300);
+    egal(await page.evaluate(() => Math.round(document.querySelector('.bara').getBoundingClientRect().bottom) === window.innerHeight), true, 'el: telefon culcat (844×390): bara jos');
+    await poza(page, 'el-15-culcat');
+    await page.setViewportSize({ width: 1024, height: 768 }); await asteapta(200);
+    egal(await page.evaluate(() => Math.round(document.querySelector('.bara').getBoundingClientRect().top)), 0, 'el: ecran mare (1024×768): bara sus');
+    await ctx.close();
+  }
+
+  /* ===== 3b. el: seara (telefonul în modul întunecat, sau „Aspect de seară” ales în Spațiul meu) ===== */
+  for (const [nume, opt, init] of [['telefonul', { colorScheme: 'dark' }, ''], ['Spațiul meu', { colorScheme: 'light' }, "localStorage.setItem('ahspx_seara','1');"]]) {
+    S.el = 'ok';
+    const ctx = await browser.newContext({ ...ctxOpt, ...opt, userAgent: UA_SAFARI });
+    await ruta(ctx); if (init) await ctx.addInitScript(init);
+    const page = await ctx.newPage(); const erori = []; page.on('pageerror', (e) => erori.push(e.message));
+    await page.goto(SITE + '/pentru-el/'); await asteapta(900);
+    const c = await page.evaluate(() => { const lum = (s) => { const m = s.match(/[\d.]+/g).map(Number); const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }; return 0.2126 * f(m[0]) + 0.7152 * f(m[1]) + 0.0722 * f(m[2]); };
+      const r = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+      const fond = getComputedStyle(document.documentElement).backgroundColor, p = document.querySelector('section p'), h = document.querySelector('.sus h1'), mic = document.querySelector('.nota');
+      return { fond, text: r(getComputedStyle(p).color, fond), titlu: r(getComputedStyle(h).color, fond), mic: r(getComputedStyle(mic).color, fond) }; });
+    verifica(c.fond === 'rgb(34, 25, 34)', 'seara (' + nume + '): fundalul închis (' + c.fond + ')');
+    verifica(c.text >= 4.5 && c.mic >= 4.5 && c.titlu >= 3, `seara (${nume}): contrast AA (text ${c.text.toFixed(1)}, notă ${c.mic.toFixed(1)}, titlu ${c.titlu.toFixed(1)})`);
+    if (!init) { await poza(page, 'el-13-seara'); await page.evaluate(() => { location.hash = '#invata/toamna'; }); await asteapta(400); await poza(page, 'el-13-seara-invata'); }
+    egal(erori, [], 'seara: fără erori JS');
+    await ctx.close();
+  }
+  {
+    const ctx = await browser.newContext({ ...ctxOpt, colorScheme: 'dark', userAgent: UA_SAFARI });
+    await ruta(ctx); await ctx.addInitScript("localStorage.setItem('ahspx_seara','0');");
+    const page = await ctx.newPage();
+    await page.goto(SITE + '/pentru-el/'); await asteapta(700);
+    egal(await page.evaluate(() => getComputedStyle(document.documentElement).backgroundColor), 'rgb(251, 246, 243)', 'seara oprită în Spațiul meu: pagina lui rămâne luminoasă, și cu telefonul pe întunecat');
+    await ctx.close();
+  }
+
+  /* ===== 3c. el: toamna, cu iarna următoare ca fereastră ===== */
+  {
+    S.el = 'toamna';
+    const ctx = await browser.newContext({ ...ctxOpt, userAgent: UA_SAFARI });
+    await ruta(ctx);
+    const page = await ctx.newPage(); const erori = []; page.on('pageerror', (e) => erori.push(e.message));
+    await page.goto(SITE + '/pentru-el/'); await asteapta(900);
+    const t = await page.evaluate(() => document.body.innerText);
+    verifica(/Toamna ei interioară/.test(t) && /până la următoarea menstruație/.test(t) && !/până în jur de/.test(t), 'el, toamna: „până la următoarea menstruație”, fără dată');
+    verifica(/Iarna ei interioară · \S+, între \d+( \S+)? și \d+ \S+\./.test(t), 'el, toamna: „Ce urmează”: iarna între două date');
+    egal(await page.locator('.luni .r').count(), 0, 'el, toamna: fără alte începuturi (după iarnă depinde de ziua în care începe)');
+    await poza(page, 'el-14-toamna-fereastra');
+    egal(erori, [], 'el toamna: fără erori JS');
     await ctx.close();
   }
 
@@ -260,8 +340,13 @@ const hApel = (page) => page.evaluate(() => JSON.parse(sessionStorage.getItem('h
     egal(await page.locator('.spp-carte').count(), 0, 'aplicație: fără linkuri spre cărți');
     await page.click('#spp-set'); await asteapta(300);
     verifica(await page.locator('#spp-sw-push').isVisible(), 'aplicație: comutatorul de notificări');
+    egal(await page.locator('[data-a="iesi"]').innerText(), 'Ieși din cont pe acest telefon', 'aplicație: „Ieși din cont pe acest telefon”');
     await poza(page, 'el-7-aplicatie-setari');
     egal(S.extern, [], 'aplicație: nicio cerere în afara site-ului (fără Google Fonts)');
+    await page.evaluate(() => { location.hash = '#azi'; }); await asteapta(300);
+    verifica(await page.evaluate(() => [...document.querySelectorAll('blockquote, .arh, .cap .marca small')].every((e) => !/Cormorant/.test(getComputedStyle(e).fontFamily) && /Figtree/.test(getComputedStyle(e).fontFamily) && getComputedStyle(e).fontStyle === 'italic')), 'aplicație: citatele în Figtree cursiv (fără Cormorant, care ar cădea pe Georgia)');
+    verifica(await page.evaluate(() => /Gilda Display/.test(getComputedStyle(document.querySelector('h1')).fontFamily)), 'aplicație: titlurile în Gilda Display');
+    egal(await page.locator('[data-a="iesi"]').count(), 0, 'aplicație: (Azi) fără butonul de ieșire');
     egal(erori, [], 'aplicație: fără erori JS');
     await ctx.close();
   }
@@ -284,6 +369,16 @@ const hApel = (page) => page.evaluate(() => JSON.parse(sessionStorage.getItem('h
     await page.evaluate(() => { location.hash = '#invata'; }); await asteapta(300);
     await page.evaluate(() => window.__emit('pushNotificationActionPerformed', { notification: { data: { url: 'https://www.adelaharu.ro/pentru-el/', tip: 'pentru-el' } } })); await asteapta(500);
     verifica(new URL(page.url()).pathname === '/pentru-el/' && S.cereri.some((c) => c.p === '/wp-json/ah-spp/v1/azi'), 'aplicație: atingerea notificării lui deschide Azi, fără reîncărcarea paginii');
+    /* butonul Înapoi de pe Android */
+    const inapoi = async () => { await page.evaluate(() => window.__emit('app:backButton', { canGoBack: true })); await asteapta(250); };
+    await page.evaluate(() => { location.hash = '#invata/toamna'; }); await asteapta(300);
+    await inapoi(); egal(await page.evaluate(() => location.hash), '#invata', 'Înapoi (Android): dintr-o pagină din Învață → Învață');
+    await inapoi(); egal(await page.evaluate(() => location.hash), '#azi', 'Înapoi (Android): din Învață → Azi');
+    await page.click('#spp-set'); await asteapta(300);
+    await page.click('.leg[data-a="sterge"]'); await asteapta(200);
+    await inapoi(); verifica(!(await page.locator('.foaie').count()) && (await page.evaluate(() => location.hash)) === '#setari', 'Înapoi (Android): închide întâi foaia');
+    await inapoi(); egal(await page.evaluate(() => location.hash), '#azi', 'Înapoi (Android): din Setări → Azi');
+    await inapoi(); verifica((await hApel(page)).includes('App.minimizeApp'), 'Înapoi (Android): din Azi, aplicația trece în fundal');
     await page.click('#spp-set'); await asteapta(300);
     egal(await page.getAttribute('#spp-sw-push', 'aria-checked'), 'true', 'aplicație: comutatorul arată notificările de pe acest telefon');
     S.cereri = [];
@@ -305,8 +400,9 @@ const hApel = (page) => page.evaluate(() => JSON.parse(sessionStorage.getItem('h
     const page = await ctx.newPage(); const erori = []; page.on('pageerror', (e) => erori.push(e.message)); page.on('dialog', (d) => d.accept());
     await page.goto(SITE + '/pentru-el/#setari'); await asteapta(900);
     egal(await page.getAttribute('#spp-sw-push', 'aria-checked'), 'false', 'telefonul ei: notificările lui apar oprite aici');
-    await page.click('[data-a="sterge"]'); await asteapta(900);
-    verifica(S.cereri.some((c) => c.p === '/wp-json/ah-spp/v1/sterge'), '„Șterge accesul meu”: cererea pleacă');
+    await page.click('[data-a="sterge"]'); await asteapta(250);
+    await page.click('.foaie [data-f="da"]'); await asteapta(900);
+    verifica(S.cereri.some((c) => c.p === '/wp-json/ah-spp/v1/sterge' && c.antet === '1'), '„Șterge accesul meu” (din foaie): cererea pleacă, cu antetul');
     verifica(!(await hApel(page)).includes('PushNotifications.unregister'), 'telefonul ei: fără unregister (i-ar opri ei notificările)');
     egal(JSON.parse((await hPrefs(page)).ah_push || 'null').cont, 'ea', 'telefonul ei: Preferences.ah_push rămâne al ei');
     verifica(!S.cereri.some((c) => c.p.startsWith('/wp-json/ah-spa/')), 'telefonul ei: nicio cerere spre push-ul ei');
@@ -338,11 +434,18 @@ const hApel = (page) => page.evaluate(() => JSON.parse(sessionStorage.getItem('h
     await page.goto(SITE + '/pentru-el/'); await asteapta(700);
     const t = await page.evaluate(() => document.body.innerText);
     verifica(re.test(t), 'el: ' + st);
-    if (st === 'pauza') verifica(!/Primăvara|Iarna ei|Vara ei|Toamna ei|Ziua \d/.test(t) && !/hormonal|contracepție hormonală/i.test(await page.content()), 'el: pauza nu arată faze și nici situația ei');
+    if (st === 'pauza') {
+      verifica(!/Primăvara|Iarna ei|Vara ei|Toamna ei|Ziua \d/.test(t) && !/hormonal|contracepție hormonală/i.test(await page.content()), 'el: pauza nu arată faze și nici situația ei');
+      verifica(await page.locator('.lista a[href="#invata"]').isVisible() && /Cele 4 faze ale ciclului feminin/.test(t), 'el: pauza: un card spre Învață, sub mesaj');
+    }
+    if (st === 'iesit' || st === 'link') {
+      egal(await page.locator('h1').count(), 0, 'el ' + st + ': fără titlul „Ciclul ei” dublat (e deja în cap)');
+      egal(await page.evaluate(() => [document.getElementById('spp-lpb').classList.contains('lite'), document.getElementById('spp-b').classList.contains('lite')]), [false, true], 'el ' + st + ': „Deschide linkul” principal, „Trimite-mi linkul” secundar');
+    }
     if (st === 'iesit') {
       await page.fill('#spp-lpi', 'nu e un link'); await page.click('#spp-lpb'); await asteapta(150);
       verifica(/nu pare întreg/.test(await page.locator('#spp-lpm').innerText()), 'el fără cont: câmpul pentru linkul lipit, cu mesaj la greșeală');
-      await page.fill('#spp-lpi', ''); await page.evaluate(() => { document.getElementById('spp-lpm').textContent = ''; document.activeElement.blur(); });
+      await page.fill('#spp-lpi', ''); await page.evaluate(() => { document.getElementById('spp-lpm').textContent = ''; document.getElementById('spp-lpi').removeAttribute('aria-invalid'); document.activeElement.blur(); });
     }
     await poza(page, nume);
     egal(erori, [], 'el ' + st + ': fără erori JS');

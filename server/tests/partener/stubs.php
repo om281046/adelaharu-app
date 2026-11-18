@@ -109,6 +109,9 @@ function wp_redirect( $l, $s = 302 ) { throw new Ah_Test_Redirect( $l ); }
 function wp_schedule_single_event( $t, $h, $a = array() ) { $GLOBALS['ah_test_cron'][] = array( $t, $h, $a ); return true; }
 function wp_schedule_event( $t, $r, $h, $a = array() ) { $GLOBALS['ah_test_cron'][] = array( $t, $h, $a, $r ); return true; }
 function wp_next_scheduled( $h, $a = array() ) { foreach ( $GLOBALS['ah_test_cron'] as $e ) { if ( $e[1] === $h && $e[2] === $a ) { return $e[0]; } } return false; }
+function wp_get_schedule( $h, $a = array() ) { foreach ( $GLOBALS['ah_test_cron'] as $e ) { if ( $e[1] === $h && $e[2] === $a ) { return $e[3] ?? false; } } return false; }
+function wp_clear_scheduled_hook( $h, $a = array() ) { $n = count( $GLOBALS['ah_test_cron'] ); $GLOBALS['ah_test_cron'] = array_values( array_filter( $GLOBALS['ah_test_cron'], function ( $e ) use ( $h, $a ) { return ! ( $e[1] === $h && $e[2] === $a ); } ) ); return $n - count( $GLOBALS['ah_test_cron'] ); }
+function wp_timezone() { return new DateTimeZone( date_default_timezone_get() ); }
 
 /* ---------- articole ---------- */
 function get_post( $id ) { $p = $GLOBALS['ah_test_posts'][ (int) $id ] ?? null; return $p ? (object) $p : null; }
@@ -217,14 +220,14 @@ class Ah_Test_Wpdb_Spp extends Ah_Test_Wpdb {
 	public $insert_id = 0;
 	public function __construct() {
 		parent::__construct();
-		$this->pdo->exec( 'CREATE TABLE wp_ah_spp_parteneri ( id INTEGER PRIMARY KEY AUTOINCREMENT, ea TEXT NOT NULL, nume TEXT DEFAULT \'\', nume_ea TEXT DEFAULT \'\', email_c TEXT NOT NULL, email_h TEXT NOT NULL, token_h TEXT NOT NULL UNIQUE, token_nou_h TEXT NOT NULL DEFAULT \'\', ses TEXT NOT NULL, acord TEXT NOT NULL, acord_v TEXT NOT NULL DEFAULT \'\', creat TEXT NOT NULL, invitat TEXT NOT NULL, intrat TEXT DEFAULT NULL, vizita TEXT DEFAULT NULL, oprit TEXT DEFAULT NULL, email_faze INTEGER NOT NULL DEFAULT 0, faza_trimisa TEXT NOT NULL DEFAULT \'\' )' );
+		$this->pdo->exec( 'CREATE TABLE wp_ah_spp_parteneri ( id INTEGER PRIMARY KEY AUTOINCREMENT, ea TEXT NOT NULL, nume TEXT DEFAULT \'\', nume_ea TEXT DEFAULT \'\', email_c TEXT NOT NULL, email_h TEXT NOT NULL, token_h TEXT NOT NULL UNIQUE, token_nou_h TEXT NOT NULL DEFAULT \'\', ses TEXT NOT NULL, acord TEXT NOT NULL, acord_v TEXT NOT NULL DEFAULT \'\', creat TEXT NOT NULL, invitat TEXT NOT NULL, intrat TEXT DEFAULT NULL, vizita TEXT DEFAULT NULL, oprit TEXT DEFAULT NULL, email_faze INTEGER NOT NULL DEFAULT 0, faza_trimisa TEXT NOT NULL DEFAULT \'\', pauza_de_la TEXT NOT NULL DEFAULT \'\' )' );
 		$this->pdo->exec( 'CREATE TABLE wp_ah_spp_push ( id INTEGER PRIMARY KEY AUTOINCREMENT, partener INTEGER NOT NULL, token TEXT NOT NULL, token_h TEXT NOT NULL UNIQUE, platforma TEXT DEFAULT \'\', creat TEXT NOT NULL, vazut TEXT NOT NULL )' );
 	}
 	public function get_col( $q ) { return array_map( function ( $r ) { return $r[0]; }, $this->pdo->query( $q )->fetchAll( PDO::FETCH_NUM ) ); }
 	public function insert( $t, $d ) { $n = parent::insert( $t, $d ); $this->insert_id = (int) $this->pdo->lastInsertId(); return $n; }
 }
 $GLOBALS['wpdb'] = new Ah_Test_Wpdb_Spp();
-$GLOBALS['ah_test_options']['ah_spp_tabel']   = '3'; // tabelele de mai sus țin locul lui dbDelta (AH_SPP_TABEL_VER)
+$GLOBALS['ah_test_options']['ah_spp_tabel']   = '4'; // tabelele de mai sus țin locul lui dbDelta (AH_SPP_TABEL_VER)
 define( 'AH_SPP_LINK_MS', 60 ); // /trimite-link: timpul minim, mic în teste
 $GLOBALS['ah_test_options']['ah_sp_ciclu_db'] = '1';
 
