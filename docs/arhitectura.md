@@ -53,7 +53,8 @@ Nu se urcă nimic pe site fără OK-ul lui Mircea (se urcă inactiv, cu copie de
    (așa linkul personal `?cont=` din orice email deschide aplicația deja logată).
 2. **Notificări push:** după intrarea în cont, cere permisiunea O SINGURĂ dată, la un moment potrivit (nu la prima
    deschidere), cu un ecran de explicație; tokenul FCM → `POST /wp-json/ah-spa/v1/push` (legat de emailul din
-   cookie-ul `ah_sp`). La ieșire din cont → `DELETE`. Atingerea unei notificări deschide `data.url`.
+   cookie-ul `ah_sp`). La ieșire din cont → `POST /wp-json/ah-spa/v1/push/sterge` (2.3.0; `DELETE /push` rămâne pentru
+   aplicațiile vechi). Atingerea unei notificări deschide `data.url`.
    Doar dacă `AhApp.info().push` e `true` (build cu Firebase; pe iOS și cu `aps-environment`); altfel puntea nu
    întreabă și nu arată comutatorul „Notificări”, iar notele de recenzie și fișa magazinului nu promit push.
 3. **Ciclul:** citește `localStorage.ahsp_ciclu` (`{starturi:[YYYY-MM-DD…], lung, men, sit}`), calculează fazele cu
@@ -70,6 +71,14 @@ Nu se urcă nimic pe site fără OK-ul lui Mircea (se urcă inactiv, cu copie de
      cont pe același telefon ⇒ înainte ca 235 să citească ceva, pleacă `ahsp_*`, `ahspx_*`, `ahct_*`, `ah_ciclu_v1`, apoi
      `Preferences` ale ei (`ah_ciclu`, `ah_ciclu_notif`, `ah_push_on`, `ah_push_intrebat`, `ah_deschideri`), mementourile
      și descărcările. Tot ce citește/anulează/programează mementourile trece printr-o singură coadă.
+     **Amprenta** (2.3.0): `S.cine` = HMAC al adresei cu un secret creat o dată în baza de date (`ah_spa_cine_secret`), nu
+     din sărurile WordPress (rotirea lor ar fi șters ciclul tuturor de pe telefoane). `S.cine_vechi` = amprentele aceluiași
+     cont (cea din săruri, 60 de zile; aliasurile din „Mută contul”, un an): pentru ele nu se șterge nimic, doar se rescrie
+     `ahspa_cine`, iar refacerea primește și o copie `ah_ciclu` cu amprenta veche.
+   - **o pagină fără cont** (cookie expirat) nu șterge nimic de pe telefon (2.3.0); șterg doar ieșirea cerută, alt cont,
+     „Șterge contul”. Un „Șterge contul” întrerupt (aplicația închisă după răspuns) se termină la pornirea următoare
+     (`Preferences.ah_sterge`, scris înaintea cererii).
+   - mementourile se reprogramează și la schimbarea fusului orar (în semnătură) și la `App.resume`.
    - mementourile pornesc doar dacă ea a spus da (`ah_ciclu_notif` = 1; pe Android ≤ 12 permisiunea e dată fără
      întrebare, deci nu ajunge); textul de pe ecranul blocat e neutru („Ciclul meu · Începe o fază nouă.”).
 4. **Meditații offline:** buton „Descarcă” lângă fiecare meditație Inner Temple pe care o poate asculta →
@@ -116,8 +125,15 @@ Nu se urcă nimic pe site fără OK-ul lui Mircea (se urcă inactiv, cu copie de
 
 ## Pe server, fragmentul nou mai face
 
-- `ah-spa/v1`: `POST/DELETE /push`, `GET /descarca`, `POST /sterge-cont`, `GET /config` (versiunea minimă, mesaj).
-  Autentificare = cookie-ul `ah_sp` existent (`ah_sp_email()`), nimic nou. `Cache-Control: no-store`, LiteSpeed nocache.
+- `ah-spa/v1`: `POST /push`, `POST /push/sterge` (+ `DELETE /push`, pentru aplicațiile vechi), `GET /descarca`,
+  `POST /sterge-cont`, `GET /config` (versiunea minimă, mesaj; îl întreabă și pagina offline).
+  Autentificare = cookie-ul `ah_sp` existent (`ah_sp_email()`), nimic nou. `Cache-Control: no-store`, LiteSpeed nocache —
+  din 2.3.0 pe toate rutele `ah-sp`, `ah-spx`, `ah-spp`, `ah-spa` (`rest_post_dispatch`), în afară de `punte` și `config`.
+- **„Mută contul”** (2.3.0, Setări › Aplicația mobilă, doar administratori): adresa veche → nouă pentru ciclul din cont
+  (`ah_sp_ciclu.cheie`), emailurile fazelor, push, telefoanele Inner Temple; alias pentru amprenta de pe telefon;
+  `do_action('ah_spa_cont_mutat', $vechi, $nou)`. Comenzile se mută în WooCommerce.
+- **Cronul verificat** (2.3.0): ultimele rulări (`ah_spa_tick`, `ah_spa_lot`, `ah_spp_ultima_rulare`) în setări; anunț în
+  admin după 26 h fără `ah_spa_tick` (sau fără cronul lui, cu fragmentul lui activ).
 - Trimiterea push: FCM HTTP v1 (cont de serviciu în opțiunea `ah_spa_fcm`; până atunci doar jurnal). Declanșatori:
   meditație nouă publicată (celor cu acces), înregistrare „Respiră-te acasă” publicată (celor înscrise în ziua
   aceea), întâlnire care începe în 15 minute (celor înscrise). În loturi, prin cron, fără să blocheze cererea.
@@ -132,8 +148,13 @@ Nu se urcă nimic pe site fără OK-ul lui Mircea (se urcă inactiv, cu copie de
 
 ## Pagina offline (app/, locală)
 
-Se deschide când nu e internet. Arată: faza de azi din `Preferences.ah_ciclu` (același calcul), meditațiile
-descărcate cu player (Media Session), butonul „Încearcă din nou”. Fără cont, fără rețea.
+Se deschide când nu e internet sau când site-ul răspunde cu o eroare. Arată: motivul („Nu avem internet acum” /
+„Site-ul e în lucru, revino în câteva minute” / pe Android cu WebView sub 90, „Telefonul are nevoie de o actualizare”),
+faza de azi din `Preferences.ah_ciclu` (același calcul), meditațiile descărcate cu player (Media Session), butonul
+„Încearcă din nou”. Fără cont. Singura cerere: `GET /wp-json/ah-spa/v1/config` (CORS, `r.ok`), ca să deosebească cele
+două motive; încercările automate au pauze tot mai lungi după fiecare întoarcere rapidă (fără buclă site ↔ offline).
+iOS: `AhNavigare` deschide pagina și pentru un 5xx al site-ului (`offline.html?cod=`); Android: Capacitor o deschide la
+orice ≥ 400, iar codul îl ține `AhApp.info().eroare`. Android: un proces WebView oprit reface ecranul (nu închide aplicația).
 
 ## Ce a rămas din v1
 
@@ -159,7 +180,10 @@ El primește un email (cadrul comun al emailurilor) cu un link personal permanen
 (32 de octeți aleatori; pe server doar sha256). Linkul deschide aplicația (universal link) sau pagina din browser și
 îl ține conectat (cookie semnat `ah_spp`, 1 an). Link pierdut: „Trimite-mi din nou linkul” cu emailul lui → token nou,
 cel vechi se anulează când îl folosește pe cel nou (review 18 nov.). Ea vede în „Ciclul meu”: cine e invitat, dacă a intrat, ultima vizită; „Oprește accesul” (pe loc)
-și „Trimite din nou invitația” (token și sesiune noi: deconectează orice telefon sau browser al lui). Cel mult 2 parteneri activi.
+și „Trimite din nou invitația” („Trimite-i din nou linkul” dacă a intrat deja; token și sesiune noi: deconectează orice telefon sau
+browser al lui, dar doar dacă emailul a plecat, 1.4.0). Cel mult 2 parteneri activi (verificat sub `GET_LOCK`, ca două cereri
+deodată să nu treacă amândouă). Adresa lui se verifică strict (1.4.0): diacriticele, spațiile sau orice caracter non-ASCII sunt
+refuzate cu un mesaj clar, nu „curățate” de `sanitize_email` spre adresa altcuiva.
 
 **Ce primește el (sincronizat, minim):** `GET /wp-json/ah-spp/v1/azi` (cookie `ah_spp` sau `?t=`) calculează pe server,
 din datele ei criptate (`ah_sp_ciclu`: `ciclu.starturi`, `lung`, `men`, `sit`), cu EXACT regula `CI.faze`/`CI.lung` din 235:
@@ -176,7 +200,11 @@ pentru fiecare partener, păstrate în `pauza_de_la`). `sit` lipsă = `natural`,
 **Notificări pentru el:** în aplicație, push (FCM) din cron-ul zilnic (8:10 ora site-ului, lanț de evenimente unice, deci și
 după schimbarea orei), la începutul fiecărei faze, doar dacă s-a schimbat faza (la fel și când ea notează o menstruație nouă care
 mută faza). Faza e notată ca trimisă doar după o trimitere reușită (altfel se reîncearcă). Fără aplicație: email la începutul fiecărei faze, doar dacă
-bifează asta pe pagina lui (oprire din orice email). Tokenurile push ale lui sunt separate de ale ei.
+bifează asta pe pagina lui (oprire din orice email). Tokenurile push ale lui sunt separate de ale ei. **Notificarea nu spune faza
+(1.4.0)**, pentru că se vede pe ecranul blocat: „Ciclul ei” / „Începe o fază nouă. Vezi cum o poți sprijini.”, iar pe Android
+vizibilitatea e `PRIVATE`; subiectul emailului e „Ciclul ei: o fază nouă” (corpul păstrează faza și sprijinul). Invitat de două
+femei, telefonul lui stă lângă amândouă invitațiile (unic pe partener + token) și primește de la amândouă. Fiecare rulare a
+cronului notează `ah_spp_ultima_rulare` (avizul din admin al modulului aplicație).
 
 **Un telefon = un cont, pentru push** (integrare, 18 nov.): tokenul FCM e al telefonului, nu al contului, deci stă într-un
 singur tabel o dată. Serverul îl mută: `POST /ah-spa/v1/push` (ea) îl scoate din `wp_ah_spp_push`, `POST /ah-spp/v1/push`
@@ -187,15 +215,21 @@ Pe un telefon cu ea intrată, telefonul e al ei: pagina lui nu oferă notificăr
 întoarce 409 `cont_ea`. Puntea ei (`AHApp`) se tipărește doar pe paginile ei, deci nu poate lega telefonul lui de contul
 ei; pagina lui are scriptul ei, care scrie doar la `ah-spp/v1`. „Ieși”/„Șterge accesul meu” la el scot doar tokenul lui
 (`unregister()` doar dacă `ah_push.cont` e `el`); ieșirea ei scoate doar tokenul ei și nu atinge tokenul lui cât e intrat
-el (`AH_SPA.el`); pe o pagină fără niciun cont, un token rămas al lui pleacă prin `DELETE /ah-spp/v1/push`.
+el (`AH_SPA.el`); pe o pagină fără niciun cont, un token rămas al lui pleacă prin `POST /ah-spp/v1/push/sterge` (1.4.0, pentru
+firewallurile care blochează DELETE; `DELETE /push` rămâne pentru compatibilitate).
+
+**Interfețele cu modulul aplicație (1.4.0):** `ah_spa_cont_mutat($vechi, $nou)` — ea și-a schimbat adresa: rândurile ei trec pe
+`ah_sp_ciclu_cheie($nou)`; `ah_spa_are_acces_el` — adevărat doar cu un cookie `ah_spp` valid al unui acces activ (aplicația ei arată
+atunci rândul „Ciclul ei” spre `/pentru-el/`); `ah_spp_ultima_rulare` (opțiune, unix time).
 
 **În aplicație:** `/pentru-el/` e pe lista permisă (filtrul `ah_spa_permise`), deschisă în aplicație (`allowNavigation`
 `www.adelaharu.ro`, App Links / AASA); fără analiză, fără Google Fonts, fără cărți. Pe ecranul de intrare apare „Sunt partenerul ei” → „Deschide linkul primit pe email” (cu un câmp pentru
 linkul copiat, care îl deschide în aplicație) sau „Trimite-mi din nou linkul”. Apple: același cont simplu (fără parolă, fără cumpărături).
 
 **Datele lui:** prenume, email (criptat; hash pentru căutare), token (hash), tokenuri push, ultima vizită. Cheia modulului nu
-stă în baza de date (constanta `AH_SPP_CHEIE` din `wp-config.php` sau derivată din sărurile WordPress; din 1.3.0, cu migrarea
-o dată a cheii vechi din opțiuni). Cheia ciclului din 235 (`ah_sp_ciclu_secret`) e încă în opțiuni: recomandare în
+stă în baza de date (constanta `AH_SPP_CHEIE` din `wp-config.php` sau derivată din sărurile WordPress). Cheia veche din opțiuni
+(până la 1.2.0) rămâne 30 de zile după urcare (1.4.0): rândurile vechi se citesc cu ea și se recriptează abia la capăt, așa că o
+întoarcere sub 1.3 e sigură doar în aceste 30 de zile (apoi copia veche a fragmentului se șterge). Cheia ciclului din 235 (`ah_sp_ciclu_secret`) e încă în opțiuni: recomandare în
 `docs/partener.md`. Rutele care schimbă ceva cer antetul `X-AH-SPP: 1` (apărare CSRF în plus față de SameSite=Lax). El își poate șterge
 accesul din pagina lui; când ea își șterge contul (`sterge-cont`, cu numărul în emailul echipei: `pentru_el`) sau ciclul,
 rândurile lui și tokenurile lui push se șterg pe loc. Paragraf nou în Politica de confidențialitate.
@@ -203,7 +237,7 @@ rândurile lui și tokenurile lui push se șterg pe loc. Paragraf nou în Politi
 **Textele (Mircea, 18 nov.): niciun text nou.** Azi și Învață (6 pagini) se fac doar din ce e deja pe site: Harta ciclului 41
 (`pe_scurt`, `simti`, `ajuta`, `practica`, arhetip, luna, „Nota” din *Spre feminitate*), 235 (`sprijin`, citatele din „Magia Ciclului
 Feminin”, episoadele 2–6 ale podcastului, frazele paginii `?ciclul-ei`), cu nota „Fazele sunt o estimare: nu sunt o metodă de
-contracepție.” (41). Notificarea fazei: „Începe {Iarna ei interioară…}” + primul rând din `sprijin`. Emailurile lui numesc operatorul
+contracepție.” (41). Notificarea fazei: neutră (vezi mai sus); emailul fazei: „Începe {Iarna ei interioară…}” + sprijinul. Emailurile lui numesc operatorul
 (HARU TRAINING SRL) și politica de confidențialitate; versiunea textului acordului ei (`acord_v`) stă lângă `acord`. Puținele rânduri
 funcționale fără sursă pe site: lista din `docs/partener.md`.
 Linkul vechi „Pentru el” (`?ciclul-ei` cu datele după #) continuă să meargă; în „Ciclul meu” generatorul vechi e înlocuit

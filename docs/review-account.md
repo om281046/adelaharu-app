@@ -133,6 +133,19 @@ Prioritatea 4 (înaintea filtrului de portaluri, 5) nu contează pentru corectit
 4. Același cod se trece în App Store Connect (App Review Information › Password) și în Play Console (Acces la
    aplicație). **Codul nu se pune în repo, în chat sau în emailuri.**
 
+### Ecranul de intrare în aplicație (2.3.0)
+
+Puntea face ecranul de cod al lui 235 mai ușor de folosit, fără să-l schimbe; contează și pentru recenzori:
+- codul se poate lipi și cu spațiu („123 456”); „Intră” pleacă doar cu 6 cifre (altfel „Codul are 6 cifre.”, nicio
+  încercare consumată la server);
+- „Trimite-mi un cod nou” e separat de „Altă adresă”. Pe adresa de recenzie, „Trimite-mi un cod nou” răspunde ca 235
+  (fără email; codul fix rămâne același) și nu golește contoarele codului fix;
+- un cod greșit se anunță (cititorul de ecran) și focusul rămâne în câmp; după „Prea multe încercări” câmpul se golește;
+- o eroare a serverului (5xx) arată „Nu am putut verifica codul acum. Mai încearcă puțin.” (nu „Codul nu se potrivește”).
+Limita pe adresă (secțiunea 11 a fragmentului) și contoarele codului fix numără exact ca înainte: fiecare cod de 6 cifre
+trimis ajunge la `POST /ah-sp/v1/intra`. Din 2.3.0, o „adresă” care nu e o adresă de email nu mai creează rânduri în
+tabelul contoarelor (235 răspunde oricum „Codul a expirat”).
+
 ## Partenerul de recenzie (contul „Pentru el”, când există `ah-sp-partener.php`)
 
 Contul lui nu are cod: intră cu un link personal permanent (`/pentru-el/?t=<token>`, `arhitectura.md`), care pe

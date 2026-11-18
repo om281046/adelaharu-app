@@ -31,6 +31,13 @@
  *      15 greșeli pe zi), prin rest_pre_dispatch / rest_post_dispatch; 235 rămâne neschimbat (2.2.0, 18 nov. 2026).
  *  2.2.0: puntea se încarcă dintr-un fișier cu versiune (cache un an), cu doar configurația și partea „devreme” în pagină;
  *      schimbarea contului pe același telefon curăță datele celei dinainte; mementourile cu text neutru pe ecranul blocat.
+ *  2.3.0 (review 18 nov., runda 2): amprenta contului („cine”) dintr-un secret din baza de date (nu din sărurile WordPress),
+ *      cu amprenta veche acceptată 60 de zile și alias la „Mută contul” (Setări › Aplicația mobilă); o pagină fără cont nu mai
+ *      șterge descărcările și copia ciclului; rutele ah-sp, ah-spx, ah-spp, ah-spa fără cache (antete + LiteSpeed); POST /push/sterge; ștergerea
+ *      contului terminată și după o închidere bruscă (Preferences.ah_sterge); contoarele vechi se curăță; ștergerea rândurilor
+ *      „Pentru el” și când fragmentul lui e oprit; versiunea tabelelor doar după ce coloanele există; cronul verificat (anunț
+ *      în admin după 26 h fără rulare); fusul orar în mementouri; accesibilitate (foi cu focus prins și Escape, comutatoare
+ *      <button role=switch>, titlul secțiunii <h1>, zoom 200%, codul de intrare), modul de seară după telefon.
  *
  * În browser nu se schimbă nimic: fiecare cârlig de pagină întreabă întâi ah_spa_e_aplicatie().
  * Oprire: dezactivezi fragmentul. Site-ul rămâne exact ca înainte; aplicația arată Spațiul meu ca în browser.
@@ -42,17 +49,19 @@ if ( ! defined( 'ABSPATH' ) ) {
 if ( defined( 'AH_SPA' ) ) {
 	return; // încărcat deja (de exemplu, copie dublă a fragmentului)
 }
-define( 'AH_SPA', '2.2.0' );
+define( 'AH_SPA', '2.3.0' );
 define( 'AH_SPA_NS', 'ah-spa/v1' );
 define( 'AH_SPA_PACHET', 'ro.adelaharu.app' );
 define( 'AH_SPA_LINK_MIN', 15 );        // cât ține linkul semnat al unei descărcări
 define( 'AH_SPA_LOT', 100 );            // telefoane pe lot de notificări
 define( 'AH_SPA_TOKENURI_MAX', 10 );    // telefoane cu notificări pe o adresă
 define( 'AH_SPA_TABEL_VER', '2' );      // 2: și tabelul contoarelor atomice (ah_spa_incercari, secțiunea 11)
-define( 'AH_SPA_NOTIF_ID', 41000 );
+define( 'AH_SPA_NOTIF_ID', 41000 );     // id-urile notificărilor locale ale ciclului: 41000–41099 (aceleași în puntea JS)
 define( 'AH_SPA_COD_MAX', 5 );         // încercări pe un cod trimis de 235 (POST /ah-sp/v1/intra), secțiunea 11
 define( 'AH_SPA_COD_ZI', 15 );         // coduri greșite pe o adresă într-o zi
-define( 'AH_SPA_REC_MAX', 20 );        // coduri greșite pe contul de recenzie, apoi se oprește (secțiunea 9)     // id-urile notificărilor locale ale ciclului: 41000–41099 (aceleași în puntea JS)
+define( 'AH_SPA_REC_MAX', 20 );        // coduri greșite pe contul de recenzie, apoi se oprește (secțiunea 9)
+define( 'AH_SPA_CINE_TRECERE', 60 );   // zile în care amprenta veche (din sărurile WordPress) e recunoscută ca același cont
+define( 'AH_SPA_CRON_ORE', 26 );       // ore fără nicio rulare a cronului, apoi anunț în admin (secțiunea 12)
 
 if ( ! function_exists( 'ah_spa_e_aplicatie' ) ) :
 
@@ -424,6 +433,8 @@ function ah_spa_cfg( $zona, $email ) {
 		'zona'           => $zona,
 		'cont'           => '' !== $email,
 		'cine'           => '' !== $email ? ah_spa_cine( $email ) : '',
+		// amprentele vechi ale aceluiași cont (trecerea de la sărurile WordPress, „Mută contul”): nu e „alt cont” (2.3.0)
+		'cine_vechi'     => '' !== $email ? ah_spa_cine_vechi( $email ) : array(),
 		'api'            => esc_url_raw( rest_url( AH_SPA_NS . '/' ) ),
 		'pagina'         => $sp,
 		'gazde'          => array_values( array_unique( array( $h, preg_replace( '/^www\./', '', $h ), 'www.' . preg_replace( '/^www\./', '', $h ) ) ) ),
@@ -438,7 +449,8 @@ function ah_spa_cfg( $zona, $email ) {
 		'magazin'        => 'ios' === $pl ? (string) $s['link_ios'] : ( 'android' === $pl ? (string) $s['link_android'] : '' ),
 		'notif_id'       => AH_SPA_NOTIF_ID,
 		// contul pentru el (ah-sp-partener.php), dacă fragmentul lui e activ: e intrat el pe acest telefon? (doar da/nu)
-		'el'             => function_exists( 'ah_spp_din_cookie' ) && function_exists( 'ah_spp_gata' ) && ah_spp_gata() && (bool) ah_spp_din_cookie(),
+		// și dacă adresa ei are acces la ciclul cuiva (filtrul ah_spa_are_acces_el, din ah-sp-partener.php): rândul „Ciclul ei” în Mai mult
+		'el'             => (bool) apply_filters( 'ah_spa_are_acces_el', function_exists( 'ah_spp_din_cookie' ) && function_exists( 'ah_spp_gata' ) && ah_spp_gata() && (bool) ah_spp_din_cookie(), $email ),
 		'api_el'         => function_exists( 'ah_spp_gata' ) && defined( 'AH_SPP_NS' ) ? esc_url_raw( rest_url( AH_SPP_NS . '/' ) ) : '',
 		'pagina_el'      => function_exists( 'ah_spp_gata' ) && defined( 'AH_SPP_PAGINA' ) ? esc_url_raw( home_url( AH_SPP_PAGINA ) ) : '',
 	);
@@ -526,14 +538,18 @@ function ah_spa_r_punte( WP_REST_Request $r ) {
  *  - contul de pe telefon: cheia ahspa_cine ține amprenta contului care a scris datele paginii. Alt cont (B după A, pe
  *    același telefon) ⇒ datele ei din localStorage (ciclul, notițele, partenerul, progresul) pleacă ÎNAINTE ca 235 să le
  *    citească sau să le urce în contul lui B; puntea curăță apoi Preferences, mementourile și descărcările
- *    (window.AHSPA_ALT_CONT). Fără amprentă (prima pornire după actualizare): doar o notăm;
+ *    (window.AHSPA_ALT_CONT). Fără amprentă (prima pornire după actualizare): doar o notăm. O amprentă din S.cine_vechi
+ *    (cea din sărurile WordPress, în trecere, sau aliasul lăsat de „Mută contul”) e același cont: doar o rescriem (2.3.0);
+ *  - modul de seară după telefon: dacă ea n-a ales nimic în „Aspect de seară” (266, ahspx_seara lipsă), pagina urmează
+ *    tema întunecată a sistemului (clasa ahsp-seara, fără să scriem alegerea);
  *  - refacerea ciclului: fără date în pagină, pe telefon, cu cont, #ahsp stă ascuns până răspunde Preferences (cel mult
  *    2,5 s, și dacă puntea nu se încarcă).
  */
 function ah_spa_js_devreme() {
 	return <<<'AHSPAJS0'
 (function(){var S=window.AH_SPA||{},H=document.documentElement,L;if(S.zona)H.classList.add('ahspa-z-'+S.zona);
-try{L=window.localStorage;var v=L.getItem('ahspa_cine');if(S.cont&&S.cine){if(v&&v!==S.cine){Object.keys(L).forEach(function(k){if(/^(ahsp_|ahspx_|ahct_|ah_ciclu_v1$)/.test(k))L.removeItem(k);});window.AHSPA_ALT_CONT=1;}if(v!==S.cine)L.setItem('ahspa_cine',S.cine);}}catch(e){}
+try{L=window.localStorage;var v=L.getItem('ahspa_cine');if(S.cont&&S.cine){if(v&&v!==S.cine&&(S.cine_vechi||[]).indexOf(v)<0){Object.keys(L).forEach(function(k){if(/^(ahsp_|ahspx_|ahct_|ah_ciclu_v1$)/.test(k))L.removeItem(k);});window.AHSPA_ALT_CONT=1;}if(v!==S.cine)L.setItem('ahspa_cine',S.cine);}}catch(e){}
+try{if(S.zona==='sp'&&L&&L.getItem('ahspx_seara')===null&&window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches){H.classList.add('ahsp-seara');var tc=document.querySelector('meta[name="theme-color"]');if(tc)tc.setAttribute('content','#221922');}}catch(e){}
 try{var C=window.Capacitor,N=!!(C&&(typeof C.isNativePlatform==='function'?C.isNativePlatform():C.isNative));if(N&&S.cont&&S.zona==='sp'&&L&&!L.getItem('ahsp_ciclu')&&!L.getItem('ah_ciclu_v1')){H.classList.add('ahspa-refac');setTimeout(function(){H.classList.remove('ahspa-refac');},2500);}}catch(e){}})();
 AHSPAJS0;
 }
@@ -645,6 +661,41 @@ html.ahspa-refac #ahsp{visibility:hidden}
 
 /* ===== fără bara de cookie-uri în aplicație: aici rămân doar cookie-uri strict necesare (fragmentul, secțiunea 10) ===== */
 #cmplz-cookiebanner-container,#cmplz-manage-consent,.cmplz-cookiebanner,.cmplz-manage-consent,.cmplz-soft-cookiewall{display:none!important}
+/* ===== accesibilitate (2.3.0) ===== */
+/* rândurile din „Mai mult” sunt <button>: același aspect ca rândurile <a> din 235 */
+#ahsp button.rand.spa-b{width:100%;text-align:left;font:inherit;color:inherit;margin:0;cursor:pointer;-webkit-appearance:none;appearance:none;border:1px solid #fff;background:rgba(255,255,255,.85)}
+html.ahsp-seara #ahsp button.rand.spa-b{background:var(--card,#31242E);border-color:rgba(255,255,255,.08)}
+#ahsp #spa-el .sageata{margin-left:auto}
+#ahsp #spa-el .spa-dr{transform:scaleX(-1)}
+#ahsp button.rand.spa-b:focus-visible,#ahsp a.rand:focus-visible,.ahspa-foaie button:focus-visible,.ahspa-foaie input:focus-visible,#ahsp .spa-dl button:focus-visible{outline:3px solid #964E46;outline-offset:2px}
+html.ahsp-seara #ahsp button.rand.spa-b:focus-visible{outline-color:#EDB7A4}
+.ahspa-sr{position:absolute!important;width:1px!important;height:1px!important;margin:-1px!important;padding:0!important;overflow:hidden!important;clip:rect(0 0 0 0)!important;white-space:nowrap!important;border:0!important}
+/* titlul secțiunii: <h1> cu aspectul vechiului <span class="titlu"> */
+#ahsp .sus h1#ahsp-tit{font:400 20px/1.2 var(--disp)!important;color:var(--ink)!important;margin:0!important;padding:0!important;min-width:0;overflow-wrap:anywhere}
+#ahsp h1#ahsp-tit:focus{outline:none}
+/* eticheta mică ce repetă titlul din antet (doar pe telefon: pe calculator antetul nu se vede) */
+@media (max-width:899px){html.ahspa-z-sp #ahsp .et.spa-dublu{display:none}}
+/* zoom 200% (ecran de 195 px): bara pe 5 coloane egale, etichetele se rup, nimic nu iese în lateral */
+#ahsp .bara{grid-auto-flow:row!important;grid-template-columns:repeat(5,minmax(0,1fr))!important}
+#ahsp .bara a{min-width:0;overflow-wrap:anywhere;text-align:center}
+#ahsp .bara .pt{width:100%!important;max-width:52px}
+#ahsp .grila{grid-template-columns:repeat(auto-fit,minmax(min(140px,100%),1fr))!important}
+#ahsp .ecran>*,#ahsp .tile,#ahsp .spx-ev,#ahsp .spx-ev>*{min-width:0;max-width:100%}
+#ahsp .spx-ev *{overflow-wrap:anywhere}
+#ahsp>div,#ahsp>div>div,#ahsp main,#ahsp .ci-azi,#ahsp .dar,#ahsp .ecran,#ahsp .sectiune,#ahsp .salut,#ahsp .continua,#ahsp .grila>*{min-width:0;max-width:100%}
+#ahsp .salut h1,#ahsp .continua b{overflow-wrap:anywhere}
+#ahsp .ci-inel{max-width:100%;height:auto}
+#ahsp .ci-hor svg{max-width:100%}
+@media (max-width:260px){#ahsp .bara a{font-size:0!important;gap:0}#ahsp .sus{padding-left:8px!important;padding-right:8px!important}#ahsp main{padding-left:10px!important;padding-right:10px!important}#ahsp .cov-grila{grid-template-columns:minmax(0,1fr)!important}}
+/* playerul nu acoperă sfârșitul listei */
+html.ahspa-cu-player #ahsp main{padding-bottom:calc(190px + var(--jos,0px))!important}
+/* descărcarea: „Descărcat” și „Șterge” pe un rând, aceeași înălțime în ambele stări */
+#ahsp .spa-dl{min-height:44px}
+#ahsp .spa-dl button.leg{min-height:44px}
+/* foaia „Șterge contul”: butoanele rămân jos, la vedere, cât derulează textul */
+.ahspa-foaie .c .b.lipit{position:sticky;bottom:calc(-22px - env(safe-area-inset-bottom,0px));margin:6px -20px calc(-22px - env(safe-area-inset-bottom,0px));padding:12px 20px calc(22px + env(safe-area-inset-bottom,0px));background:#FBF6F3;box-shadow:0 -12px 18px -14px rgba(40,25,30,.35)}
+html.ahsp-seara .ahspa-foaie .c .b.lipit{background:#2A1F28}
+@media (min-width:700px){.ahspa-foaie .c .b.lipit{margin-bottom:-22px;padding-bottom:22px;bottom:-22px}}
 AHSPACSS;
 }
 
@@ -660,7 +711,7 @@ var NATIV=!!(CAP&&(typeof CAP.isNativePlatform==='function'?CAP.isNativePlatform
 if(S.zona)H.classList.add('ahspa-z-'+S.zona); /* stilul pe zone (politicile: fără antetul și subsolul temei) */
 function ls(k,v){try{if(v===undefined)return JSON.parse(localStorage.getItem(k)||'null');localStorage.setItem(k,JSON.stringify(v));}catch(e){return null;}}
 function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
-function scoate(el){if(el&&el.parentNode)el.parentNode.removeChild(el);}
+function scoate(el){if(el&&el.__ahInchide){var f=el.__ahInchide;el.__ahInchide=null;f();}if(el&&el.parentNode)el.parentNode.removeChild(el);}
 function pr(p){return p&&typeof p.then==='function'?p:Promise.resolve(p);}
 function are(n,m){return !!(PL[n]&&typeof PL[n][m]==='function');}
 function cheama(n,m,a){if(!are(n,m))return Promise.reject(new Error('lipsă '+n+'.'+m));try{return pr(PL[n][m](a));}catch(e){return Promise.reject(e);}}
@@ -743,7 +794,7 @@ function linkSpotify(){var P=(window.AH_SP&&window.AH_SP.podcast)||{},y=abs(P.sp
 /* Unde ascultă, după telefon: iPhone = Apple Podcasts (episodul) + Spotify; Android = Spotify (Apple Podcasts nu e aplicație de Android). */
 function butoanePodcast(f){
  var a=platf()==='android'?'':linkPodcast(f),sp=linkSpotify(),h='';
- if(a)h+='<a class="btn lite" href="'+esc(a)+'" rel="noopener">'+ic('nota')+'Ascultă în Apple Podcasts</a>'; /* CIORNĂ */
+ if(a)h+='<a class="btn lite" href="'+esc(a)+'" rel="noopener">'+ic('iesire')+'Ascultă în Apple Podcasts</a>'; /* CIORNĂ; aceeași iconiță ca Spotify: ambele ies din aplicație */
  if(sp)h+='<a class="btn lite" href="'+esc(sp)+'" rel="noopener">'+ic('iesire')+'Ascultă pe Spotify</a>'; /* CIORNĂ */
  return h;
 }
@@ -796,7 +847,7 @@ function curataAplicatie(){
  /* Abonamente: un calendar în locul cardului bancar */
  d.querySelectorAll('#ahsp path[d="M4 7h16v10H4zM4 11h16M8 15h3"]').forEach(function(x){x.setAttribute('d',IC.calendar);});
  /* Inner Temple: „Instrucțiuni” ca iconiță, pe copertă */
- d.querySelectorAll('#ahsp .cov-inst:not([data-spa-ic])').forEach(function(b){b.setAttribute('data-spa-ic','1');b.setAttribute('aria-label','Instrucțiuni');b.setAttribute('title','Instrucțiuni');b.innerHTML=ic('info');});
+ d.querySelectorAll('#ahsp .cov-inst:not([data-spa-ic])').forEach(function(b){var c=b.closest('.cov'),t=c&&c.querySelector('.cov-t b'),n=t?'Instrucțiuni pentru „'+(t.textContent||'').trim()+'”':'Instrucțiuni';b.setAttribute('data-spa-ic','1');b.setAttribute('aria-label',n);b.setAttribute('title',n);b.innerHTML=ic('info');});
  /* Podcast: căștile în locul lui ▶ (episodul se ascultă în aplicația de podcasturi); pe Android fără Apple Podcasts */
  d.querySelectorAll('#ahsp .cov-pod .cov-play:not([data-spa])').forEach(function(x){x.setAttribute('data-spa','1');x.innerHTML=ic('casti');});
  if(platf()==='android')d.querySelectorAll('#ahsp a[href^="https://podcasts.apple.com"]').forEach(function(a){if(!a.closest('[data-spa]'))scoate(a);});
@@ -860,6 +911,8 @@ function ciLocal(){return CX.d(ls('ahsp_ciclu'),ls('ah_ciclu_v1'));}
    (cel mult 1,5 s) până răspunde Preferences; dacă 235 a desenat deja, îl punem să redeseneze (hashchange → arata()).
    Copia și mementourile NU se șterg aici. Se șterg doar la acțiuni explicite: „Șterge datele de pe acest telefon”
    (removeItem('ahsp_ciclu') când cheia exista, mai jos), ieșirea din cont și „Șterge contul” (curataLocal). */
+/* amprenta contului de acum sau una veche a aceluiași cont (trecerea de la sărurile WordPress, „Mută contul”) */
+function acelasi(c){return !!c&&(c===S.cine||(S.cine_vechi||[]).indexOf(c)>-1);}
 function refacere(){
  if(!NATIV||!S.cont||S.zona!=='sp'||ciLocal()){H.classList.remove('ahspa-refac');return Promise.resolve(false);}
  H.classList.add('ahspa-refac');
@@ -867,7 +920,7 @@ function refacere(){
  var ceas=new Promise(function(r){setTimeout(function(){r('timp');},1500);});
  return Promise.race([PREF.ia('ah_ciclu'),ceas]).then(function(v){
   if(v==='timp'||!v||typeof v!=='object'||!Array.isArray(v.starturi))return gata(false);
-  if(v.cine!==S.cine){PREF.scoate('ah_ciclu');return anuleazaCiclu().then(function(){return gata(false);},function(){return gata(false);});} /* copia altui cont de pe acest telefon: nu e a ei */
+  if(!acelasi(v.cine)){PREF.scoate('ah_ciclu');return anuleazaCiclu().then(function(){return gata(false);},function(){return gata(false);});} /* copia altui cont de pe acest telefon: nu e a ei */
   var x=CX.d({starturi:v.starturi,lung:v.lung,men:v.men,sit:v.sit},null);
   if(!x||ciLocal())return gata(false); /* între timp pagina a scris singură ceva: nu suprascriem */
   try{localStorage.setItem('ahsp_ciclu',JSON.stringify({starturi:x.starturi,lung:x.lung,men:x.men,sit:x.sit||'natural'}));}catch(e){return gata(false);}
@@ -883,8 +936,14 @@ function curataContVechi(){
  return Promise.all(['ah_ciclu','ah_ciclu_notif','ah_push_on','ah_push_intrebat','ah_deschideri'].map(function(k){return PREF.scoate(k);})
   .concat([anuleazaCiclu().catch(function(){}),DL.stergeTot().catch(function(){})])).catch(function(){});
 }
+/* „Șterge contul” întrerupt (aplicația închisă după răspunsul serverului, înainte de curățenie): Preferences.ah_sterge
+   rămâne, deci la pornirea următoare curățăm tot de pe telefon, înaintea refacerii (care altfel ar aduce ciclul înapoi). */
+function stergereRamasa(){
+ if(!NATIV)return Promise.resolve();
+ return PREF.ia('ah_sterge').then(function(v){if(v==null||v==='')return;return curataLocal(true,true).then(function(){return PREF.scoate('ah_sterge');});});
+}
 /* în microtask: DL (secțiunea 5) e definit abia mai jos */
-var REF=inCoada(function(){return Promise.resolve().then(curataContVechi).then(refacere);});
+var REF=inCoada(function(){return Promise.resolve().then(stergereRamasa).then(curataContVechi).then(refacere);});
 /* Mementourile: pornite DOAR dacă ea a spus da (ah_ciclu_notif = 1, pus la „Da, anunță-mă” sau din comutator). Pe Android ≤ 12
    permisiunea e „granted” fără să fi întrebat-o cineva, deci permisiunea singură nu ajunge. Instalările de dinainte de 2.2.0
    (fără cheie) rămân pornite dacă ea spusese da notificărilor (ah_push_on = 1). */
@@ -895,7 +954,8 @@ function ciclu(forteaza){
  var x=ciLocal();
  return Promise.all([PREF.ia('ah_ciclu_notif'),cheama('LocalNotifications','checkPermissions').catch(function(){return {};}),PREF.ia('ah_push_on')]).then(function(r){
   var on=mementouriPornite(r[0],r[2]),perm=!!(r[1]&&r[1].display==='granted');
-  var sem=JSON.stringify([x,on,perm,S.cont,ciSters,CX.azi0()]);
+  /* și fusul orar: după o călătorie (alt fus), mementourile de la 9:00 se reprogramează pe ora locului */
+  var sem=JSON.stringify([x,on,perm,S.cont,ciSters,CX.azi0(),new Date().getTimezoneOffset()]);
   if(!forteaza&&sem===ciSem)return;ciSem=sem;
   if(x)PREF.pune('ah_ciclu',{starturi:x.starturi,lung:x.lung,men:x.men,sit:x.sit||'natural',cine:S.cine,actualizat:new Date().toISOString()});
   else if(ciSters)PREF.scoate('ah_ciclu');
@@ -946,21 +1006,39 @@ var PUSH={
  porneste:function(){return PUSH.disponibil().then(function(ok){if(!ok)return;PUSH.leaga();return cheama('PushNotifications','register');}).catch(function(){});},
  trimite:function(tok){if(!S.cont)return Promise.resolve();
   return PREF.ia('ah_push').then(function(v){var acum=Date.now();
-   if(v&&v.token===tok&&PUSH.al(v)==='ea'&&v.cine===S.cine&&acum-(v.la||0)<7*864e5)return;
+   if(v&&v.token===tok&&PUSH.al(v)==='ea'&&v.cine===S.cine&&acum-(v.la||0)<7*864e5)return; /* (cine vechi: se retrimite o dată, ca serverul să lege tokenul de adresa de acum) */
    /* contul activ pe telefon e al ei (aplicația deschide contul ei când e intrată): un token al lui trece la ea (serverul îl scoate din tabelul lui) */
    return api('push',{metoda:'POST',corp:{token:tok,platforma:PUSH.platforma(),versiune:S.versiune,disp:DISP}}).then(function(j){if(j&&j.ok)return PREF.pune('ah_push',{token:tok,cont:'ea',cine:S.cine,la:acum});});});},
  /* Al cui e tokenul telefonului (Preferences.ah_push.cont): 'ea' (puntea aceasta) sau 'el' (pagina /pentru-el/ a partenerului,
     ah-sp-partener.php). Rândurile scrise înainte de contul pentru el nu au „cont”: sunt ale ei. */
  al:function(v){return v&&v.cont==='el'?'el':'ea';},
- /* Scoate tokenul ei. Al lui rămâne cât timp e intrat pe acest telefon (S.el); altfel pleacă și el (DELETE /ah-spp/v1/push). */
- opreste:function(){var scos=false;return PREF.ia('ah_push').then(function(v){if(!v||!v.token)return;
-   if(PUSH.al(v)==='el'){if(S.el||!S.api_el)return;scos=true;return fetch(S.api_el+'push',{method:'DELETE',credentials:'same-origin',cache:'no-store',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:v.token})}).catch(function(){}).then(function(){return PREF.scoate('ah_push');});}
-   scos=true;return api('push',{metoda:'DELETE',corp:{token:v.token}}).then(function(){return PREF.scoate('ah_push');});})
+ /* Scoate tokenul lui de la /ah-spp/v1: POST /push/sterge (2.3.0, cu antetul lui X-AH-SPP); un fragment al lui mai vechi
+    (404/405) primește DELETE, ca înainte. */
+ scoateEl:function(tok){var h={'Content-Type':'application/json','X-AH-SPP':'1'},b=JSON.stringify({token:tok});
+  return fetch(S.api_el+'push/sterge',{method:'POST',credentials:'same-origin',cache:'no-store',headers:h,body:b})
+   .then(function(r){if(r.status===404||r.status===405)return fetch(S.api_el+'push',{method:'DELETE',credentials:'same-origin',cache:'no-store',headers:h,body:b});}).catch(function(){});},
+ /* Scoate tokenul ei (POST /ah-spa/v1/push/sterge). Al lui rămâne cât timp e intrat pe acest telefon (S.el); altfel pleacă și el.
+    doarEl: pe o pagină fără cont, doar tokenul rămas al lui (al ei rămâne: e tot telefonul ei, notificările o duc la intrare). */
+ opreste:function(doarEl){var scos=false;return PREF.ia('ah_push').then(function(v){if(!v||!v.token)return;
+   if(PUSH.al(v)==='el'){if(S.el||!S.api_el)return;scos=true;return PUSH.scoateEl(v.token).then(function(){return PREF.scoate('ah_push');});}
+   if(doarEl)return;scos=true;return api('push/sterge',{metoda:'POST',corp:{token:v.token}}).then(function(){return PREF.scoate('ah_push');});})
   .then(function(){return scos?PUSH.disponibil():false;}).then(function(ok){if(ok)return cheama('PushNotifications','unregister').catch(function(){});});}
 };
 var foaieN=0;
-function foaie(html,cls){var R=d.getElementById('ahsp')||d.body,f=d.createElement('div'),id='ahspa-f'+(++foaieN);f.className='ahspa-foaie ahspa-ui'+(cls?' '+cls:'');f.setAttribute('data-spa','1');
- f.innerHTML='<div class="c" role="dialog" aria-modal="true" aria-labelledby="'+id+'">'+html.replace('<h2>','<h2 id="'+id+'">')+'</div>';R.appendChild(f);setTimeout(function(){var b=f.querySelector('button:not([disabled]),input');if(b)b.focus();},60);return f;}
+/* Foile punții (întrebările, ștergerea): dialog modal adevărat. Fundalul (#ahsp > tot în afară de foi) devine inert, Tab
+   se rotește în foaie, Escape = „Renunț” / „Închide” / „Am înțeles”, iar la închidere (scoate) focusul se întoarce la
+   butonul care a deschis-o. Foaia cea mai nouă e cea activă. */
+function focusabile(f){return [].slice.call(f.querySelectorAll('button,input,a[href],select,textarea,[tabindex]:not([tabindex="-1"])')).filter(function(x){return !x.disabled&&x.offsetParent!==null&&x.getAttribute('tabindex')!=='-1';});}
+function foaie(html,cls){var R=d.getElementById('ahsp')||d.body,f=d.createElement('div'),id='ahspa-f'+(++foaieN),deschis=d.activeElement,inerte=[];f.className='ahspa-foaie ahspa-ui'+(cls?' '+cls:'');f.setAttribute('data-spa','1');
+ f.innerHTML='<div class="c" role="dialog" aria-modal="true" aria-labelledby="'+id+'">'+html.replace('<h2>','<h2 id="'+id+'">')+'</div>';R.appendChild(f);
+ [].forEach.call(R.children,function(c){if(c!==f&&!c.classList.contains('ahspa-foaie')&&!c.hasAttribute('inert')){c.setAttribute('inert','');inerte.push(c);}});
+ f.__ahInchide=function(){inerte.forEach(function(c){c.removeAttribute('inert');});if(deschis&&deschis.focus&&d.contains(deschis)){try{deschis.focus({preventScroll:true});}catch(e){}}};
+ setTimeout(function(){var b=f.querySelector('button:not([disabled]),input');if(b)b.focus();},60);return f;}
+d.addEventListener('keydown',function(e){var l=d.querySelectorAll('.ahspa-foaie');if(!l.length)return;var f=l[l.length-1];
+ if(e.key==='Escape'||e.key==='Esc'){var n=f.querySelector('[data-a="nu"],[data-a="inchide"],[data-a="ok"]');if(n){e.preventDefault();n.click();}return;}
+ if(e.key!=='Tab')return;var q=focusabile(f);if(!q.length){e.preventDefault();return;}var a=q[0],z=q[q.length-1],x=d.activeElement;
+ if(!f.contains(x)){e.preventDefault();(e.shiftKey?z:a).focus();return;}
+ if(e.shiftKey&&x===a){e.preventDefault();z.focus();}else if(!e.shiftKey&&x===z){e.preventDefault();a.focus();}},true);
 /* O întrebare cu o acțiune roșie și „Renunț” (în locul ferestrei confirm() a sistemului). */
 function confirma(titlu,text,da){return new Promise(function(gata){var f=foaie('<h2>'+esc(titlu)+'</h2><p>'+esc(text)+'</p><div class="b"><button type="button" data-a="da">'+esc(da)+'</button><button type="button" class="lite" data-a="nu">Renunț</button></div>');
  f.addEventListener('click',function(e){var b=e.target.closest('[data-a]');if(!b)return;scoate(f);gata(b.getAttribute('data-a')==='da');});});}
@@ -1029,15 +1107,24 @@ var DL={idx:null,lucru:{},
   var p=[DL.salveaza()];if(r){[r.fisier,r.poza].forEach(function(f){if(f)p.push(cheama('Filesystem','deleteFile',{path:f,directory:r.dir||DIR}).catch(function(){}));});}return Promise.all(p);});},
  stergeTot:function(){return DL.incarca().then(function(){var t=(DL.idx||[]).slice();DL.idx=[];if(!t.length)return PREF.scoate('ah_descarcate');return Promise.all(t.map(function(r){return Promise.all([r.fisier,r.poza].filter(Boolean).map(function(f){return cheama('Filesystem','deleteFile',{path:f,directory:r.dir||DIR}).catch(function(){});}));})).then(function(){return cheama('Filesystem','rmdir',{path:'meditatii',directory:DIR,recursive:true}).catch(function(){});}).then(function(){return PREF.scoate('ah_descarcate');});});}
 };
-/* Textele de lângă fiecare meditație. CIORNĂ. */
+/* Titlul meditației de pe copertă (pentru numele accesibile ale butoanelor). */
+function titluMed(id){var c=d.querySelector('#ahsp .cov[data-id="'+id+'"]'),b=c&&c.querySelector('.cov-t b');if(b)return (b.textContent||'').trim();var r=DL.rand(id);return r&&r.titlu||'';}
+/* Un singur loc anunțat de cititorul de ecran (role=status) pentru descărcări: începutul, jumătatea, sfârșitul, eroarea. */
+var anuntat={};
+function anunta(t){var el=d.getElementById('ahspa-sr');if(!el){el=d.createElement('p');el.id='ahspa-sr';el.className='ahspa-sr';el.setAttribute('role','status');el.setAttribute('aria-live','polite');el.setAttribute('data-spa','1');d.body.appendChild(el);}el.textContent='';setTimeout(function(){el.textContent=t;},50);}
+/* Textele de lângă fiecare meditație. CIORNĂ. „Descărcat” și „Șterge” pe un singur rând (aceeași înălțime a cartonașelor). */
 function arataDl(id,st){
+ var tt=titluMed(id),q='„'+tt+'”';
+ if(st&&st.p!=null){var tr=st.p>=50?50:0;if(anuntat[id]!==tr){anuntat[id]=tr;anunta(tr?'Descărcarea e la jumătate: '+q+'.':'Se descarcă '+q+'.');}}
+ else if(st&&st.err){delete anuntat[id];anunta('N-a mers descărcarea: '+q+'.');}
+ else if(anuntat[id]!=null&&DL.rand(id)){delete anuntat[id];anunta(q+' e descărcată pe telefon.');}
  d.querySelectorAll('#ahsp .spa-dl[data-dl="'+id+'"]').forEach(function(el){
   var r=DL.rand(id),h;
   if(st&&st.p!=null)h='<button type="button" disabled>'+ic('jos')+'Se descarcă… '+st.p+'%</button>';
   else if(DL.lucru[id])h='<button type="button" disabled>'+ic('jos')+'Se descarcă…</button>';
-  else if(r)h='<span class="gata">'+ic('bifa')+'Descărcat</span><button type="button" class="leg" data-spa-sterge="'+id+'">Șterge descărcarea</button>';
-  else h='<button type="button" data-spa-desc="'+id+'" aria-label="Descarcă meditația pe telefon">'+ic('jos')+'Descarcă</button>';
-  if(st&&st.err)h+='<span class="err" role="status">'+esc(st.err)+'</span>';
+  else if(r)h='<span class="gata">'+ic('bifa')+'Descărcat</span><button type="button" class="leg" data-spa-sterge="'+id+'" aria-label="Șterge descărcarea '+esc(q)+'">Șterge</button>';
+  else h='<button type="button" data-spa-desc="'+id+'" aria-label="Descarcă '+esc(q)+' pe telefon">'+ic('jos')+'Descarcă</button>';
+  if(st&&st.err)h+='<span class="err">'+esc(st.err)+'</span>';
   el.innerHTML=h;
  });
 }
@@ -1051,7 +1138,7 @@ function meditatii(){
 d.addEventListener('click',function(e){
  var b=e.target.closest&&e.target.closest('[data-spa-desc],[data-spa-sterge]');if(!b)return;e.preventDefault();
  var id=b.getAttribute('data-spa-desc')||b.getAttribute('data-spa-sterge');
- if(b.hasAttribute('data-spa-sterge')){DL.sterge(id).then(function(){arataDl(id);});return;}
+ if(b.hasAttribute('data-spa-sterge')){DL.sterge(id).then(function(){arataDl(id);anunta('Descărcarea „'+titluMed(id)+'” a fost ștearsă.');var n=d.querySelector('#ahsp .spa-dl[data-dl="'+id+'"] [data-spa-desc]');if(n)n.focus();});return;}
  arataDl(id,{p:0});
  /* mesajul serverului e în română; orice altă eroare (pluginul nativ, rețeaua, permisiunea pe Android 7–10) primește textul nostru */
  DL.descarca(id).then(function(){arataDl(id);},function(er){arataDl(id,{err:(er&&er.ro&&er.message?er.message:'N-a mers descărcarea. Verifică internetul și încearcă din nou.')});});
@@ -1092,8 +1179,20 @@ var AM={el:null,ceas:0,ascult:false,
   AM.trimite();
  }
 };
+/* Playerul lui 235: o regiune cu nume, iar poziția se citește ca timp („0:07 din 0:30”), nu ca număr din 1000. */
+function ceasM(x){x=Math.max(0,Math.floor(x||0));var m=Math.floor(x/60),s=x%60;return m+':'+(s<10?'0':'')+s;}
+function playerA11y(a){
+ var pl=d.querySelector('#ahsp .player');if(!pl)return;
+ if(pl.getAttribute('role')!=='region'){pl.setAttribute('role','region');pl.setAttribute('aria-label','Player');}
+ var r=pl.querySelector('input[type=range]');if(!r)return;
+ if(!r.getAttribute('aria-label'))r.setAttribute('aria-label','Poziția în meditație');
+ var dur=a&&a.duration&&isFinite(a.duration)?a.duration:0;r.setAttribute('aria-valuetext',ceasM(a?a.currentTime:0)+(dur?' din '+ceasM(dur):''));
+}
+var A11Y=typeof WeakSet==='function'?new WeakSet():null;
 function mediaSesiune(a){
  if(!a)return;
+ if(A11Y&&!A11Y.has(a)){A11Y.add(a);var u=function(){playerA11y(a);};['timeupdate','loadedmetadata','seeked'].forEach(function(n){a.addEventListener(n,u);});}
+ playerA11y(a);
  if(AM.are())AM.lega(a);
  if(!('mediaSession' in navigator))return;var ms=navigator.mediaSession;
  try{
@@ -1117,7 +1216,9 @@ try{var _play=HTMLMediaElement.prototype.play;HTMLMediaElement.prototype.play=fu
 /* ==================================================================
    7. „MAI MULT” › APLICAȚIA: notificări, mementouri, descărcări, ștergerea contului
    ================================================================== */
-function sw(id,ico,t,s,on){return '<a href="#mai" class="rand" role="switch" aria-checked="'+(on?'true':'false')+'" id="'+id+'" data-spa="1"><span class="ic-mic">'+ic(ico)+'</span><span class="t"><b>'+t+'</b><span>'+s+'</span></span><span class="ahspa-sw" aria-hidden="true"><i></i></span></a>';}
+/* Rândurile din „Mai mult” sunt butoane adevărate (comutatoarele: role=switch, aria-checked), cu aspectul rândurilor din 235. */
+function sw(id,ico,t,s,on){return '<button type="button" class="rand spa-b" role="switch" aria-checked="'+(on?'true':'false')+'" id="'+id+'" data-spa="1"><span class="ic-mic">'+ic(ico)+'</span><span class="t"><b>'+t+'</b><span>'+s+'</span></span><span class="ahspa-sw" aria-hidden="true"><i></i></span></button>';}
+function rb(id,ico,t,s,cls){return '<button type="button" class="rand spa-b'+(cls?' '+cls:'')+'" id="'+id+'" data-spa="1"><span class="ic-mic">'+ic(ico)+'</span><span class="t"><b>'+t+'</b><span>'+s+'</span></span></button>';}
 function mai(){
  var iesi=d.getElementById('ahsp-iesi');if(!iesi||!S.cont)return;
  var sec=iesi.closest('.sectiune');if(!sec||!sec.parentNode)return;
@@ -1131,8 +1232,10 @@ function mai(){
   var pOn=r[0]==='granted'&&+r[1]===1,cOn=mementouriPornite(r[2],r[1]),n=(r[3]||[]).length;
   /* CIORNĂ */
   loc.innerHTML=(NATIV?(r[4]?sw('spa-push','clopot','Notificări','Meditații noi, întâlniri și înregistrări',pOn):'')+sw('spa-ciclu','ciclu','Mementourile ciclului','O notificare la începutul fiecărei faze',cOn&&r[0]==='granted'):'')+
-   (n?'<a href="#mai" class="rand" id="spa-dl-tot" data-spa="1"><span class="ic-mic">'+ic('nota')+'</span><span class="t"><b>Meditații descărcate</b><span>'+(n===1?'O meditație':n+' meditații')+' pe acest telefon. Atinge ca să le ștergi.</span></span></a>':'')+
-   '<a href="#mai" class="rand spa-pericol" id="spa-sterge" data-spa="1"><span class="ic-mic">'+ic('cos')+'</span><span class="t"><b>Șterge contul</b><span>Datele tale din Spațiul meu și de pe acest telefon</span></span></a>';
+   (n?rb('spa-dl-tot','nota','Meditații descărcate',n===1?'O meditație pe acest telefon. Atinge ca s-o ștergi.':n+' meditații pe acest telefon. Atinge ca să le ștergi.'):'')+
+   /* contul pentru el: adresa ei are și acces la ciclul cuiva (ah_spa_are_acces_el) sau el e intrat pe acest telefon */
+   (S.el&&S.pagina_el?'<a href="'+esc(S.pagina_el)+'" class="rand" id="spa-el" data-spa="1"><span class="ic-mic">'+ic('luna')+'</span><span class="t"><b>Ciclul ei</b><span>Pagina „Pentru el”, la care ai fost invitat</span></span><span class="sageata" aria-hidden="true">'+ic('inapoi','ic spa-dr')+'</span></a>':'')+
+   rb('spa-sterge','cos','Șterge contul','Datele tale din Spațiul meu și de pe acest telefon','spa-pericol');
   var v=d.querySelector('#ahsp .spa-ver');if(!v&&S.versiune){v=d.createElement('p');v.className='spa-ver';v.setAttribute('data-spa','1');v.textContent='Aplicația Adela Haru · versiunea '+S.versiune;sec.appendChild(v);}
  });
 }
@@ -1154,7 +1257,7 @@ d.addEventListener('click',function(e){
 });
 /* Ștergerea contului (Apple 5.1.1(v), Google Play). CIORNĂ. */
 function stergeCont(){
- var f=foaie('<h2>Ștergi contul tău?</h2><p>Ce ștergem:</p><ul><li>datele ciclului păstrate în contul tău, emailurile fazelor și accesul celor pe care i-ai invitat să-ți vadă ciclul;</li><li>înscrierea ta în Spațiul meu, telefoanele conectate și notificările;</li><li>pe acest telefon: meditațiile descărcate, datele ciclului și mementourile.</li></ul><p>Comenzile și facturile rămân la noi, fiindcă legea ne cere să le păstrăm. Cursurile, cărțile și meditațiile cumpărate rămân ale tale: dacă vrei vreodată să revii, intri din nou cu adresa ta de email.</p><label><input type="checkbox" id="spa-st-ok"> Am înțeles și vreau să-mi șterg contul.</label><p class="m" id="spa-st-m" role="status"></p><div class="b"><button type="button" data-a="da">Șterge contul</button><button type="button" class="lite" data-a="nu">Renunț</button></div>');
+ var f=foaie('<h2>Ștergi contul tău?</h2><p>Ce ștergem:</p><ul><li>datele ciclului păstrate în contul tău, emailurile fazelor și accesul celor pe care i-ai invitat să-ți vadă ciclul;</li><li>înscrierea ta în Spațiul meu, telefoanele conectate și notificările;</li><li>pe acest telefon: meditațiile descărcate, datele ciclului și mementourile.</li></ul><p>Comenzile și facturile rămân la noi, fiindcă legea ne cere să le păstrăm. Cursurile, cărțile și meditațiile cumpărate rămân ale tale: dacă vrei vreodată să revii, intri din nou cu adresa ta de email.</p><label><input type="checkbox" id="spa-st-ok"> Am înțeles și vreau să-mi șterg contul.</label><p class="m" id="spa-st-m" role="status"></p><div class="b lipit"><button type="button" data-a="da">Șterge contul</button><button type="button" class="lite" data-a="nu">Renunț</button></div>','spa-st');
  var ok=f.querySelector('#spa-st-ok'),bd=f.querySelector('[data-a="da"]');bd.disabled=true; /* „Șterge contul” doar după bifă */
  ok.addEventListener('change',function(){bd.disabled=!ok.checked;});
  f.addEventListener('click',function(e){var b=e.target.closest('[data-a]');if(!b)return;
@@ -1162,18 +1265,19 @@ function stergeCont(){
   if(b.getAttribute('data-a')==='inchide'){location.href=S.pagina;return;}
   var m=f.querySelector('#spa-st-m');if(!ok.checked){m.textContent='Bifează, te rog, că ai înțeles ce se șterge.';return;}
   b.disabled=true;m.textContent='Se șterge…';
-  api('sterge-cont',{metoda:'POST',corp:{confirmare:true}}).then(function(j){
-   if(!j||!j.ok){b.disabled=false;m.textContent=j&&j.retea?'Nu e internet acum. Încearcă din nou.':((j&&j.mesaj)||'N-a mers. Încearcă din nou sau scrie-ne pe WhatsApp.');return;}
+  /* întâi semnul pe telefon (Preferences.ah_sterge): dacă aplicația se închide după răspuns, curățenia se face la pornire */
+  PREF.pune('ah_sterge',S.cine||'1').then(function(){return api('sterge-cont',{metoda:'POST',corp:{confirmare:true}});}).then(function(j){
+   if(!j||!j.ok){PREF.scoate('ah_sterge');b.disabled=false;m.textContent=j&&j.retea?'Nu e internet acum. Încearcă din nou.':(j&&j._cod>=500?'Nu am putut șterge contul acum. Mai încearcă puțin.':((j&&j.mesaj)||'N-a mers. Încearcă din nou sau scrie-ne pe WhatsApp.'));return;}
    H.classList.add('ahspa-sters'); /* în spate nu mai rămâne nimic din contul șters */
-   return curataLocal(true).then(function(){var c=f.querySelector('.c');c.setAttribute('aria-labelledby','spa-st-gata');c.innerHTML='<h2 id="spa-st-gata">Contul tău a fost șters</h2><p>Îți mulțumim că ai fost aici. Te așteptăm oricând.</p><div class="b"><button type="button" data-a="inchide">Închide</button></div>';var x=c.querySelector('button');if(x)x.focus();});
+   return curataLocal(true).then(function(){return PREF.scoate('ah_sterge');}).then(function(){var c=f.querySelector('.c');c.setAttribute('aria-labelledby','spa-st-gata');c.innerHTML='<h2 id="spa-st-gata">Contul tău a fost șters</h2><p>Îți mulțumim că ai fost aici. Te așteptăm oricând.</p><div class="b"><button type="button" data-a="inchide">Închide</button></div>';var x=c.querySelector('button');if(x)x.focus();});
   });
  });
 }
 /* La ieșire și la ștergere: notificările, descărcările și cheile de pe telefon. tot = ieșirea cerută de ea sau ștergerea
    contului: și datele paginii (ciclul, notițele, partenerul, progresul), ca altcineva intrat după ea pe telefon să nu le
-   moștenească. Fără „tot” (cookie-ul a expirat): doar ce ține de cont pe telefon; datele paginii le apără „devreme” amprenta. */
-function curataLocal(tot){
- var p=[PUSH.opreste(),DL.stergeTot(),inCoada(anuleazaCiclu).catch(function(){}),PREF.scoate('ah_ciclu')];
+   moștenească. Fără „tot”: doar ce ține de cont pe telefon. dinCoada = chemată din coada mementourilor (pornirea). */
+function curataLocal(tot,dinCoada){
+ var p=[PUSH.opreste(),DL.stergeTot(),(dinCoada?anuleazaCiclu():inCoada(anuleazaCiclu)).catch(function(){}),PREF.scoate('ah_ciclu')];
  if(tot){
   ['ah_push_intrebat','ah_push_on','ah_ciclu_notif','ah_deschideri'].forEach(function(k){p.push(PREF.scoate(k));});
   try{Object.keys(localStorage).forEach(function(k){if(/^(ahsp_|ahspx_|ahct_|ah_ciclu_v1$|ahspa_cine$)/.test(k))localStorage.removeItem(k);});}catch(e){}
@@ -1212,9 +1316,77 @@ function versiune(){
 }
 
 /* ==================================================================
+   8b. ACCESIBILITATE (2.3.0): titlul secțiunii, eticheta dublă, aspectul de seară, playerul, codul de intrare (235 neschimbat)
+   ================================================================== */
+/* Titlul de sus al secțiunii (235: <span id="ahsp-tit">) devine <h1 tabindex="-1">, cu același id (235 îl scrie mai departe
+   prin getElementById) și același aspect. La schimbarea secțiunii primește focusul (fără derulare), iar titlul documentului
+   spune unde e ea: „Ciclul meu · Spațiul meu”. */
+function titluH1(){var t=d.getElementById('ahsp-tit');if(!t||t.tagName==='H1')return t;var h=d.createElement('h1');h.id='ahsp-tit';h.className=t.className;h.setAttribute('tabindex','-1');h.textContent=t.textContent;t.parentNode.replaceChild(h,t);return h;}
+function titluDoc(){var t=d.getElementById('ahsp-tit'),x=t?(t.textContent||'').trim():'';if(x)d.title=x==='Spațiul meu'?x:x+' · Spațiul meu';}
+/* Eticheta mică de sus a secțiunii, când repetă exact titlul din antet (de ex. „Ciclul meu” / „CICLUL MEU”): o ascunde stilul
+   (doar pe telefon, unde antetul se vede). */
+function eticheteDuble(){var t=d.getElementById('ahsp-tit'),x=t?(t.textContent||'').trim().toLowerCase():'';if(!x)return;
+ d.querySelectorAll('#ahsp-main .ecran .et').forEach(function(e,i){var y=(e.textContent||'').trim().toLowerCase();e.classList.toggle('spa-dublu',i===0&&y===x);});}
+/* „Aspect de seară” (266): comutatorul arată starea paginii (și când pagina urmează tema telefonului) */
+function searaSync(){var w=d.getElementById('spx-seara');if(w)w.setAttribute('aria-checked',H.classList.contains('ahsp-seara')?'true':'false');}
+try{if(S.zona==='sp'&&window.matchMedia){var mq=matchMedia('(prefers-color-scheme: dark)'),mqf=function(){var v=null;try{v=localStorage.getItem('ahspx_seara');}catch(e){}if(v===null){H.classList.toggle('ahsp-seara',mq.matches);searaSync();}};if(mq.addEventListener)mq.addEventListener('change',mqf);else if(mq.addListener)mq.addListener(mqf);}}catch(e){}
+/* playerul (235) acoperă sfârșitul listei: cât se vede, pagina are loc dedesubt (clasa ahspa-cu-player pe <html>) */
+var plObs=null;
+function playerLoc(){var pl=d.querySelector('#ahsp .player');H.classList.toggle('ahspa-cu-player',!!(pl&&pl.classList.contains('arata')));
+ if(pl&&!plObs&&window.MutationObserver){plObs=new MutationObserver(playerLoc);plObs.observe(pl,{attributes:true,attributeFilter:['class']});}}
+
+/* Codul de intrare (235, ecranul de intrare). Fără să schimbăm 235: câmpul codului fără maxlength (lipirea „123 456” merge;
+   235 păstrează doar cifrele), „Intră” doar cu 6 cifre, greșeala marcată (aria-invalid) cu focusul în câmp, „Trimite-mi
+   un cod nou” separat de „Altă adresă”, iar după „prea multe încercări” / „cod expirat” câmpul se golește și focusul merge
+   pe „Trimite-mi un cod nou”. O eroare a serverului (5xx) are textul ei. Limita din secțiunea 11 numără la fel: fiecare
+   încercare ajunge tot la POST /ah-sp/v1/intra (un cod de altă lungime nici nu pleacă). CIORNĂ pentru texte. */
+var IN={am_cod:false,rasp:null};
+function emailIntrare(){var b=d.querySelector('#ahsp .intrare .cutie p b');return b?(b.textContent||'').trim():'';}
+function invalid(el,da){if(!el)return;if(da)el.setAttribute('aria-invalid','true');else el.removeAttribute('aria-invalid');}
+function intrareA11y(){
+ var D0=window.AH_SP||{};if(S.cont||D0.stare==='cont')return;
+ var c=d.getElementById('ahsp-c'),e=d.getElementById('ahsp-e'),m=d.getElementById('ahsp-m');
+ if(c&&!c.getAttribute('data-spa')){c.setAttribute('data-spa','1');IN.am_cod=true;c.removeAttribute('maxlength');if(m)c.setAttribute('aria-describedby','ahsp-m');
+  c.addEventListener('input',function(){invalid(c,false);});
+  var alt=d.getElementById('ahsp-alt');
+  if(alt&&!d.getElementById('spa-cod-nou')){alt.textContent='Altă adresă';var nb=d.createElement('button');nb.type='button';nb.className='legatura';nb.id='spa-cod-nou';nb.setAttribute('data-spa','1');nb.textContent='Trimite-mi un cod nou';alt.parentNode.insertBefore(nb,alt);
+   nb.addEventListener('click',function(){var em=emailIntrare();if(!em||!D0.api)return;nb.disabled=true;if(m)m.textContent='Îți trimitem un cod nou…';
+    fetch(D0.api+'cod',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:em})}).then(function(r){return r.json().catch(function(){return {ok:false};}).then(function(j){j=j||{};j._cod=r.status;return j;});}).catch(function(){return {ok:false,mesaj:'Nu e internet acum. Încearcă din nou.'};})
+     .then(function(j){nb.disabled=false;var c2=d.getElementById('ahsp-c');
+      if(j.ok){if(m)m.textContent='Ți-am trimis un cod nou. Uită-te și în Promoții sau Spam.';if(c2){c2.value='';invalid(c2,false);c2.focus();}}
+      else{if(m)m.textContent=j._cod>=500?'Nu am putut trimite codul acum. Mai încearcă puțin.':(j.mesaj||'Nu s-a putut trimite codul.');nb.focus();}});});}
+ }
+ if(e&&!e.getAttribute('data-spa')){e.setAttribute('data-spa','1');if(m)e.setAttribute('aria-describedby','ahsp-m');e.addEventListener('input',function(){invalid(e,false);});
+  if(IN.am_cod){IN.am_cod=false;try{e.focus();}catch(x){}}} /* înapoi la adresă din pasul codului: focusul în câmp */
+}
+/* „Intră” / „Trimite-mi codul”: înaintea lui 235 (captură); un cod care nu are 6 cifre nu pleacă la server */
+d.addEventListener('submit',function(ev){var f=ev.target;if(!f||f.id!=='ahsp-f')return;var m=d.getElementById('ahsp-m'),c=d.getElementById('ahsp-c'),e=d.getElementById('ahsp-e');
+ if(c){var v=String(c.value||'').replace(/\D/g,'');if(v.length!==6){ev.preventDefault();ev.stopImmediatePropagation();if(m)m.textContent='Codul are 6 cifre.';invalid(c,true);c.focus();return;}c.value=v;}
+ else if(e&&!/^\S+@\S+\.\S+$/.test(String(e.value||'').trim())){invalid(e,true);setTimeout(function(){e.focus();},0);}},true);
+/* Răspunsul lui /ah-sp/v1/intra și /cod, văzut înainte ca 235 să-l citească: 5xx primește un text clar; după ce 235 arată
+   mesajul, marcăm câmpul (greșit), sau îl golim și dăm focusul lui „Trimite-mi un cod nou” (prea multe încercări, expirat). */
+if(S.zona==='sp'&&!S.cont&&window.fetch&&window.Response){var f0=window.fetch;
+ window.fetch=function(u,o){var url=String(u&&u.url||u||''),m=String(o&&o.method||'GET').toUpperCase(),ruta=/\/ah-sp\/v1\/(intra|cod)$/.exec(url.split('?')[0]);
+  var p=f0.apply(this,arguments);if(!ruta||m!=='POST')return p;
+  return p.then(function(r){var st=r.status;
+   var dupa=function(mes){setTimeout(function(){var c=d.getElementById('ahsp-c'),e=d.getElementById('ahsp-e'),nb=d.getElementById('spa-cod-nou');
+    if(st===200)return;
+    if(ruta[1]==='cod'){invalid(e,true);if(e)e.focus();return;}
+    if(!c)return;
+    if(st===429||/expirat|cod nou|unul nou/i.test(mes||'')){c.value='';invalid(c,false);if(nb)nb.focus();return;}
+    invalid(c,true);try{c.focus();c.select();}catch(x){}},40);};
+   if(st>=500){dupa('');return new Response(JSON.stringify({ok:false,mesaj:ruta[1]==='intra'?'Nu am putut verifica codul acum. Mai încearcă puțin.':'Nu am putut trimite codul acum. Mai încearcă puțin.'}),{status:st,headers:{'Content-Type':'application/json'}});}
+   return r.clone().json().then(function(j){dupa(j&&j.mesaj);return r;},function(){dupa('');return r;});
+  });};}
+
+/* ==================================================================
    9. PORNIREA
    ================================================================== */
-function dupaDesen(){try{curata();iframeuri();if(S.zona==='sp'){meditatii();mai();}}catch(e){}}
+function dupaDesen(){try{curata();iframeuri();if(S.zona==='sp'){meditatii();mai();var t=titluH1();if(t&&!titluDoc.gata){titluDoc.gata=1;titluDoc();}eticheteDuble();searaSync();playerLoc();intrareA11y();bara200();}}catch(e){}}
+/* la zoom mare (bara la 195 px): etichetele barei rămân ca nume accesibile chiar dacă stilul le ascunde */
+function bara200(){d.querySelectorAll('#ahsp .bara a:not([aria-label])').forEach(function(a){var t=(a.textContent||'').trim();if(t)a.setAttribute('aria-label',t);});}
+/* schimbarea secțiunii (după arata() din 235, care ascultă primul): titlul documentului și focusul pe titlul secțiunii */
+window.addEventListener('hashchange',function(){if(S.zona!=='sp')return;setTimeout(function(){var t=titluH1();titluDoc();eticheteDuble();if(t&&!d.querySelector('.ahspa-foaie')){try{t.focus({preventScroll:true});}catch(e){}}},0);});
 /* iframe-urile, oriunde în pagină (și în sala de curs, în afara #ahsp), imediat ce apar */
 if(window.MutationObserver){new MutationObserver(function(l){l.forEach(function(r){r.addedNodes.forEach(function(n){if(n.nodeType!==1)return;if(n.tagName==='IFRAME')iframe(n);else if(n.getElementsByTagName&&n.getElementsByTagName('iframe').length)iframeuri(n);});});}).observe(H,{childList:true,subtree:true});}
 var prog=false;function curand(){if(prog)return;prog=true;(window.queueMicrotask||function(f){Promise.resolve().then(f);})(function(){prog=false;dupaDesen();});}
@@ -1242,8 +1414,12 @@ function pornesteNativ(){
  cheama('App','getLaunchUrl').then(function(r){var u=r&&r.url;if(!u||!permis(u))return;u=intra(u);var k='ahspa_lansare';try{if(sessionStorage.getItem(k)===u)return;sessionStorage.setItem(k,u);}catch(e){}var x=abs(u);if(x&&x.pathname+x.search!==location.pathname+location.search)mergi(u);}).catch(function(){});
  var prima=false;try{prima=!sessionStorage.getItem('ahspa_sesiune');sessionStorage.setItem('ahspa_sesiune','1');}catch(e){}
  REF.then(function(){return prima&&S.zona==='sp'&&S.cont?PREF.ia('ah_deschideri').then(function(n){return PREF.pune('ah_deschideri',(+n||0)+1);}):null;}).then(momentPush); /* după curățarea contului de dinainte */
- if(S.zona==='sp'&&!S.cont){curataLocal(false);} /* contul s-a închis (ieșire, cookie expirat): nimic personal rămas pe telefon */
+ /* Fără cont (cookie expirat, sesiune pierdută): NU ștergem descărcările, copia ciclului sau mementourile ei (2.3.0): doar
+    ieșirea cerută de ea, schimbarea contului și ștergerea contului curăță. Pleacă doar un token rămas al lui. */
+ if(S.zona==='sp'&&!S.cont){PUSH.opreste(true);}
  else setTimeout(function(){ciclu(false);},800);
+ /* revenirea în aplicație (alt fus orar, o zi nouă): mementourile se verifică din nou, prin aceeași coadă */
+ asculta('App','resume',function(){ciclu(false);});
 }
 pornesteNativ();
 window.AHApp={versiune:S.v,permis:permis,blocat:blocat,mergi:mergi,curata:curata,curataDate:curataD,ciclu:{calc:CX,viitoare:CX.viitoare,programeaza:function(){return ciclu(true);}},push:PUSH,intreabaPush:intreabaPush,descarcari:DL,mediaSesiune:mediaSesiune,mediaNativ:AM,stergeCont:stergeCont,curataLocal:curataLocal,inapoi:inapoiAndroid,intra:intra};
@@ -1263,6 +1439,30 @@ function ah_spa_raspuns( $d, $cod = 200 ) {
 	$r->header( 'X-LiteSpeed-Cache-Control', 'no-cache' );
 	return $r;
 }
+
+/**
+ * Rutele cu date personale ale Spațiului meu (ah-sp, 235), ale extensiilor (ah-spx, 266), ale contului pentru el (ah-spp) și
+ * ale noastre (ah-spa) nu intră în niciun cache (LiteSpeed, proxy, browser), oricine le-ar fi scris. Rămân în cache doar
+ * fișierele punții (/ah-spa/v1/punte, aceleași pentru toți) și /ah-spa/v1/config (public). Pură (pe ruta dată).
+ */
+function ah_spa_ruta_privata( $ruta ) {
+	$ruta = (string) $ruta;
+	if ( ! preg_match( '~^/ah-sp(x|p|a)?/v1(/|$)~', $ruta ) ) {
+		return false;
+	}
+	return ! preg_match( '~^/ah-spa/v1/(punte|config)/?$~', $ruta );
+}
+add_filter( 'rest_post_dispatch', function ( $rez, $server, $req ) {
+	if ( ! is_object( $req ) || ! method_exists( $req, 'get_route' ) || ! ah_spa_ruta_privata( $req->get_route() ) ) {
+		return $rez;
+	}
+	do_action( 'litespeed_control_set_nocache', 'ah spa rest privat' );
+	if ( is_object( $rez ) && method_exists( $rez, 'header' ) ) {
+		$rez->header( 'X-LiteSpeed-Cache-Control', 'no-cache' );
+		$rez->header( 'Cache-Control', 'no-store, private' );
+	}
+	return $rez;
+}, 99, 3 );
 
 /** Cererile care schimbă ceva vin doar din pagina noastră: antetul X-AH-App (un alt site nu-l poate trimite fără CORS). */
 function ah_spa_antet_ok( $r ) {
@@ -1293,9 +1493,48 @@ function ah_spa_jurnal( $text ) {
 function ah_spa_secret() {
 	return hash_hmac( 'sha256', 'ah_spa|fisier', wp_salt( 'auth' ) );
 }
+/**
+ * Secretul amprentei contului: creat O DATĂ, în baza de date (nu din sărurile WordPress: o rotire a sărurilor ar fi făcut
+ * din fiecare clientă „alt cont”, iar puntea i-ar fi șters de pe telefon istoricul ciclului). add_option nu suprascrie,
+ * deci două cereri deodată la prima pornire păstrează același secret (se recitește după scriere). Momentul creării
+ * (ah_spa_cine_din) deschide trecerea de AH_SPA_CINE_TRECERE zile în care amprenta veche e recunoscută.
+ */
+function ah_spa_cine_secret() {
+	$v = get_option( 'ah_spa_cine_secret', '' );
+	if ( ! is_string( $v ) || strlen( $v ) < 32 ) {
+		add_option( 'ah_spa_cine_secret', bin2hex( random_bytes( 32 ) ), '', 'no' );
+		add_option( 'ah_spa_cine_din', time(), '', 'no' );
+		$v = (string) get_option( 'ah_spa_cine_secret', '' );
+	}
+	return $v;
+}
 /** O amprentă scurtă a adresei (în linkuri și în pagină, în locul emailului). */
 function ah_spa_cine( $email ) {
+	return substr( hash_hmac( 'sha256', strtolower( trim( (string) $email ) ), ah_spa_cine_secret() . '|cine' ), 0, 16 );
+}
+/** Amprenta de dinainte de 2.3.0 (din sărurile WordPress): doar ca puntea s-o recunoască în timpul trecerii. */
+function ah_spa_cine_salt( $email ) {
 	return substr( hash_hmac( 'sha256', strtolower( trim( (string) $email ) ), ah_spa_secret() . '|cine' ), 0, 16 );
+}
+/**
+ * Amprentele vechi ale aceluiași cont, pe care puntea le tratează ca „același cont” (nu șterge nimic, doar rescrie
+ * ahspa_cine): amprenta din săruri în primele AH_SPA_CINE_TRECERE zile și aliasurile lăsate de „Mută contul”.
+ */
+function ah_spa_cine_vechi( $email, $acum = null ) {
+	$acum = null === $acum ? time() : (int) $acum;
+	$nou  = ah_spa_cine( $email );
+	$o    = array();
+	$din  = (int) get_option( 'ah_spa_cine_din', 0 );
+	if ( $din && $acum - $din < AH_SPA_CINE_TRECERE * DAY_IN_SECONDS ) {
+		$o[] = ah_spa_cine_salt( $email );
+	}
+	$al = get_option( 'ah_spa_alias', array() );
+	foreach ( (array) ( is_array( $al ) && isset( $al[ $nou ] ) ? $al[ $nou ] : array() ) as $x ) {
+		if ( is_array( $x ) && isset( $x[0] ) && $acum - (int) ( $x[1] ?? 0 ) < YEAR_IN_SECONDS ) {
+			$o[] = (string) $x[0];
+		}
+	}
+	return array_values( array_unique( array_diff( array_filter( $o, function ( $c ) { return (bool) preg_match( '/^[0-9a-f]{16}$/', $c ); } ), array( $nou ) ) ) );
 }
 function ah_spa_semn( $id, $exp, $cine ) {
 	return substr( hash_hmac( 'sha256', 'fisier|' . (int) $id . '|' . (int) $exp . '|' . (string) $cine, ah_spa_secret() ), 0, 32 );
@@ -1420,16 +1659,48 @@ add_action( 'init', function () {
 		return;
 	}
 	global $wpdb;
-	require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+	if ( ! function_exists( 'dbDelta' ) ) {
+		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+	}
 	$t = ah_spa_tabel();
 	// contoarele atomice (secțiunea 11): cheia e o amprentă (fără adrese de email), n = încercări, expira = timestamp
 	dbDelta( "CREATE TABLE " . ah_spa_tabel_contoare() . " (\n cheie char(40) NOT NULL,\n n int(10) unsigned NOT NULL DEFAULT 0,\n expira int(10) unsigned NOT NULL DEFAULT 0,\n PRIMARY KEY  (cheie)\n) " . $wpdb->get_charset_collate() . ';' );
 	dbDelta( "CREATE TABLE {$t} (\n id bigint(20) unsigned NOT NULL AUTO_INCREMENT,\n email varchar(190) NOT NULL,\n token text NOT NULL,\n token_h char(64) NOT NULL,\n platforma varchar(10) NOT NULL DEFAULT '',\n versiune varchar(20) NOT NULL DEFAULT '',\n disp varchar(64) NOT NULL DEFAULT '',\n creat datetime NOT NULL,\n vazut datetime NOT NULL,\n PRIMARY KEY  (id),\n UNIQUE KEY token_h (token_h),\n KEY email (email)\n) " . $wpdb->get_charset_collate() . ';' );
+	// versiunea se notează doar dacă tabelele chiar au coloanele (un dbDelta eșuat — drepturi, disc plin — se reîncearcă)
+	if ( ! ah_spa_schema_ok() ) {
+		ah_spa_jurnal( 'tabelele aplicației nu s-au putut crea sau actualiza; se reîncearcă la cererea următoare' );
+		return;
+	}
 	update_option( 'ah_spa_tabel', AH_SPA_TABEL_VER, false );
 	if ( ! get_option( 'ah_spa_pornit' ) ) {
 		update_option( 'ah_spa_pornit', time(), false );
 	}
 }, 5 );
+
+/** Coloanele unui tabel (SHOW COLUMNS), cu litere mici; array gol dacă tabelul lipsește. */
+function ah_spa_coloane( $t ) {
+	global $wpdb;
+	try {
+		$r = $wpdb->get_results( 'SHOW COLUMNS FROM ' . $t, ARRAY_A );
+	} catch ( Throwable $e ) {
+		return array();
+	}
+	return array_map( function ( $x ) { return strtolower( (string) ( $x['Field'] ?? '' ) ); }, is_array( $r ) ? $r : array() );
+}
+
+/** Adevărat dacă ambele tabele ale aplicației au toate coloanele versiunii AH_SPA_TABEL_VER. */
+function ah_spa_schema_ok() {
+	$cer = array(
+		ah_spa_tabel()          => array( 'id', 'email', 'token', 'token_h', 'platforma', 'versiune', 'disp', 'creat', 'vazut' ),
+		ah_spa_tabel_contoare() => array( 'cheie', 'n', 'expira' ),
+	);
+	foreach ( $cer as $t => $col ) {
+		if ( array_diff( $col, ah_spa_coloane( $t ) ) ) {
+			return false;
+		}
+	}
+	return true;
+}
 
 /** Verifică cererea de înregistrare push. Întoarce array( 'ok' => true, 'date' => [...] ) sau array( 'ok' => false, 'motiv' => … ). */
 function ah_spa_valideaza_push( $p ) {
@@ -1637,11 +1908,55 @@ function ah_spa_sterge_cont( $email ) {
 		if ( $n ) {
 			$s['pentru_el'] = $n;
 		}
+	} elseif ( ! function_exists( 'ah_spp_gata' ) && function_exists( 'ah_sp_ciclu_cheie' ) ) {
+		// fragmentul lui e oprit (dezactivat), dar tabelele lui rămân: rândurile ei și tokenurile lor push pleacă direct (2.3.0)
+		$n = ah_spa_sterge_parteneri_direct( ah_sp_ciclu_cheie( $e ) );
+		if ( $n ) {
+			$s['pentru_el'] = $n;
+		}
 	}
 	delete_transient( 'ah_sp_rz_' . $md );
 	delete_transient( 'ah_med_a_' . $md );
 	do_action( 'ah_spa_cont_sters', $e, $s );
 	return $s;
+}
+
+/** Există tabelul $t? (SHOW TABLES; în teste, SQLite răspunde prin înlocuitor.) */
+function ah_spa_tabel_exista( $t ) {
+	global $wpdb;
+	try {
+		return (string) $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $t ) ) === (string) $t;
+	} catch ( Throwable $e ) {
+		return false;
+	}
+}
+
+/**
+ * „Pentru el” fără fragmentul lui activ: șterge rândurile invitaților ei ({prefix}ah_spp_parteneri, după ea = cheia ciclului
+ * ei din 235) și tokenurile lor push ({prefix}ah_spp_push, după id-ul partenerului). SQL pregătit, fără funcțiile lui.
+ * Întoarce câte rânduri de invitați s-au șters.
+ */
+function ah_spa_sterge_parteneri_direct( $cheie ) {
+	global $wpdb;
+	$tp = $wpdb->prefix . 'ah_spp_parteneri';
+	$tt = $wpdb->prefix . 'ah_spp_push';
+	if ( '' === (string) $cheie || ! ah_spa_tabel_exista( $tp ) ) {
+		return 0;
+	}
+	$ids = array_map( 'intval', (array) $wpdb->get_col( $wpdb->prepare( "SELECT id FROM {$tp} WHERE ea = %s", (string) $cheie ) ) );
+	if ( ! $ids ) {
+		return 0;
+	}
+	if ( ah_spa_tabel_exista( $tt ) ) {
+		foreach ( $ids as $id ) {
+			$wpdb->query( $wpdb->prepare( "DELETE FROM {$tt} WHERE partener = %d", $id ) );
+		}
+	}
+	$n = 0;
+	foreach ( $ids as $id ) {
+		$n += (int) $wpdb->query( $wpdb->prepare( "DELETE FROM {$tp} WHERE id = %d", $id ) );
+	}
+	return $n;
 }
 
 /**
@@ -1754,8 +2069,10 @@ add_action( 'rest_api_init', function () {
 	$t = '__return_true';
 	register_rest_route( AH_SPA_NS, '/push', array(
 		array( 'methods' => 'POST', 'permission_callback' => $t, 'callback' => 'ah_spa_r_push' ),
-		array( 'methods' => 'DELETE', 'permission_callback' => $t, 'callback' => 'ah_spa_r_push_sterge' ),
+		array( 'methods' => 'DELETE', 'permission_callback' => $t, 'callback' => 'ah_spa_r_push_sterge' ), // aplicațiile de dinainte de 2.3.0
 	) );
+	// 2.3.0: scoaterea tokenului prin POST (unele rețele și pluginuri de cache taie corpul unui DELETE)
+	register_rest_route( AH_SPA_NS, '/push/sterge', array( 'methods' => 'POST', 'permission_callback' => $t, 'callback' => 'ah_spa_r_push_sterge' ) );
 	register_rest_route( AH_SPA_NS, '/descarca', array( 'methods' => 'GET', 'permission_callback' => $t, 'callback' => 'ah_spa_r_descarca' ) );
 	register_rest_route( AH_SPA_NS, '/fisier', array( 'methods' => 'GET', 'permission_callback' => $t, 'callback' => 'ah_spa_r_fisier' ) );
 	register_rest_route( AH_SPA_NS, '/sterge-cont', array( 'methods' => 'POST', 'permission_callback' => $t, 'callback' => 'ah_spa_r_sterge_cont' ) );
@@ -1949,6 +2266,7 @@ function ah_spa_lot( $buget = 20 ) {
 		return;
 	}
 	set_transient( 'ah_spa_lot_lacat', 1, 120 );
+	ah_spa_cron_noteaza( 'lot' );
 	$t0     = microtime( true );
 	$amana  = false;
 	$gata_t = false;
@@ -2092,6 +2410,10 @@ function ah_spa_intalniri() {
 
 /** La 5 minute: înregistrările noi, întâlnirile care încep curând și lucrările rămase. */
 function ah_spa_tick() {
+	ah_spa_cron_noteaza( 'tick' );
+	if ( 0 === wp_rand( 0, 11 ) ) {
+		ah_spa_contoare_curata(); // cam o dată pe oră (cronul rulează la 5 minute)
+	}
 	$s    = ah_spa_setari();
 	$acum = time();
 	$sp   = home_url( defined( 'AH_SP_PAGINA' ) ? AH_SP_PAGINA : '/spatiul-meu/' );
@@ -2327,6 +2649,15 @@ function ah_spa_pagina_setari() {
 		echo '<div class="notice notice-info"><p>Proba a plecat (vezi jurnalul de mai jos).</p></div>';
 	} elseif ( 'recenzie_email' === $m ) {
 		echo '<div class="notice notice-error"><p>Adresa de recenzie nu pare o adresă de email: contul de recenzie e oprit (câmpul a rămas gol). Celelalte setări sunt salvate.</p></div>';
+	} elseif ( 'mutat' === $m ) {
+		$mm = get_transient( 'ah_spa_muta_rez_' . get_current_user_id() );
+		$t1 = array();
+		foreach ( (array) $mm as $k => $v ) {
+			$t1[] = esc_html( $k . ': ' . (int) $v );
+		}
+		echo '<div class="notice notice-success"><p>Contul a fost mutat. ' . ( $t1 ? 'Mutat: ' . implode( ', ', $t1 ) . '.' : 'Nu era nimic de mutat (sau totul exista deja pe adresa nouă).' ) . ' Nu uita de comenzi (adresa de facturare).</p></div>'; // phpcs:ignore
+	} elseif ( 0 === strpos( $m, 'muta_' ) ) {
+		echo '<div class="notice notice-error"><p>Contul NU a fost mutat: ' . ( 'muta_aceeasi' === $m ? 'adresele sunt aceleași.' : 'scrie două adrese de email valide.' ) . '</p></div>';
 	} elseif ( 0 === strpos( $m, 'recenzie_' ) ) {
 		echo '<div class="notice notice-error"><p>Codul de recenzie NU s-a schimbat: trebuie să fie exact 6 cifre, greu de ghicit (nu 123456, 654321 sau aceeași cifră de 6 ori). Celelalte setări sunt salvate.</p></div>';
 	}
@@ -2358,7 +2689,15 @@ function ah_spa_pagina_setari() {
 		echo '<div class="notice notice-warning inline"><p><strong>Contul de recenzie e OPRIT</strong> din ' . esc_html( wp_date( 'Y-m-d H:i', (int) $rec['oprit'] ) ) . ', după ' . (int) AH_SPA_REC_MAX . ' coduri greșite. <label><input type="checkbox" name="recenzie_porneste" value="1"> Pornește din nou contul de recenzie</label> (sau pune un cod nou).</p></div>';
 	}
 	submit_button( 'Salvează' );
-	echo '</form><h2>Adrese de verificat</h2><ul>'
+	echo '</form>';
+	ah_spa_formular_muta();
+	$cr = array();
+	foreach ( array( 'ah_spa_tick' => 'ah_spa_cron_tick', 'ah_spa_lot' => 'ah_spa_cron_lot', 'ah_spp_zilnic' => 'ah_spp_ultima_rulare' ) as $k => $o ) {
+		$x    = (int) get_option( $o, 0 );
+		$cr[] = '<code>' . $k . '</code>: ' . ( $x ? esc_html( wp_date( 'Y-m-d H:i', $x ) ) : '—' );
+	}
+	echo '<p>Ultima rulare a cronului: ' . implode( ' · ', $cr ) . '</p>'; // phpcs:ignore
+	echo '<h2>Adrese de verificat</h2><ul>'
 		. '<li><a href="' . esc_url( home_url( '/.well-known/apple-app-site-association' ) ) . '" target="_blank">/.well-known/apple-app-site-association</a></li>'
 		. '<li><a href="' . esc_url( home_url( '/.well-known/assetlinks.json' ) ) . '" target="_blank">/.well-known/assetlinks.json</a></li>'
 		. '<li><a href="' . esc_url( home_url( '/app/intra' ) ) . '" target="_blank">/app/intra</a></li>'
@@ -2976,6 +3315,17 @@ function ah_spa_contor_sterge( $k ) {
 	delete_transient( 'ah_spa_c_' . substr( $c, 0, 24 ) );
 }
 
+/** Curățenia contoarelor: rândurile expirate de peste o zi pleacă, câte cel mult 5000 o dată (din ah_spa_tick). */
+function ah_spa_contoare_curata( $acum = null ) {
+	global $wpdb;
+	$acum = null === $acum ? time() : (int) $acum;
+	try {
+		return (int) $wpdb->query( $wpdb->prepare( 'DELETE FROM ' . ah_spa_tabel_contoare() . ' WHERE expira < %d LIMIT 5000', $acum - DAY_IN_SECONDS ) );
+	} catch ( Throwable $e ) {
+		return 0;
+	}
+}
+
 /** Scade contorul $k cu 1 (o încercare care s-a dovedit bună nu e o greșeală). */
 function ah_spa_contor_scade( $k ) {
 	global $wpdb;
@@ -3007,6 +3357,9 @@ function ah_spa_cod_paza( $rez, $server, $req ) {
 		return $rez; // un răspuns dat deja (contul de recenzie), altă rută, fără 235: neatins
 	}
 	$e  = ah_spa_cod_email( $req );
+	if ( ! is_email( $e ) ) {
+		return $rez; // o adresă care nu e adresă nu are cod (235 răspunde „expirat”): fără rând nou în tabelul contoarelor
+	}
 	$nc = ah_spa_contor( 'cod|' . $e, HOUR_IN_SECONDS );     // încercări pe codul de acum (se golește la un cod nou)
 	$nz = ah_spa_contor( 'zi|' . $e, DAY_IN_SECONDS );       // greșeli pe zi (o intrare reușită scade 1)
 	if ( $nc <= AH_SPA_COD_MAX && $nz <= AH_SPA_COD_ZI ) {
@@ -3038,5 +3391,172 @@ function ah_spa_cod_dupa( $rez, $server, $req ) {
 	return $rez;
 }
 add_filter( 'rest_post_dispatch', 'ah_spa_cod_dupa', 10, 3 );
+
+/* ==================================================================
+   12. „MUTĂ CONTUL” (adresă nouă) ȘI SĂNĂTATEA CRONULUI (2.3.0)
+   ================================================================== */
+
+/**
+ * Mută datele aplicației de pe o adresă pe alta (clienta și-a schimbat emailul): rândul ciclului din 235 (ah_sp_ciclu.cheie,
+ * HMAC prin ah_sp_ciclu_cheie; datele criptate nu depind de adresă), emailurile fazelor (41), tokenurile push, telefoanele și
+ * ascultările din Inner Temple (51), vizitele (235). Ce există deja pe adresa nouă NU se suprascrie (rămâne pe cea veche și
+ * apare în rezultat ca „…_ocupat”). Lasă un alias (amprenta veche → cea nouă), ca puntea să nu ia telefonul ei drept „alt
+ * cont” și să nu-i șteargă ciclul de pe telefon, apoi do_action( 'ah_spa_cont_mutat', $vechi, $nou ) (contul pentru el își
+ * mută acolo rândurile). Comenzile (accesul) NU se mută aici: adresa de facturare se schimbă în WooCommerce.
+ * Întoarce array( 'ok' => bool, 'motiv' => '' | email | aceeasi, 'mutat' => array( ce => n ) ).
+ */
+function ah_spa_muta_cont( $vechi, $nou ) {
+	global $wpdb;
+	$v = strtolower( trim( (string) $vechi ) );
+	$n = strtolower( trim( (string) $nou ) );
+	if ( ! is_email( $v ) || ! is_email( $n ) ) {
+		return array( 'ok' => false, 'motiv' => 'email', 'mutat' => array() );
+	}
+	if ( $v === $n ) {
+		return array( 'ok' => false, 'motiv' => 'aceeasi', 'mutat' => array() );
+	}
+	$m = array();
+	// ciclul din cont (235)
+	if ( function_exists( 'ah_sp_ciclu_tabel' ) && function_exists( 'ah_sp_ciclu_cheie' ) ) {
+		if ( function_exists( 'ah_sp_ciclu_db' ) ) {
+			ah_sp_ciclu_db();
+		}
+		$t  = ah_sp_ciclu_tabel();
+		$kv = ah_sp_ciclu_cheie( $v );
+		$kn = ah_sp_ciclu_cheie( $n );
+		if ( $wpdb->get_var( $wpdb->prepare( "SELECT id FROM {$t} WHERE cheie = %s", $kv ) ) ) {
+			if ( $wpdb->get_var( $wpdb->prepare( "SELECT id FROM {$t} WHERE cheie = %s", $kn ) ) ) {
+				$m['ciclu_ocupat'] = 1;
+			} else {
+				$m['ciclu'] = (int) $wpdb->update( $t, array( 'cheie' => $kn ), array( 'cheie' => $kv ) );
+			}
+		}
+	}
+	// emailurile fazelor (41)
+	if ( function_exists( 'ah_ciclu_tabel' ) ) {
+		$t = ah_ciclu_tabel();
+		if ( $wpdb->get_var( $wpdb->prepare( "SELECT id FROM {$t} WHERE email = %s", $v ) ) ) {
+			if ( $wpdb->get_var( $wpdb->prepare( "SELECT id FROM {$t} WHERE email = %s", $n ) ) ) {
+				$m['ciclu_emailuri_ocupat'] = 1;
+			} else {
+				$m['ciclu_emailuri'] = (int) $wpdb->update( $t, array( 'email' => $n ), array( 'email' => $v ) );
+			}
+		}
+	}
+	// tokenurile push (aici)
+	$np = (int) $wpdb->update( ah_spa_tabel(), array( 'email' => $n ), array( 'email' => $v ) );
+	if ( $np ) {
+		$m['push'] = $np;
+	}
+	// telefoanele, minutele și ascultările din Inner Temple (51): după md5 al adresei
+	foreach ( array( 'med_dispozitive' => 'ah_med_d_', 'med_minute' => 'ah_med_min_', 'med_ascultari' => 'ah_med_asc_' ) as $k => $pre ) {
+		$x = get_option( $pre . md5( $v ), null );
+		if ( null === $x ) {
+			continue;
+		}
+		if ( null !== get_option( $pre . md5( $n ), null ) ) {
+			$m[ $k . '_ocupat' ] = 1;
+			continue;
+		}
+		update_option( $pre . md5( $n ), $x, false );
+		delete_option( $pre . md5( $v ) );
+		$m[ $k ] = 1;
+	}
+	// vizitele (235)
+	$vz = get_option( 'ah_sp_vizite', array() );
+	if ( is_array( $vz ) && isset( $vz[ md5( $v ) ] ) && ! isset( $vz[ md5( $n ) ] ) ) {
+		$vz[ md5( $n ) ] = $vz[ md5( $v ) ];
+		unset( $vz[ md5( $v ) ] );
+		update_option( 'ah_sp_vizite', $vz, false );
+		$m['vizite'] = 1;
+	}
+	ah_spa_alias_adauga( $v, $n );
+	do_action( 'ah_spa_cont_mutat', $v, $n );
+	ah_spa_jurnal( 'cont mutat: ' . ah_spa_cine( $v ) . ' → ' . ah_spa_cine( $n ) . ' (' . wp_json_encode( $m ) . ')' );
+	return array( 'ok' => true, 'motiv' => '', 'mutat' => $m );
+}
+
+/** Aliasul: pe telefonul ei, amprentele adresei vechi (cea nouă și cea din săruri) = același cont cu adresa nouă (un an). */
+function ah_spa_alias_adauga( $vechi, $nou, $acum = null ) {
+	$acum = null === $acum ? time() : (int) $acum;
+	$al   = get_option( 'ah_spa_alias', array() );
+	$al   = is_array( $al ) ? $al : array();
+	$cn   = ah_spa_cine( $nou );
+	$l    = isset( $al[ $cn ] ) && is_array( $al[ $cn ] ) ? $al[ $cn ] : array();
+	foreach ( array_unique( array_merge( array( ah_spa_cine( $vechi ), ah_spa_cine_salt( $vechi ) ), ah_spa_cine_vechi( $vechi, $acum ) ) ) as $c ) {
+		$l   = array_values( array_filter( $l, function ( $x ) use ( $c ) { return is_array( $x ) && ( $x[0] ?? '' ) !== $c; } ) );
+		$l[] = array( $c, $acum );
+	}
+	$al[ $cn ] = array_slice( $l, -10 ); // cel mult 10 amprente vechi pe cont, cele mai noi
+	update_option( 'ah_spa_alias', $al, false );
+}
+
+add_action( 'admin_post_ah_spa_muta', function () {
+	if ( ! current_user_can( 'manage_options' ) ) {
+		wp_die( 'Nu ai voie aici.' );
+	}
+	check_admin_referer( 'ah_spa_muta' );
+	$p = wp_unslash( $_POST ); // phpcs:ignore
+	$r = ah_spa_muta_cont( (string) ( $p['muta_vechi'] ?? '' ), (string) ( $p['muta_nou'] ?? '' ) );
+	if ( $r['ok'] ) {
+		set_transient( 'ah_spa_muta_rez_' . get_current_user_id(), $r['mutat'], 10 * MINUTE_IN_SECONDS );
+	}
+	wp_safe_redirect( add_query_arg( array( 'page' => 'ah-spa', 'm' => $r['ok'] ? 'mutat' : 'muta_' . $r['motiv'] ), admin_url( 'options-general.php' ) ) );
+	exit;
+} );
+
+/** Formularul „Mută contul” (în Setări › Aplicația mobilă; doar administratorii, cu nonce). */
+function ah_spa_formular_muta() {
+	echo '<h2>Mută contul pe o adresă nouă</h2><p>Când o clientă își schimbă adresa de email: ciclul păstrat în cont, emailurile fazelor, notificările, telefoanele din Inner Temple și invitațiile „Pentru el” trec pe adresa nouă, iar aplicația de pe telefonul ei o recunoaște ca același cont (nu-i șterge nimic de pe telefon). <strong>Accesul (comenzile) nu se mută aici:</strong> schimbă adresa de facturare pe comenzile ei în WooCommerce. Ce există deja pe adresa nouă nu se suprascrie.</p>'
+		. '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '"><input type="hidden" name="action" value="ah_spa_muta">';
+	wp_nonce_field( 'ah_spa_muta' );
+	echo '<table class="form-table"><tr><th scope="row"><label for="ah-muta-v">Adresa veche</label></th><td><input type="email" class="regular-text" id="ah-muta-v" name="muta_vechi" required autocomplete="off"></td></tr>'
+		. '<tr><th scope="row"><label for="ah-muta-n">Adresa nouă</label></th><td><input type="email" class="regular-text" id="ah-muta-n" name="muta_nou" required autocomplete="off"></td></tr></table>';
+	submit_button( 'Mută contul', 'secondary' );
+	echo '</form>';
+}
+
+/** Momentul rulării unui cron al aplicației: tick (la 5 minute) sau lot (notificările). */
+function ah_spa_cron_noteaza( $ce, $acum = null ) {
+	update_option( 'ah_spa_cron_' . sanitize_key( $ce ), null === $acum ? time() : (int) $acum, false );
+}
+
+/**
+ * Cronurile oprite: array( nume => ore de la ultima rulare ) pentru cele care n-au rulat de AH_SPA_CRON_ORE ore: ah_spa_tick
+ * (al nostru, la 5 minute; dacă n-a rulat niciodată, de la pornirea fragmentului) și cronul zilnic al contului pentru el
+ * (opțiunea ah_spp_ultima_rulare, dacă fragmentul lui e activ și o scrie). ah_spa_lot rulează doar când sunt notificări de
+ * trimis, deci lipsa lui nu e un semn de oprire (doar se afișează în setări).
+ */
+function ah_spa_cron_oprite( $acum = null ) {
+	$acum = null === $acum ? time() : (int) $acum;
+	$lim  = AH_SPA_CRON_ORE * HOUR_IN_SECONDS;
+	$o    = array();
+	$tick = (int) get_option( 'ah_spa_cron_tick', 0 );
+	$din  = $tick ? $tick : (int) get_option( 'ah_spa_pornit', 0 );
+	if ( $din && $acum - $din > $lim ) {
+		$o['ah_spa_tick'] = (int) floor( ( $acum - $din ) / HOUR_IN_SECONDS );
+	}
+	$spp = (int) get_option( 'ah_spp_ultima_rulare', 0 );
+	if ( $spp > 0 && function_exists( 'ah_spp_gata' ) && $acum - $spp > $lim ) {
+		$o['ah_spp_zilnic'] = (int) floor( ( $acum - $spp ) / HOUR_IN_SECONDS );
+	}
+	return $o;
+}
+
+add_action( 'admin_notices', function () {
+	if ( ! current_user_can( 'manage_options' ) ) {
+		return;
+	}
+	$o = ah_spa_cron_oprite();
+	if ( ! $o ) {
+		return;
+	}
+	$ce = array();
+	foreach ( $o as $k => $h ) {
+		$ce[] = '<code>' . esc_html( $k ) . '</code> (' . (int) $h . ' h)';
+	}
+	echo '<div class="notice notice-warning"><p><strong>Aplicația mobilă:</strong> cronul WordPress nu a mai rulat de mult: ' . implode( ', ', $ce ) // phpcs:ignore
+		. '. Notificările și curățenia nu pleacă până nu pornește din nou. Verifică DISABLE_WP_CRON și cronul serverului (server/README.md, „Cronul”).</p></div>';
+} );
 
 endif;

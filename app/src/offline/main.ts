@@ -3,13 +3,14 @@
  * Se deschide când Spațiul meu nu se poate încărca. Arată, fără cont și fără rețea:
  *   1. faza de azi din Preferences `ah_ciclu` (aceeași regulă ca Ciclul meu din sn235);
  *   2. meditațiile descărcate din Preferences `ah_descarcate`, cu player;
- *   3. butonul „Încearcă din nou”.
+ *   3. butonul „Încearcă din nou”, cu motivul (fără internet / site-ul în lucru / WebView vechi): legatura.ts.
  * Textele noi sunt CIORNĂ (de citit de Adela) și sunt marcate așa mai jos.
  */
 import './fonturi.css';
 import './stil.css';
 
-import { adresaFisier, ascunde_splash, bara_stare, existaFisier, laInapoi, mediaOpreste, platforma, preferinta, uriNativ } from './cap';
+import { adresaFisier, ascunde_splash, bara_stare, eroareNativa, existaFisier, laInapoi, mediaOpreste, platforma, preferinta, uriNativ } from './cap';
+import { TEXTE, intoarceri, motivInitial, pauza, verifica, versiuneWebView, type Motiv } from './legatura';
 import { F, SIT, azi0, citesteJson, data, situatie, ziua, type ZiCiclu } from './ciclu';
 import { ceas, citesteDescarcate, dosarImplicit, durataScurta, type Descarcata } from './descarcate';
 import { Player, SALT, type Piesa } from './player';
@@ -136,30 +137,50 @@ function htmlPlayer(): string {
   </div></div>`;
 }
 
-/* ---------- „Încearcă din nou” ---------- */
-
-async function legaturaMerge(ms = 8000): Promise<boolean> {
-  if (typeof navigator !== 'undefined' && navigator.onLine === false) return false;
-  const c = new AbortController();
-  const t = setTimeout(() => c.abort(), ms);
-  try {
-    await fetch(SITE, { method: 'GET', mode: 'no-cors', cache: 'no-store', credentials: 'omit', signal: c.signal });
-    return true;
-  } catch {
-    return false;
-  } finally {
-    clearTimeout(t);
-  }
-}
+/* ---------- „Încearcă din nou”, fără bucle (legatura.ts) ---------- */
 
 /** Playerul paginii (unul singur); îl ținem aici ca revenirea conexiunii să nu întrerupă o meditație. */
 let player: Player | null = null;
+
+const ss = {
+  ia(k: string): number {
+    try {
+      return Number(sessionStorage.getItem(k) || 0) || 0;
+    } catch {
+      return 0;
+    }
+  },
+  pune(k: string, v: number) {
+    try {
+      sessionStorage.setItem(k, String(v));
+    } catch {
+      /* fără sessionStorage: fără pauze ținute minte */
+    }
+  },
+};
+
+/** Câte întoarceri rapide (pagina s-a deschis iar la scurt timp după plecarea spre site): pauza automată crește. */
+let nIntors = 0;
+let motivAcum: Exclude<Motiv, 'ok'> = 'fara_internet';
 
 /** Plecăm spre Spațiul meu: întâi oprim sunetul și notificarea AhMedia (site-ul nu le mai ascultă). */
 function deschideSite() {
   player?.opreste();
   mediaOpreste();
+  ss.pune('ah_off_plecat', Date.now());
+  ss.pune('ah_off_n', nIntors);
   location.replace(SITE);
+}
+
+/** Textele de sus după motiv (fără internet / site în lucru / WebView vechi). */
+function arataMotiv(m: Exclude<Motiv, 'ok'>) {
+  motivAcum = m;
+  const t = TEXTE[m];
+  const h = g('off-titlu');
+  if (h && h.textContent !== t.titlu) h.textContent = t.titlu;
+  const p = g('off-text');
+  if (p && p.textContent !== t.text) p.textContent = t.text;
+  document.documentElement.dataset.motiv = m;
 }
 
 /** Conexiunea a revenit în timp ce ascultă: nu o scoatem din meditație, doar îi spunem, discret. CIORNĂ */
@@ -172,27 +193,37 @@ function arataRevenit() {
   if (m) m.textContent = 'Conexiunea a revenit.';
 }
 
+let ceasAuto: ReturnType<typeof setTimeout> | null = null;
+/** Următoarea încercare automată, după pauza curentă (crește la fiecare eșec și la fiecare întoarcere rapidă). */
+function programeaza() {
+  if (ceasAuto) clearTimeout(ceasAuto);
+  if (motivAcum === 'webview') return; // telefonul are nevoie de o actualizare: fără încercări automate
+  ceasAuto = setTimeout(() => void incearcaDinNou(true), pauza(nIntors) * 1000);
+}
+
 let incerca: Promise<void> | null = null;
 function incearcaDinNou(automat = false): Promise<void> {
   if (incerca) return incerca;
   const b = g('reincearca') as HTMLButtonElement | null;
   const m = g('re-msg');
   if (b) b.disabled = true;
-  if (m) m.textContent = 'Verificăm conexiunea…'; // CIORNĂ
-  incerca = legaturaMerge().then((ok) => {
+  if (m && !automat) m.textContent = 'Verificăm conexiunea…'; // CIORNĂ
+  incerca = verifica((u, o) => fetch(u, o)).then((r) => {
     incerca = null;
-    if (ok && automat && player?.stare.piesa) {
-      if (b) b.disabled = false;
+    if (b) b.disabled = false;
+    if (r === 'ok' && automat && player?.stare.piesa) {
       arataRevenit();
       return;
     }
-    if (ok) {
+    if (r === 'ok' && motivAcum !== 'webview') {
       deschideSite();
       return;
     }
-    if (b) b.disabled = false;
+    if (r !== 'ok') arataMotiv(r);
+    nIntors++;
+    programeaza();
     // CIORNĂ
-    if (m) m.textContent = automat ? '' : 'Încă nu avem conexiune. Mai încearcă puțin mai târziu.';
+    if (m) m.textContent = automat ? '' : r === 'site' ? 'Site-ul încă nu răspunde. Încercăm din nou singuri, în câteva minute.' : r === 'ok' ? '' : 'Încă nu avem conexiune. Mai încearcă puțin mai târziu.';
   });
   return incerca;
 }
@@ -221,15 +252,22 @@ export async function porneste(): Promise<void> {
   );
 
   const ciclu = citesteJson(cicluBrut);
+  // de ce suntem aici: ?cod= (iOS) / eroarea ținută de AhApp (Android) / WebView prea vechi; apoi întoarcerile rapide
+  const acum = Date.now();
+  nIntors = intoarceri(ss.ia('ah_off_plecat'), ss.ia('ah_off_n'), acum);
+  ss.pune('ah_off_plecat', 0);
+  const vWv = versiuneWebView(navigator.userAgent);
+  const m0: Exclude<Motiv, 'ok'> = platforma() === 'android' && vWv > 0 && vWv < 90 ? 'webview' : motivInitial(location.search, await eroareNativa(), acum);
+  const t0 = TEXTE[m0];
   // CIORNĂ: titlul și textul de sus
   rad.innerHTML = `
   <header class="antet">
    <p class="marca">Adela Haru</p>
    <div class="dar offline">
     <span class="ic-mare">${ic('fararetea')}</span>
-    <h1>Nu avem internet acum</h1>
-    <p>Spațiul tău se deschide din nou când revine conexiunea. Până atunci, te așteaptă aici ziua ta din ciclu și meditațiile descărcate pe telefon.</p>
-    <button type="button" class="btn" id="reincearca">Încearcă din nou</button>
+    <h1 id="off-titlu">${esc(t0.titlu)}</h1>
+    <p id="off-text">${esc(t0.text)}</p>
+    <button type="button" class="btn" id="reincearca">${esc(t0.buton)}</button>
     <p class="mic" id="re-msg" aria-live="polite"></p>
    </div>
   </header>
@@ -239,8 +277,11 @@ export async function porneste(): Promise<void> {
   </main>
   ${htmlPlayer()}`;
 
+  arataMotiv(m0);
   g('reincearca')?.addEventListener('click', () => void incearcaDinNou());
   window.addEventListener('online', () => void incearcaDinNou(true));
+  // prima încercare automată după pauză (5 s; mai lung după întoarceri rapide): fără buclă site ↔ pagina offline
+  programeaza();
   // la plecarea din pagină (orice navigare), notificarea Android a playerului nu trebuie să rămână „în redare”
   window.addEventListener('pagehide', () => mediaOpreste());
 

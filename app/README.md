@@ -57,8 +57,17 @@ Garamond italic incluse, doar woff2, latin + latin-ext). CSP strict: doar script
 - `descarcate.ts` — citește `ah_descarcate`.
 - `player.ts` — un `<audio>`, Media Session (titlu, „Adela Haru”, poza, play/pauză/±15 s/seek/poziție) + `AhMedia` pe Android.
 - `cap.ts` — acces protejat la `window.Capacitor.Plugins` (fără `@capacitor/core` în pachet).
-- `main.ts` + `stil.css` — pagina: „Nu avem internet acum”, **Încearcă din nou** (verifică întâi cu un `fetch` no-cors,
-  apoi `location.replace` spre Spațiul meu; reîncearcă singur la evenimentul `online`), Ciclul meu, meditațiile descărcate.
+- `legatura.ts` (2.3.0) — de ce s-a deschis pagina și când se întoarce: `GET /wp-json/ah-spa/v1/config` cu CORS și `r.ok`
+  cerut: eroare de rețea = **„Nu avem internet acum”**; un răspuns care nu e ok (5xx, 403/429 de la paravan) = **„Site-ul e în
+  lucru, revino în câteva minute”**; doar CORS-ul căzut (o cerere no-cors trece) = rețeaua merge, se încearcă site-ul.
+  Motivul de la deschidere: `?cod=503` (iOS, `AhNavigare`) sau `AhApp.info().eroare = {cod, la}` (Android, `MainActivity`;
+  adresa paginii offline nu poate avea `?cod=` pe Android: `WebViewLocalServer.isErrorUrl` o compară exact). Fără bucle:
+  plecarea spre site se ține în `sessionStorage`; o întoarcere în mai puțin de 30 s mărește pauza încercării automate
+  (5 s, 15 s, 30 s, 1 min, 2 min, 5 min). Pe Android cu WebView sub 90 (`minWebViewVersion`): „Telefonul are nevoie de o
+  actualizare” (Android System WebView / Chrome), fără încercări automate; sub ~80, unde scriptul nici nu rulează,
+  rămâne textul static din `offline.html`.
+- `main.ts` + `stil.css` — pagina: titlul după motiv, **Încearcă din nou** (prin `legatura.ts`, apoi `location.replace`
+  spre Spațiul meu; reîncearcă singur după pauză și la evenimentul `online`), Ciclul meu, meditațiile descărcate.
   Același aspect ca Spațiul meu (culori, fonturi, inelul ciclului), cu aspect de seară după tema telefonului.
 
 Textele noi sunt marcate `CIORNĂ` în cod, pentru Adela. Textele fazelor și situațiilor sunt cele de pe site.
@@ -190,6 +199,17 @@ La o versiune nouă se schimbă toate trei, plus `versionCode` / `CURRENT_PROJEC
   FileTimestamp (C617.1, Filesystem), date colectate legate de cont, doar pentru funcționare, fără urmărire:
   email, nume, sănătate (ciclul, doar dacă îl păstrează în cont), istoricul accesului/abonamentelor, interacțiunea
   (progres), DeviceID (tokenul push). `AhAppPlugin.swift` (+ `AhBridgeViewController`, folosit în `SceneDelegate`).
+  `AhNavigare` (2.3.0) implementează și `decidePolicyFor navigationResponse`: un răspuns ≥ 500 al cadrului principal de pe
+  site se anulează și se deschide `offline.html?cod=<cod>` (serverul local ia doar calea); anularea dă WebKit 102, deja
+  filtrat. Capacitor 8 nu are metoda (la o actualizare: `grep navigationResponse` în `WebViewDelegationHandler.swift`).
+  Codul și momentul stau și în `AhNavigare.ultimaEroare`, citite prin `AhApp.info().eroare`.
 - **Android**: `AndroidManifest.xml` — App Links `autoVerify` pentru `/spatiul-meu*`, `/app/intra*` și `/pentru-el*` (aceleași căi ca AASA; testul `server/tests/integrare/run.php` le compară), `POST_NOTIFICATIONS`,
   `FOREGROUND_SERVICE` + `FOREGROUND_SERVICE_MEDIA_PLAYBACK`, serviciul `AhMediaService`, `allowBackup=false`.
   `androidx.media:media` pentru MediaSession. Iconița de notificare `ic_stat_lotus` (folosită și de LocalNotifications).
+  `MainActivity.AhWebViewClient` (2.3.0, pus cu `bridge.setWebViewClient` după `super.onCreate`, extinde
+  `BridgeWebViewClient`): ține minte eroarea HTTP a cadrului principal (`AhAppPlugin.noteazaEroare`, apoi Capacitor
+  deschide pagina offline ca înainte, la orice ≥ 400) și tratează `onRenderProcessGone` (întoarce `true`, scoate WebView-ul
+  și reface activitatea; a treia oprire într-un minut închide ecranul, fără buclă). Fără tratare, Android ar închide toată
+  aplicația. `capacitor.config.ts`: `android.minWebViewVersion: 90` (= ținta `chrome90` din `vite.config.ts`); sub ea,
+  `Bridge.isMinimumWebViewInstalled()` e fals și Capacitor încarcă direct `errorPath` (pagina offline), care cere
+  actualizarea WebView-ului. Implicit, Capacitor 8 cere doar 55 (`Bridge.MINIMUM_ANDROID_WEBVIEW_VERSION`).

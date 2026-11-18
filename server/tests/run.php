@@ -28,7 +28,7 @@ function redirect_spre( $uri, $devreme = true ) {
 }
 
 /* ---------- 0. fragmentul se încarcă o singură dată, fără efecte ---------- */
-egal( AH_SPA, '2.2.0', 'versiunea fragmentului' );
+egal( AH_SPA, '2.3.0', 'versiunea fragmentului' );
 verifica( isset( $GLOBALS['ah_test_hooks']['template_redirect'] ), 'cârligul de redirecționare e legat' );
 $n_hooks = count( $GLOBALS['ah_test_hooks'], COUNT_RECURSIVE );
 require __DIR__ . '/../ah-sp-aplicatie.php'; // a doua oară: gărzile AH_SPA și function_exists
@@ -186,7 +186,7 @@ verifica( strlen( $cap ) < 6000, 'aplicație: <head>-ul punții e mic (' . strle
 egal( substr_count( $cap, 'rel="preload"' ), 4, 'aplicație: fonturile primului ecran preîncărcate (Figtree, Gilda; latin și latin-ext)' );
 verifica( false !== strpos( $cap, '/wp-content/uploads/elementor/google-fonts/fonts/figtree-xms-huzqdcfdgfmm4s9dq.woff2" as="font" type="font/woff2" crossorigin>' ), 'aplicație: preload Figtree latin, crossorigin' );
 verifica( false === strpos( $cap, 'ana@exemplu.ro' ), 'puntea nu tipărește adresa de email' );
-verifica( 0 === strpos( ah_spa_punte_ver(), '2.2.0-' ) && false === strpos( ah_spa_js() . ah_spa_css_tot(), 'ana@exemplu.ro' ), 'fișierele punții: aceleași pentru toate (fără date personale)' );
+verifica( 0 === strpos( ah_spa_punte_ver(), '2.3.0-' ) && false === strpos( ah_spa_js() . ah_spa_css_tot(), 'ana@exemplu.ro' ), 'fișierele punții: aceleași pentru toate (fără date personale)' );
 verifica( false !== strpos( ah_spa_css_tot(), '#ahsp a[href="https://www.adelaharu.ro/"]' ), 'aplicație: „Înapoi pe site” ascuns din stil' );
 preg_match( '~window\.AH_SPA=(\{.*?\});\(function~s', $cap, $m );
 $cfg = json_decode( $m[1] ?? 'null', true );
@@ -785,7 +785,7 @@ verifica( false === strpos( wp_json_encode( $C2 ), 'embed.podcasts.apple.com' ),
 
 /* ---------- 14. JS: refacerea ciclului, tipul tokenului, iframe-urile ---------- */
 $js = ah_spa_js();
-foreach ( array( 'function refacere()', "PREF.ia('ah_ciclu')", 'v.cine!==S.cine', "new HashChangeEvent('hashchange')", 'ahspa-refac', 'ciSters', 'cine:S.cine', "fel:function(tok)", "r.token==='fcm'", 'PUSH.primit(t.value)', 'dntVimeo', 'embed\\.podcasts\\.apple\\.com', 'Ascultă în Apple Podcasts' ) as $x ) {
+foreach ( array( 'function refacere()', "PREF.ia('ah_ciclu')", '!acelasi(v.cine)', "new HashChangeEvent('hashchange')", 'ahspa-refac', 'ciSters', 'cine:S.cine', "fel:function(tok)", "r.token==='fcm'", 'PUSH.primit(t.value)', 'dntVimeo', 'embed\\.podcasts\\.apple\\.com', 'Ascultă în Apple Podcasts' ) as $x ) {
 	verifica( false !== strpos( $js, $x ), 'puntea conține ' . $x );
 }
 verifica( false !== strpos( ah_spa_css(), 'html.ahspa-refac #ahsp{visibility:hidden}' ), 'stilul: Spațiul meu ascuns cât se reface ciclul' );
@@ -884,6 +884,129 @@ foreach ( array( "'backButton'", "'minimizeApp'", 'function inCoada(', 'AHSPA_AL
 verifica( false === strpos( $js, 'window.confirm' ) && false === strpos( $js, 'Menstruația ta ar putea' ), 'puntea: fără window.confirm și fără „menstruație” pe ecranul blocat' );
 $dev = ah_spa_js_devreme();
 verifica( false !== strpos( $dev, "'ahspa_cine'" ) && false !== strpos( $dev, '/^(ahsp_|ahspx_|ahct_|ah_ciclu_v1$)/' ) && strlen( $dev ) < 1200, 'partea devreme: amprenta contului și curățarea cheilor, mică' );
+
+/* ---------- 17. 2.3.0: amprenta contului din baza de date (H2) ---------- */
+$c1 = ah_spa_cine( 'Ana@Exemplu.ro ' );
+verifica( 1 === preg_match( '/^[0-9a-f]{16}$/', $c1 ) && $c1 === ah_spa_cine( 'ana@exemplu.ro' ), 'cine: 16 hexa, aceeași pentru aceeași adresă' );
+verifica( strlen( (string) get_option( 'ah_spa_cine_secret' ) ) === 64 && (int) get_option( 'ah_spa_cine_din' ) > 0, 'cine: secretul creat o dată în baza de date, cu momentul creării' );
+$sare_veche = ah_spa_cine_salt( 'ana@exemplu.ro' );
+$GLOBALS['ah_test_sare'] = 'sare-rotita-';
+egal( ah_spa_cine( 'ana@exemplu.ro' ), $c1, 'cine: sărurile WordPress rotite ⇒ aceeași amprentă (nu „alt cont”)' );
+verifica( ah_spa_cine_salt( 'ana@exemplu.ro' ) !== $sare_veche, 'cine: (martor) amprenta din săruri s-ar fi schimbat' );
+unset( $GLOBALS['ah_test_sare'] );
+egal( ah_spa_cine_vechi( 'ana@exemplu.ro' ), array( $sare_veche ), 'cine_vechi: amprenta din săruri, în trecere' );
+egal( ah_spa_cine_vechi( 'ana@exemplu.ro', time() + 61 * DAY_IN_SECONDS ), array(), 'cine_vechi: după 60 de zile, fără amprenta din săruri' );
+update_option( 'ah_spa_cine_secret', 'scurt' ); // un secret stricat nu se folosește: add_option nu suprascrie, deci se citește ce e
+verifica( 'scurt' === get_option( 'ah_spa_cine_secret' ), 'cine: add_option nu suprascrie un secret existent (două cereri deodată la prima pornire)' );
+delete_option( 'ah_spa_cine_secret' ); delete_option( 'ah_spa_cine_din' );
+$c2 = ah_spa_cine( 'ana@exemplu.ro' );
+verifica( $c2 !== $c1 && strlen( (string) get_option( 'ah_spa_cine_secret' ) ) === 64, 'cine: fără secret se creează unul nou' );
+$GLOBALS['ah_test_e_pagina'] = true; $GLOBALS['ah_test_email'] = 'ana@exemplu.ro'; $_SERVER['REQUEST_URI'] = '/spatiul-meu/';
+ca_aplicatie();
+$cfg = ah_spa_cfg( 'sp', 'ana@exemplu.ro' );
+egal( array( $cfg['cine'], $cfg['cine_vechi'] ), array( $c2, array( ah_spa_cine_salt( 'ana@exemplu.ro' ) ) ), 'AH_SPA: cine (din baza de date) și cine_vechi (din săruri)' );
+egal( ah_spa_cfg( 'sp', '' )['cine_vechi'], array(), 'AH_SPA fără cont: fără amprente' );
+$dev = ah_spa_js_devreme();
+verifica( false !== strpos( $dev, '(S.cine_vechi||[]).indexOf(v)<0' ), 'partea devreme: o amprentă veche a aceluiași cont nu șterge nimic' );
+verifica( false !== strpos( $dev, "getItem('ahspx_seara')===null" ) && false !== strpos( $dev, 'prefers-color-scheme: dark' ), 'partea devreme: seara după telefon, doar fără alegerea ei' );
+$GLOBALS['ah_test_e_pagina'] = false;
+
+/* ---------- 18. rutele private fără cache (H3) ---------- */
+foreach ( array( '/ah-sp/v1/ciclu-date' => true, '/ah-spx/v1/ev' => true, '/ah-spp/v1/azi' => true, '/ah-spa/v1/push' => true, '/ah-spa/v1/descarca' => true, '/ah-spa/v1/punte' => false, '/ah-spa/v1/config' => false, '/ah-hb/v1/portal' => false, '/wp/v2/posts' => false, '/ah-spz/v1/x' => false ) as $r0 => $da ) {
+	egal( ah_spa_ruta_privata( $r0 ), $da, 'rută privată: ' . $r0 );
+}
+$GLOBALS['ah_test_jurnal_do'] = array();
+$rz = ah_test_filtru( 'rest_post_dispatch', new WP_REST_Response( array( 'ok' => true ) ), null, new WP_REST_Request( array(), null, array(), '/ah-spp/v1/azi' ) );
+egal( array( $rz->headers['Cache-Control'] ?? '', $rz->headers['X-LiteSpeed-Cache-Control'] ?? '', in_array( 'litespeed_control_set_nocache', $GLOBALS['ah_test_jurnal_do'], true ) ), array( 'no-store, private', 'no-cache', true ), 'rest_post_dispatch: no-store, LiteSpeed no-cache pe /ah-spp/v1/azi' );
+$rz = ah_test_filtru( 'rest_post_dispatch', ah_spa_r_config(), null, new WP_REST_Request( array(), null, array(), '/ah-spa/v1/config' ) );
+egal( $rz->headers['Cache-Control'], 'public, max-age=300', '/config rămâne public (cache 5 minute)' );
+
+/* ---------- 19. POST /push/sterge (DELETE rămâne pentru aplicațiile vechi) ---------- */
+$GLOBALS['wpdb']->query( 'DELETE FROM wp_ah_spa_push' );
+ah_spa_push_salveaza( 'ana@exemplu.ro', array( 'token' => 'fcmT:' . str_repeat( 'a', 60 ), 'platforma' => 'ios', 'versiune' => '', 'disp' => '' ) );
+ah_spa_push_salveaza( 'ana@exemplu.ro', array( 'token' => 'fcmT:' . str_repeat( 'b', 60 ), 'platforma' => 'ios', 'versiune' => '', 'disp' => '' ) );
+egal( ah_spa_r_push_sterge( new WP_REST_Request( array(), array( 'token' => 'fcmT:' . str_repeat( 'a', 60 ) ), array(), '/ah-spa/v1/push/sterge', 'POST' ) )->get_status(), 403, 'push/sterge: fără antetul X-AH-App, refuzat' );
+ah_spa_r_push_sterge( new WP_REST_Request( array( 'X-AH-App' => '1' ), array( 'token' => 'fcmT:' . str_repeat( 'a', 60 ) ), array(), '/ah-spa/v1/push/sterge', 'POST' ) );
+egal( (int) $GLOBALS['wpdb']->get_var( 'SELECT COUNT(*) FROM wp_ah_spa_push' ), 1, 'push/sterge: tokenul scos, celălalt rămâne' );
+$js = ah_spa_js();
+foreach ( array( "api('push/sterge',{metoda:'POST'", "S.api_el+'push/sterge'", "'X-AH-SPP':'1'", 'r.status===404||r.status===405', 'if(S.el||!S.api_el)return;', 'getTimezoneOffset()', "asculta('App','resume'", "PREF.pune('ah_sterge'", 'function stergereRamasa(', "PUSH.opreste(true)", 'function acelasi(c)', 'aria-valuetext', "role','status'", 'Atinge ca s-o ștergi.', 'Codul are 6 cifre.', 'Nu am putut verifica codul acum. Mai încearcă puțin.', 'Trimite-mi un cod nou', "setAttribute('inert'", "e.key==='Escape'", "type=\"button\" class=\"rand spa-b\" role=\"switch\"", 'Ciclul ei', "h.setAttribute('tabindex','-1')" ) as $x ) {
+	verifica( false !== strpos( $js, $x ), 'puntea 2.3.0 conține ' . $x );
+}
+verifica( false === strpos( $js, 'curataLocal(false)' ), 'puntea: o pagină fără cont nu mai curăță telefonul (curataLocal(false))' );
+verifica( false === strpos( $js, "metoda:'DELETE'" ), 'puntea: tokenul ei nu mai pleacă prin DELETE' );
+
+/* ---------- 20. contoarele: fără rânduri pentru „adrese” care nu sunt adrese; curățenia (M6) ---------- */
+$wpdb->query( 'DELETE FROM wp_ah_spa_incercari' );
+$GLOBALS['ah_test_sql'] = array();
+$pz = ah_test_filtru( 'rest_pre_dispatch', null, null, new WP_REST_Request( array(), null, array( 'email' => 'nu-e-adresa-' . str_repeat( 'x', 30 ), 'cod' => '123456' ), '/ah-sp/v1/intra', 'POST' ) );
+egal( array( $pz, (int) $wpdb->get_var( 'SELECT COUNT(*) FROM wp_ah_spa_incercari' ) ), array( null, 0 ), '/intra cu o „adresă” care nu e adresă: niciun rând de contor (235 răspunde singur)' );
+ah_test_filtru( 'rest_pre_dispatch', null, null, new WP_REST_Request( array(), null, array( 'email' => 'ana@exemplu.ro', 'cod' => '123456' ), '/ah-sp/v1/intra', 'POST' ) );
+egal( (int) $wpdb->get_var( 'SELECT COUNT(*) FROM wp_ah_spa_incercari' ), 2, '/intra cu o adresă: contorul codului și al zilei' );
+$wpdb->query( "INSERT INTO wp_ah_spa_incercari (cheie, n, expira) VALUES ('vechi1', 3, " . ( time() - 2 * DAY_IN_SECONDS ) . "), ('vechi2', 1, " . ( time() - DAY_IN_SECONDS - 5 ) . "), ('recent', 1, " . ( time() - 3600 ) . ')' );
+$GLOBALS['ah_test_sql'] = array();
+egal( ah_spa_contoare_curata(), 2, 'curățenia: pleacă doar ce a expirat de peste o zi' );
+verifica( (bool) preg_match( '/^DELETE FROM wp_ah_spa_incercari WHERE expira < \d+ LIMIT 5000$/', end( $GLOBALS['ah_test_sql'] ) ), 'curățenia: în loturi de cel mult 5000 (MySQL)' );
+egal( (int) $wpdb->get_var( "SELECT COUNT(*) FROM wp_ah_spa_incercari WHERE cheie = 'recent'" ), 1, 'curățenia: contorul recent rămâne' );
+$wpdb->query( 'DELETE FROM wp_ah_spa_incercari' );
+
+/* ---------- 21. versiunea tabelelor doar dacă există coloanele (L7) ---------- */
+$init = null;
+foreach ( $GLOBALS['ah_test_hooks']['init'] as $h ) { if ( 5 === $h[1] ) { $init = $h[0]; } }
+delete_option( 'ah_spa_tabel' );
+$GLOBALS['ah_test_fara_coloane'] = true;
+$init();
+egal( get_option( 'ah_spa_tabel', false ), false, 'dbDelta fără efect (coloanele lipsesc): versiunea tabelelor NU se notează' );
+verifica( false !== strpos( wp_json_encode( get_option( 'ah_spa_jurnal' ) ), 'nu s-au putut crea' ), 'dbDelta eșuat: rând în jurnal' );
+unset( $GLOBALS['ah_test_fara_coloane'] );
+$init();
+egal( get_option( 'ah_spa_tabel' ), AH_SPA_TABEL_VER, 'cu coloanele la locul lor: versiunea se notează' );
+verifica( ah_spa_schema_ok(), 'schema: ambele tabele au coloanele' );
+
+/* ---------- 22. ștergerea contului cu fragmentul „Pentru el” oprit (L1) ---------- */
+$wpdb->pdo->exec( 'CREATE TABLE wp_ah_spp_parteneri ( id INTEGER PRIMARY KEY AUTOINCREMENT, ea TEXT NOT NULL )' );
+$wpdb->pdo->exec( 'CREATE TABLE wp_ah_spp_push ( id INTEGER PRIMARY KEY AUTOINCREMENT, partener INTEGER NOT NULL, token_h TEXT )' );
+$kea = ah_sp_ciclu_cheie( 'ana@exemplu.ro' ); $kalta = ah_sp_ciclu_cheie( 'alta@exemplu.ro' );
+$wpdb->pdo->exec( "INSERT INTO wp_ah_spp_parteneri (ea) VALUES ('$kea'), ('$kea'), ('$kalta')" );
+$wpdb->pdo->exec( "INSERT INTO wp_ah_spp_push (partener, token_h) VALUES (1, 'a'), (2, 'b'), (3, 'c')" );
+egal( ah_spa_sterge_parteneri_direct( '' ), 0, 'Pentru el direct: fără cheie, nimic' );
+$sc = ah_spa_sterge_cont( 'ana@exemplu.ro' );
+egal( array( $sc['pentru_el'] ?? 0, (int) $wpdb->get_var( 'SELECT COUNT(*) FROM wp_ah_spp_parteneri' ), $wpdb->get_col( 'SELECT partener FROM wp_ah_spp_push' ) ), array( 2, 1, array( 3 ) ), 'ștergerea contului cu „Pentru el” oprit: invitații ei și tokenurile lor, prin SQL; ale altei cliente rămân' );
+$wpdb->pdo->exec( 'DROP TABLE wp_ah_spp_parteneri' ); $wpdb->pdo->exec( 'DROP TABLE wp_ah_spp_push' );
+egal( ah_spa_sterge_parteneri_direct( $kea ), 0, 'Pentru el direct: fără tabel, nimic (și fără eroare)' );
+
+/* ---------- 23. „Mută contul” (adresă nouă) ---------- */
+$wpdb->query( 'DELETE FROM wp_ah_spa_push' ); $wpdb->query( 'DELETE FROM wp_ah_sp_ciclu' ); $wpdb->query( 'DELETE FROM wp_ah_ciclu' );
+$wpdb->insert( 'wp_ah_sp_ciclu', array( 'cheie' => ah_sp_ciclu_cheie( 'veche@exemplu.ro' ), 'date' => 'criptat', 'acord' => '2026-11-01', 'actualizat' => '2026-11-01' ) );
+$wpdb->insert( 'wp_ah_ciclu', array( 'email' => 'veche@exemplu.ro', 'token' => 't', 'start' => '2026-11-01' ) );
+ah_spa_push_salveaza( 'veche@exemplu.ro', array( 'token' => 'fcmM:' . str_repeat( 'm', 60 ), 'platforma' => 'android', 'versiune' => '', 'disp' => '' ) );
+update_option( 'ah_med_d_' . md5( 'veche@exemplu.ro' ), array( 'x' ) );
+$GLOBALS['ah_test_jurnal_do'] = array();
+egal( ah_spa_muta_cont( 'veche@exemplu.ro', 'nu-e-adresa' )['motiv'], 'email', 'mută: adresa nouă trebuie să fie o adresă' );
+egal( ah_spa_muta_cont( 'Veche@exemplu.ro', 'veche@exemplu.ro ' )['motiv'], 'aceeasi', 'mută: aceeași adresă, refuzat' );
+$cv = ah_spa_cine( 'veche@exemplu.ro' );
+$mr = ah_spa_muta_cont( 'veche@exemplu.ro', 'Noua@Exemplu.ro' );
+egal( $mr['mutat'], array( 'ciclu' => 1, 'ciclu_emailuri' => 1, 'push' => 1, 'med_dispozitive' => 1 ), 'mută: ciclul (cheia HMAC), emailurile fazelor, tokenul, telefoanele Inner Temple' );
+egal( array( (int) $wpdb->get_var( "SELECT COUNT(*) FROM wp_ah_sp_ciclu WHERE cheie = '" . ah_sp_ciclu_cheie( 'noua@exemplu.ro' ) . "'" ), $wpdb->get_var( "SELECT email FROM wp_ah_spa_push" ), $wpdb->get_var( "SELECT email FROM wp_ah_ciclu" ) ), array( 1, 'noua@exemplu.ro', 'noua@exemplu.ro' ), 'mută: rândurile sunt pe adresa nouă' );
+verifica( in_array( 'ah_spa_cont_mutat', $GLOBALS['ah_test_jurnal_do'], true ), 'mută: do_action( ah_spa_cont_mutat ) pentru contul pentru el' );
+verifica( in_array( $cv, ah_spa_cine_vechi( 'noua@exemplu.ro' ), true ) && in_array( $cv, ah_spa_cfg( 'sp', 'noua@exemplu.ro' )['cine_vechi'], true ), 'mută: aliasul — amprenta adresei vechi e același cont (S.cine_vechi)' );
+verifica( false === strpos( wp_json_encode( get_option( 'ah_spa_alias' ) ), 'veche@' ) && false === strpos( wp_json_encode( get_option( 'ah_spa_jurnal' ) ), 'veche@' ), 'mută: fără adrese de email în alias și în jurnal' );
+egal( ah_spa_cine_vechi( 'noua@exemplu.ro', time() + 400 * DAY_IN_SECONDS ), array(), 'mută: aliasul ține un an' );
+$wpdb->insert( 'wp_ah_sp_ciclu', array( 'cheie' => ah_sp_ciclu_cheie( 'a3@exemplu.ro' ), 'date' => 'x', 'acord' => '2026-11-01', 'actualizat' => '2026-11-01' ) );
+egal( ah_spa_muta_cont( 'noua@exemplu.ro', 'a3@exemplu.ro' )['mutat'], array( 'ciclu_ocupat' => 1, 'ciclu_emailuri' => 1, 'push' => 1, 'med_dispozitive' => 1 ), 'mută: ce există deja pe adresa nouă nu se suprascrie (ciclu_ocupat)' );
+verifica( false !== strpos( (string) ( function () { ob_start(); ah_spa_formular_muta(); return ob_get_clean(); } )(), 'name="action" value="ah_spa_muta"' ), 'mută: formularul în Setări › Aplicația mobilă' );
+
+/* ---------- 24. cronul: ultima rulare, anunțul după 26 de ore (L12) ---------- */
+delete_option( 'ah_spa_cron_tick' ); update_option( 'ah_spa_pornit', time() - 3600 );
+egal( ah_spa_cron_oprite(), array(), 'cron: fragment pornit de curând, fără anunț' );
+update_option( 'ah_spa_pornit', time() - 30 * 3600 );
+egal( ah_spa_cron_oprite(), array( 'ah_spa_tick' => 30 ), 'cron: n-a rulat niciodată în 30 h ⇒ anunț' );
+ah_spa_tick();
+verifica( (int) get_option( 'ah_spa_cron_tick' ) >= time() - 2, 'cron: ah_spa_tick își notează rularea' );
+egal( ah_spa_cron_oprite(), array(), 'cron: după o rulare, fără anunț' );
+egal( ah_spa_cron_oprite( time() + 27 * 3600 ), array( 'ah_spa_tick' => 27 ), 'cron: 27 h fără rulare ⇒ anunț' );
+update_option( 'ah_spp_ultima_rulare', time() - 40 * 3600 );
+egal( ah_spa_cron_oprite(), array(), 'cron: cronul lui contează doar cu fragmentul lui activ' );
+delete_option( 'ah_spp_ultima_rulare' );
 
 echo "\n" . $GLOBALS['ok'] . ' teste trecute, ' . $GLOBALS['rau'] . " picate.\n";
 exit( $GLOBALS['rau'] ? 1 : 0 );

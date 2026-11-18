@@ -24,6 +24,11 @@ se lansează la fel, separat, **după** modulul aplicație (pasul 10, aceeași r
 Ce adaugă echipa pe site (meditații, cursuri, înregistrări) apare singur în aplicație, **fără versiune nouă**.
 O versiune nouă a aplicației e nevoie doar când se schimbă partea de telefon.
 
+**Fragmentul 2.3.0 și aplicația** (review 18 nov., runda 2): fragmentul merge și cu aplicațiile construite înainte
+(`DELETE /push` rămâne). Partea nativă nouă (iPhone: un 5xx al site-ului deschide pagina offline cu „Site-ul e în lucru”;
+Android: motivul erorii pentru pagina offline, refacerea ecranului când procesul WebView e oprit, `minWebViewVersion` 90;
+pagina offline care deosebește „fără internet” de „site în lucru”) cere un build nou al aplicației.
+
 Detaliile tehnice: `docs/arhitectura.md`. Planul și riscurile: `docs/strategie-v2.md`.
 
 ## Pe scurt: ce urmează și cât durează
@@ -300,8 +305,14 @@ fiecare trebuie să se deschidă fără eroare. Tot acolo e jurnalul (ultimele r
   Complianz, Google Analytics și pixelul Meta, adică exact ce etichetele de confidențialitate spun că lipsește, sau o
   pagină de magazin pe care redirecționarea ar fi trebuit s-o ascundă):
   - **„Do Not Cache User Agents”** += `AdelaHaruApp`;
-  - **„Do Not Cache Cookies”** += `ah_app` și `ah_spp`;
-  - **„Do Not Cache URIs”** += `/wp-json/ah-spa/`, `/app/`, `/.well-known/`, `/pentru-el/`.
+  - **„Do Not Cache Cookies”** += `ah_app`, `ah_spp` și (2.3.0) `ah_sp`;
+  - **„Do Not Cache URIs”** += `/wp-json/ah-` (2.3.0: toate rutele Spațiului meu, ale extensiilor, ale lui și ale aplicației;
+    înlocuiește `/wp-json/ah-spa/`), `/app/`, `/.well-known/`, `/pentru-el/`.
+  Din 2.3.0 fragmentul trimite și singur, pe toate rutele `/wp-json/ah-sp*/v1/` (în afară de `punte` și `config`),
+  `Cache-Control: no-store, private` și `X-LiteSpeed-Cache-Control: no-cache`.
+- **`/wp-json/ah-spa/v1/config`** (2.3.0) trebuie să rămână public: pagina offline a aplicației îl întreabă ca să știe dacă
+  lipsește internetul sau site-ul e în lucru (un plugin de securitate care îl blochează face ca aplicația să spună mereu
+  „Site-ul e în lucru”).
   Pagina `/spatiul-meu/` nu se cachează nici azi.
 - **`/.well-known/`**: dacă există un folder real (de la certificatul SSL), `apple-app-site-association` și
   `assetlinks.json` trebuie să ajungă la WordPress. Verificare: `https://www.adelaharu.ro/.well-known/assetlinks.json`
@@ -393,6 +404,29 @@ scrie pe site altceva decât ar scrie o clientă (intrare, ciclu, notificări).
     deschid în aplicațiile lor.
 21. **Rafala de coduri**: pe un cont de probă, 6 coduri greșite trimise repede (de ex. din consolă, `Promise.all`) ⇒ cel
     mult 5 ajung la 235, apoi „Prea multe încercări. Cere un cod nou.”; un cod nou cerut ⇒ din nou 5.
+
+**De verificat pe telefon, în plus, de la 2.3.0** (fragmentul 2.3.0 + aplicația construită din acest `app/`):
+22. **Site-ul în lucru** (cu programatorul: un 503 de probă pe `/spatiul-meu/`, de ex. modul de mentenanță): aplicația
+    deschide pagina offline cu „Site-ul e în lucru” (nu „Nu avem internet”), pe iPhone și pe Android; în mod avion,
+    „Nu avem internet acum”. Încercările automate nu fac buclă (5 s, apoi tot mai rar); după ce site-ul revine, aplicația
+    se întoarce singură în Spațiul meu (sau la „Încearcă din nou”).
+23. **Cookie-ul expirat** nu mai șterge nimic: cu `ah_sp` șters (Web Inspector), meditațiile descărcate și ciclul rămân;
+    după intrarea cu același email, totul e la locul lui.
+24. **„Șterge contul” întrerupt**: atingeți „Șterge contul” și închideți aplicația din comutatorul de aplicații imediat
+    după „Se șterge…”; la redeschidere nu mai rămâne nimic pe telefon (descărcări, ciclu, mementouri).
+25. **Fusul orar**: cu mementourile pornite, schimbați fusul orar al telefonului (Setări › Dată și oră) și reveniți în
+    aplicație: notificările programate (Web Inspector: `LocalNotifications.getPending()`) sunt tot la 9:00, ora locului.
+26. **Android, procesul WebView oprit**: `adb shell am kill` nu ajunge; cu programatorul,
+    `adb shell "ps -A | grep sandboxed_process"` și `adb shell kill <pid>` pe procesul WebView al aplicației: aplicația
+    nu se închide, ecranul se reface (Spațiul meu de la capăt).
+27. **Accesibilitate**: VoiceOver (iPhone) și TalkBack (Android): la schimbarea secțiunii se citește titlul (ex. „Ciclul
+    meu, titlu 1”); în „Mai mult”, comutatoarele se anunță „comutator, activat/dezactivat”; foaia „Șterge contul” ține
+    focusul în ea, gestul de ieșire (Escape / scrub cu două degete) o închide; codul de intrare greșit se anunță; zoom-ul
+    textului la 200% (Setări › Accesibilitate › Text mai mare) nu taie bara de jos.
+28. **Modul întunecat al telefonului**: fără să fi atins „Aspect de seară”, Spațiul meu urmează tema telefonului; după
+    ce ea alege din comutator, alegerea ei rămâne.
+29. **Android cu WebView vechi** (sub 90, de ex. un emulator API 28 fără actualizări): aplicația deschide pagina
+    „Telefonul are nevoie de o actualizare” (Capacitor nu încarcă site-ul sub `android.minWebViewVersion`).
 
 ## 10. Lansarea, în ordine
 

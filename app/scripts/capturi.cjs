@@ -71,11 +71,11 @@ function server() {
 }
 
 /** window.Capacitor simulat; `date` = cheile din Preferences, `lipsa` = fișiere care nu mai există */
-function initCapacitor({ date, lipsa }) {
+function initCapacitor({ date, lipsa, platforma, eroare }) {
   const LIB = 'file:///var/mobile/Containers/Data/Application/X/Library/';
   window.__apeluri = [];
   window.Capacitor = {
-    getPlatform: () => 'ios',
+    getPlatform: () => platforma || 'ios',
     isNativePlatform: () => true,
     convertFileSrc: (u) => u.replace('file://', location.origin + '/_capacitor_file_'),
     Plugins: {
@@ -88,6 +88,7 @@ function initCapacitor({ date, lipsa }) {
         },
       },
       SplashScreen: { hide: async () => window.__apeluri.push('SplashScreen.hide') },
+      AhApp: { info: async () => ({ push: false, eroare: eroare || { cod: 0, la: 0 } }) },
       StatusBar: { setStyle: async (o) => window.__apeluri.push('StatusBar.setStyle:' + o.style) },
     },
   };
@@ -118,6 +119,12 @@ const SCENARII = [
   { nume: 'offline-sarcina-intunecat', date: { ah_ciclu: JSON.stringify({ starturi: ['2026-08-01'], sit: 'sarcina' }), ah_descarcate: DESC }, lipsa: [], intunecat: true },
   { nume: 'offline-ciclu-intunecat', date: { ah_ciclu: JSON.stringify({ starturi: ['2026-10-31'], lung: 28, men: 5 }), ah_descarcate: DESC }, lipsa: [], intunecat: true, reda: true },
   { nume: 'offline-reincearca', date: {}, lipsa: [], reincearca: true },
+  // site-ul răspunde cu 503 (iOS: AhNavigare deschide pagina cu ?cod=503): „Site-ul e în lucru”, nu „Nu avem internet”
+  { nume: 'offline-site-in-lucru', date: { ah_descarcate: DESC }, lipsa: [], cauta: '?cod=503', site: 503, reincearca: true, asteptat: 'Site-ul e în lucru' },
+  // Android: eroarea ținută de AhApp.info() (adresa paginii offline nu poate avea ?cod=)
+  { nume: 'offline-site-android', date: {}, lipsa: [], platforma: 'android', eroareNativa: true, site: 502, asteptat: 'Site-ul e în lucru' },
+  // Android cu WebView sub minWebViewVersion (90): cere actualizarea, fără încercări automate
+  { nume: 'offline-webview-vechi', date: {}, lipsa: [], platforma: 'android', ua: 'Mozilla/5.0 (Linux; Android 9; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/83.0.4103.106 Mobile Safari/537.36 AdelaHaruApp/2.0.0 (android)', asteptat: 'Telefonul are nevoie de o actualizare' },
   // conexiunea revine în timpul unei meditații: rămâne în pagină, cu „Deschide Spațiul meu”
   { nume: 'offline-revenit', date: { ah_ciclu: JSON.stringify({ starturi: ['2026-11-15'], lung: 30, men: 6 }), ah_descarcate: DESC }, lipsa: [], reda: true, revenit: true },
 ];
@@ -140,16 +147,18 @@ const SCENARII = [
       reducedMotion: 'reduce',
       locale: 'ro-RO',
       timezoneId: 'Europe/Bucharest',
+      ...(s.ua ? { userAgent: s.ua } : {}),
     });
     const p = await ctx.newPage();
     const erori = [];
     p.on('pageerror', (e) => erori.push(String(e)));
-    p.on('console', (m) => m.type() === 'error' && !/_capacitor_file_.*404|ERR_INTERNET_DISCONNECTED/.test(m.text()) && erori.push(m.text()));
+    p.on('console', (m) => m.type() === 'error' && !/_capacitor_file_.*404|ERR_INTERNET_DISCONNECTED|status of 50\d/.test(m.text()) && erori.push(m.text()));
     await p.clock.setFixedTime(new Date('2026-11-18T10:00:00+02:00'));
-    await p.addInitScript(initCapacitor, { date: s.date, lipsa: s.lipsa });
-    // site-ul „nu răspunde”: cererea de verificare a butonului eșuează
-    await p.route('https://www.adelaharu.ro/**', (r) => r.abort('internetdisconnected'));
-    await p.goto(`http://localhost:${port}/offline.html`);
+    await p.addInitScript(initCapacitor, { date: s.date, lipsa: s.lipsa, platforma: s.platforma, eroare: s.eroareNativa ? { cod: 502, la: Date.now() } : null });
+    // site-ul „nu răspunde”: cererea de verificare a butonului eșuează; sau răspunde cu o eroare (s.site), cu CORS
+    const cereri = [];
+    await p.route('https://www.adelaharu.ro/**', (r) => { cereri.push(r.request().url()); return s.site ? r.fulfill({ status: s.site, contentType: 'text/html', headers: { 'Access-Control-Allow-Origin': '*' }, body: '<h1>503</h1>' }) : r.abort('internetdisconnected'); });
+    await p.goto(`http://localhost:${port}/offline.html${s.cauta || ''}`);
     await p.waitForSelector('#reincearca');
     await p.evaluate(() => document.fonts.ready);
     if (s.reda) {
@@ -175,7 +184,13 @@ const SCENARII = [
     }
     if (s.reincearca) {
       await p.click('#reincearca');
-      await p.waitForFunction(() => /Încă nu avem conexiune/.test(document.getElementById('re-msg').textContent));
+      await p.waitForFunction((site) => (site ? /Site-ul încă nu răspunde/ : /Încă nu avem conexiune/).test(document.getElementById('re-msg').textContent), !!s.site);
+      if (s.site && !cereri.some((u) => /\/wp-json\/ah-spa\/v1\/config\?t=/.test(u))) erori.push('verificarea nu a cerut /wp-json/ah-spa/v1/config');
+      if (!/offline\.html/.test(p.url())) erori.push('a plecat din pagina offline deși site-ul răspunde cu eroare');
+    }
+    if (s.asteptat) {
+      const h = await p.evaluate(() => document.getElementById('off-titlu').textContent);
+      if (h !== s.asteptat) erori.push('titlul: „' + h + '”, așteptam „' + s.asteptat + '”');
     }
     await p.waitForTimeout(150);
     const apeluri = await p.evaluate(() => window.__apeluri);
