@@ -35,7 +35,7 @@ function randuri() { global $wpdb; return $wpdb->get_results( 'SELECT * FROM wp_
 function la( $uri, $get = array() ) { $_SERVER['REQUEST_URI'] = $uri; $_GET = $get; }
 
 /* ---------- 0. încărcarea ---------- */
-egal( AH_SPP, '1.1.0', 'versiunea fragmentului' );
+egal( AH_SPP, '1.2.0', 'versiunea fragmentului' );
 verifica( ah_spp_gata(), 'dependențele din 235 sunt găsite' );
 $n_hooks = count( $GLOBALS['ah_test_hooks'], COUNT_RECURSIVE );
 require __DIR__ . '/../../ah-sp-partener.php';
@@ -107,10 +107,13 @@ verifica( false === strpos( json_encode( $R1 ), 'mihai@' ) && false === strpos( 
 egal( ah_spp_decripteaza( $R1['email_c'] ), 'mihai@exemplu.ro', 'emailul lui, criptat' );
 egal( $R1['email_h'], ah_spp_hash_email( 'mihai@exemplu.ro' ), 'amprenta pentru căutare' );
 verifica( '' !== $R1['acord'] && $R1['acord'] === $R1['creat'], 'momentul acordului e păstrat' );
+egal( array( $R1['acord_v'], AH_SPP_ACORD_V ), array( '2026-11-18', '2026-11-18' ), 'versiunea textului acordului e păstrată lângă acord (GDPR art. 7 alin. 1)' );
+verifica( false === strpos( json_encode( $j ), 'acord_v' ), 'versiunea acordului nu apare în lista ei' );
 $m = ultimul_mail();
 egal( $m['catre'], 'mihai@exemplu.ro', 'invitația merge la el' );
 egal( $m['subiect'], 'Ana te invită să-i cunoști ciclul', 'subiectul, cu prenumele ei' );
-verifica( false !== strpos( $m['a']['continut'], 'poate opri accesul oricând' ) && false !== strpos( $m['a']['continut'], 'faza ei de azi și datele estimate' ), 'invitația spune ce vede și că ea poate opri' );
+verifica( false !== strpos( $m['a']['continut'], 'Ana: „Ți-am pregătit ceva, cu textele Adelei Haru: aici vezi în ce anotimp al ciclului sunt și cum mă poți sprijini.”' ), 'invitația: rândul ei, cu textul de pe site (mesajul de WhatsApp din 235)' );
+verifica( false !== strpos( $m['a']['motiv'], 'https://www.adelaharu.ro/politica-de-confidentialitate/' ) && false !== strpos( $m['a']['motiv'], 'Datele tale sunt prelucrate de HARU TRAINING SRL, operatorul site-ului adelaharu.ro.' ), 'invitația: operatorul și linkul spre politica de confidențialitate (GDPR art. 14)' );
 $TOK1 = token_din_mail( $m );
 verifica( ah_spp_token_valid( $TOK1 ), 'linkul personal /pentru-el/?t=' );
 verifica( 0 === strpos( $m['a']['buton'][1], 'https://www.adelaharu.ro/pentru-el/?t=' ), 'linkul duce la /pentru-el/' );
@@ -159,12 +162,14 @@ egal( ah_spp_el( cerere( null, array( 't' => $TOK2 ) ) )['nume'], 'Radu', '„az
 $_COOKIE['ah_spp'] = $COOKIE_M;
 $A = date_r( ah_spp_r_azi( cerere() ) );
 egal( $A['stare'], 'ok', 'azi: stare ok' );
-egal( array( $A['faza'], $A['zi'], $A['lungime'] ), array( 'primavara', 10, 28 ), 'ziua 10 din 28 → primăvara (CI.faze)' );
+egal( $A['faza'], 'primavara', 'ziua 10 din 28 → primăvara (CI.faze)' );
 egal( $A['pana_la'], zi( -1 ), 'primăvara ține până în ziua 11 (oS-1 = 11): mâine' );
 egal( $A['urmatoarea']['faza'] . '|' . $A['urmatoarea']['de_la'], 'vara|' . zi( -2 ), 'urmează vara, din ziua 12: poimâine' );
 egal( $A['nume_ea'], 'Ana', 'prenumele ei, cum l-a ales ea' );
-$CHEI = array( 'ok', 'nume_ea', 'nume', 'stare', 'faza', 'zi', 'lungime', 'pana_la', 'urmatoarea', 'inceputuri', 'harta', 'texte', 'azi', 'setari' );
-egal( array_keys( $A ), $CHEI, 'azi: doar cheile din contract' );
+$CHEI = array( 'ok', 'nume_ea', 'nume', 'stare', 'faza', 'pana_la', 'urmatoarea', 'inceputuri', 'texte', 'setari' );
+egal( array_keys( $A ), $CHEI, 'azi: doar cheile din contract (fără zi, lungime, harta: pagina nu mai are inelul)' );
+egal( array_keys( $A['urmatoarea'] ), array( 'faza', 'de_la', 'sprijin', 'arhetip' ), 'urmatoarea: doar ce arată „Ce urmează”' );
+egal( $A['urmatoarea']['sprijin'], ah_sp_partener_texte()['vara']['sprijin'][0], '„Ce urmează”: primul rând din „cum o poți sprijini” (235)' );
 egal( array_keys( $A['texte'] ), array( 'ce', 'sprijin', 'citate', 'arhetip', 'luna' ), 'texte: doar ale Adelei' );
 $JA = json_encode( $A, JSON_UNESCAPED_UNICODE );
 foreach ( array( 'NOTITA-SECRETA', '"sit"', 'natural', 'note', '"tri"', '"cra"', 'starturi', zi( 37 ), zi( 65 ), 'cheie-veche', 'mihai@', 'ana@', '"men"', 'partener' ) as $nu ) {
@@ -175,9 +180,9 @@ egal( $A['texte']['ce'], ah_sp_partener_texte()['primavara']['ce'], '„ce trăi
 egal( $A['texte']['citate'], ah_sp_partener_texte()['primavara']['citate'], 'citatele din Magia Ciclului Feminin (235)' );
 $prima = $A['inceputuri'][0] ?? array();
 egal( $prima, array( 'faza' => 'vara', 'data' => zi( -2 ) ), 'începuturile: prima fază viitoare' );
-verifica( count( $A['inceputuri'] ) >= 24 && count( $A['inceputuri'] ) <= 28, 'începuturile: 6 luni (~4 pe ciclu)' );
+verifica( count( $A['inceputuri'] ) >= 4 && count( $A['inceputuri'] ) <= 6, 'începuturile: ~5 săptămâni (' . count( $A['inceputuri'] ) . ')' );
 $ultima = end( $A['inceputuri'] );
-verifica( $ultima['data'] <= date( 'Y-m-d', strtotime( '+183 days' ) ), 'începuturile: cel mult 6 luni înainte' );
+verifica( $ultima['data'] <= date( 'Y-m-d', strtotime( '+35 days' ) ), 'începuturile: cel mult 35 de zile înainte' );
 verifica( ! array_filter( $A['inceputuri'], function ( $x ) { return $x['data'] <= date( 'Y-m-d' ); } ), 'începuturile: doar în viitor' );
 
 /* pauza și situațiile */
@@ -204,7 +209,7 @@ egal( array_keys( $A ), array( 'ok', 'nume_ea', 'nume', 'stare', 'mesaj', 'sub',
 $P = $A;
 ciclu_in_cont( $ANA, array( 'starturi' => array( zi( 27 ) ), 'lung' => 28, 'men' => 5 ) );
 $A = date_r( ah_spp_r_azi( cerere() ) );
-egal( array( $A['stare'], $A['faza'], $A['zi'] ), array( 'ok', 'toamna', 28 ), 'ultima zi estimată (ziua 28 din 28): încă toamna' );
+egal( array( $A['stare'], $A['faza'], $A['urmatoarea']['de_la'] ), array( 'ok', 'toamna', zi( -1 ) ), 'ultima zi estimată (ziua 28 din 28): încă toamna, iarna din jurul zilei de mâine' );
 ciclu_in_cont( $ANA, array( 'starturi' => array( zi( 35 ) ), 'lung' => 28, 'men' => 5 ) );
 $A = date_r( ah_spp_r_azi( cerere() ) );
 egal( $A, $P, 'întârziere de 1 zi și de 8 zile: același răspuns, deci el nu poate număra zilele' );
@@ -254,6 +259,7 @@ egal( $r1, $r2, 'același răspuns pentru o adresă necunoscută și una invitat
 egal( count( $GLOBALS['ah_test_mail_cadru'] ), 1, 'emailul pleacă doar la adresa invitată' );
 $TOK1b = token_din_mail( ultimul_mail() );
 egal( ultimul_mail()['subiect'], 'Linkul tău nou: ciclul ei', 'emailul cu linkul nou' );
+verifica( false !== strpos( ultimul_mail()['a']['motiv'], 'HARU TRAINING SRL' ) && false !== strpos( ultimul_mail()['a']['motiv'], '/politica-de-confidentialitate/' ), 'linkul nou: operatorul și politica' );
 egal( (int) ah_spp_rand_token( $TOK1 )['id'], (int) $R1['id'], 'cererea (poate a altcuiva) nu-i strică linkul pe care îl are' );
 egal( (int) ah_spp_rand_token( $TOK1b )['id'], (int) $R1['id'], 'linkul nou merge' );
 egal( ah_spp_rand_token( $TOK1 ), null, 'după prima folosire a linkului nou, cel vechi nu mai merge' );
@@ -334,7 +340,9 @@ egal( $v[ (int) $R1['id'] ], 'email', 'vara începe azi: fără modulul aplicaț
 verifica( false !== strpos( json_encode( get_option( 'ah_spp_jurnal' ), JSON_UNESCAPED_UNICODE ), 'push OPRIT (modulul aplicație nu e activ)' ), 'push fără modulul aplicație: doar jurnal' );
 egal( $v[ (int) $L[1]['id'] ], 'notat', 'Radu n-a intrat încă: nimic trimis' );
 $m = ultimul_mail();
-egal( array( $m['catre'], $m['subiect'] ), array( 'mihai@exemplu.ro', 'Începe vara ei interioară' ), 'emailul fazei' );
+egal( array( $m['catre'], $m['subiect'] ), array( 'mihai@exemplu.ro', 'Începe Vara ei interioară' ), 'emailul fazei' );
+verifica( false !== strpos( $m['a']['motiv'], 'HARU TRAINING SRL' ) && false !== strpos( $m['a']['motiv'], '/politica-de-confidentialitate/' ), 'emailul fazei: operatorul și politica' );
+verifica( false !== strpos( $m['a']['continut'], 'Fazele sunt o estimare: nu sunt o metodă de contracepție.' ), 'emailul fazei: nota, cu cuvintele de pe site' );
 verifica( false !== strpos( $m['a']['dezabonare'], 'fara-emailuri=' ), 'emailul fazei are link de oprire' );
 verifica( false === strpos( json_encode( $m, JSON_UNESCAPED_UNICODE ), 'NOTITA' ) && false === strpos( json_encode( $m ), zi( 11 ) ), 'emailul fazei: fără notițe, fără date notate' );
 egal( ah_spp_verifica_toti()[ (int) $R1['id'] ], '', 'a doua rulare în aceeași zi: nimic' );
@@ -351,7 +359,8 @@ $v = ah_spp_verifica_toti();
 egal( $v[ (int) $R1['id'] ], 'push+email', 'toamna: push și email' );
 egal( count( $GLOBALS['ah_test_http'] ), 2, 'push: câte o cerere pe telefon' );
 $b = json_decode( $GLOBALS['ah_test_http'][0][1]['body'], true );
-egal( array( $b['message']['notification']['title'], $b['message']['data']['url'] ), array( 'Începe toamna ei interioară', 'https://www.adelaharu.ro/pentru-el/' ), 'push: textul și pagina lui' );
+egal( array( $b['message']['notification']['title'], $b['message']['data']['url'] ), array( 'Începe Toamna ei interioară', 'https://www.adelaharu.ro/pentru-el/' ), 'push: titlul (numele fazei) și pagina lui' );
+egal( $b['message']['notification']['body'], ah_sp_partener_texte()['toamna']['sprijin'][0], 'push: primul rând din „cum o poți sprijini” (ca fișierul .ics din 235)' );
 egal( count( ah_spp_push_ale_lui( $R1['id'] ) ), 1, 'tokenul necunoscut lui Firebase s-a șters' );
 // corectare din urmă: ea mută data înapoi, faza „nouă” a început acum 5 zile → doar notat
 ciclu_in_cont( $ANA, array( 'starturi' => array( zi( 4 ), zi( 32 ) ), 'lung' => 28, 'men' => 5, 'sit' => 'natural' ) );
@@ -372,7 +381,7 @@ egal( count( $GLOBALS['ah_test_cron'] ), 1, 'nu se programează de două ori' );
 $GLOBALS['ah_test_http'] = array();
 ah_test_actiune( 'ah_spp_verifica', ah_sp_ciclu_cheie( $ANA ) );
 egal( count( $GLOBALS['ah_test_http'] ), 1, 'iarna începe azi: push trimis' );
-egal( json_decode( $GLOBALS['ah_test_http'][0][1]['body'], true )['message']['notification']['title'], 'Începe iarna ei interioară', 'push: iarna' );
+egal( json_decode( $GLOBALS['ah_test_http'][0][1]['body'], true )['message']['notification']['title'], 'Începe Iarna ei interioară', 'push: iarna' );
 // situația devine „hormonal”: nimic, iar la revenire nu „anunțăm” faza din mijloc
 ciclu_in_cont( $ANA, array( 'starturi' => array( zi( 0 ), zi( 28 ) ), 'lung' => 28, 'men' => 5, 'sit' => 'hormonal' ) );
 $GLOBALS['ah_test_http'] = array();
@@ -398,6 +407,7 @@ egal( count( ah_spp_push_ale_lui( $R1['id'] ) ), 0, 'oprit: tokenurile push s-au
 $_COOKIE['ah_spp'] = $COOKIE_M;
 $A = date_r( ah_spp_r_azi( cerere() ) );
 egal( array( $A['stare'], array_keys( $A ) ), array( 'oprit', array( 'ok', 'nume_ea', 'nume', 'stare', 'mesaj', 'sub', 'setari' ) ), 'el vede „oprit”, fără nimic din ciclu' );
+egal( array( $A['mesaj'], $A['sub'] ), array( 'Linkul a fost oprit', 'Linkul acesta nu mai e activ. Dacă vrei să-l primești din nou, vorbește cu ea.' ), 'oprit: cuvintele paginii ?ciclul-ei (235)' );
 egal( ah_spp_r_push( cerere( array( 'token' => $PT1, 'platforma' => 'ios' ) ) )->get_status(), 403, 'oprit: nu-și mai poate pune notificări' );
 egal( ah_spp_r_email( cerere( array( 'on' => true ) ) )->get_status(), 403, 'oprit: nu-și mai poate porni emailurile' );
 $GLOBALS['ah_test_http'] = array();
@@ -476,11 +486,36 @@ foreach ( array( 'mihai@', 'ana@', 'NOTITA', '"sit"', 'starturi', zi( 37 ) ) as 
 }
 verifica( false !== strpos( $h, 'magia-ciclului-feminin' ) && false !== strpos( $h, 'fonts.googleapis.com' ), 'browser: cărțile (spp-carte) și Cormorant de la Google' );
 $cfg = ah_spp_cfg_el();
-egal( count( $cfg['invata'] ), 8, 'Învață: 8 pagini' );
-egal( array_column( $cfg['invata'], 'id' ), array( 'anotimpuri', 'iarna', 'primavara', 'vara', 'toamna', 'vorbeste', 'dorinta', 'despre' ), 'Învață: paginile' );
+egal( array_column( $cfg['invata'], 'id' ), array( 'faze', 'iarna', 'primavara', 'vara', 'toamna', 'podcast' ), 'Învață: 6 pagini' );
+egal( array_column( $cfg['invata'], 'titlu' ), array( 'Cele 4 faze ale ciclului feminin', 'Iarna ei interioară', 'Primăvara ei interioară', 'Vara ei interioară', 'Toamna ei interioară', 'Din podcastul Intim Feminin' ), 'Învață: titlurile, numele de pe site' );
 $ji = json_encode( $cfg['invata'], JSON_UNESCAPED_UNICODE );
-verifica( false !== strpos( $ji, 'nu este o metodă de contracepție' ), 'Învață: nota despre contracepție' );
-verifica( false !== strpos( $ji, 'Menstruația conștientă' ) && false !== strpos( $ji, 'Energia sexuală în fazele ciclului feminin' ), 'Învață: episoadele de podcast' );
+verifica( false !== strpos( $cfg['nota'], 'Fazele sunt o estimare: nu sunt o metodă de contracepție.' ), 'nota despre contracepție, cu cuvintele lui 41' );
+/* doar texte de pe site: fiecare paragraf, rând, citat și titlu de episod trebuie să existe în 41 sau 235 (sau să fie un nume/titlu
+   compus din ele); nimic scris de noi */
+$surse = file_get_contents( __DIR__ . '/../../../reference/v2/sn41.php' ) . file_get_contents( __DIR__ . '/../../../reference/v2/sn235.php' );
+$compuse = array( 'Cele 4 faze ale ciclului feminin', 'Fragment din cartea Spre feminitate, de Adela Haru', 'Din podcastul Intim Feminin', 'Cum o poți sprijini', 'Ce le spune Adela femeilor, în Spre feminitate', 'Ce le spune Adela femeilor, în Magia Ciclului Feminin' );
+$straine = array();
+foreach ( $cfg['invata'] as $pg ) {
+	foreach ( $pg['b'] as $bl ) {
+		$txt = array();
+		if ( in_array( $bl['t'], array( 'p', 'h' ), true ) ) { $txt[] = $bl['text']; }
+		if ( in_array( $bl['t'], array( 'ul', 'citat' ), true ) ) { $txt = array_merge( $txt, $bl['l'] ); }
+		if ( 'citat' === $bl['t'] ) { $txt[] = $bl['sursa']; }
+		if ( 'podcast' === $bl['t'] ) { $txt[] = $bl['titlu']; $txt[] = $bl['text']; }
+		foreach ( $txt as $t ) {
+			if ( ! in_array( $t, $compuse, true ) && false === strpos( $surse, json_encode( $t, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES ) ) && false === strpos( $surse, $t ) && false === strpos( $surse, str_replace( '„', '„', $t ) ) ) {
+				$straine[] = $t;
+			}
+		}
+	}
+}
+egal( $straine, array(), 'Învață: doar texte de pe site (41, 235)' );
+foreach ( array( 'Adela vorbește despre ciclul feminin', 'Fazele sunt repere, nu reguli', 'Zilele dinaintea menstruației', 'Cum vorbești cu ea', 'Dorința ei poate veni', 'Despre pagina aceasta' ) as $nu ) {
+	verifica( false === strpos( $ji, $nu ), 'Învață: fără textul nostru „' . $nu . '…”' );
+}
+egal( array_column( end( $cfg['invata'] )['b'], 'titlu' ), array( 'Menstruația conștientă', 'Fertilitatea conștientă', 'Despre nevoia de a fi iubit(ă) într-o relație', 'Despre limitele personale în relațiile apropiate', 'Energia sexuală în fazele ciclului feminin' ), 'Învață: episoadele 2–6 din podcast' );
+verifica( false !== strpos( $ji, ah_ciclu_faze()['menstruala']['practica'] ) && false !== strpos( $ji, ah_ciclu_faze()['ovulatorie']['ajuta'][2] ), 'Învață: „ajuta” și „practica” din Harta ciclului (41)' );
+egal( ah_spp_mesaj_faza( 'vara' ), array( 'Începe Vara ei interioară', ah_sp_partener_texte()['vara']['sprijin'][0] ), 'mesajul fazei: numele fazei + primul rând din „sprijin”' );
 verifica( false !== strpos( $ji, ah_ciclu_faze()['premenstruala']['simti'] ), 'Învață: textele din Harta ciclului (41)' );
 verifica( false === strpos( $ji, '"mai"' ) && false === strpos( $ji, 'wild-love' ), 'Învață: fără „Mai departe” (produsele) de la podcast' );
 verifica( ! preg_match( '/\bnu\b[^.]{0,80}\bci\b/u', $ji ), 'Învață: fără construcții „nu… ci”' );

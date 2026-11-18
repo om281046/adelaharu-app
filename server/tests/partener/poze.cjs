@@ -209,21 +209,28 @@ const hApel = (page) => page.evaluate(() => JSON.parse(sessionStorage.getItem('h
     const page = await ctx.newPage(); const erori = []; page.on('pageerror', (e) => erori.push(e.message)); page.on('dialog', (d) => d.accept());
     await page.goto(SITE + '/pentru-el/'); await asteapta(900);
     const t = await page.evaluate(() => document.body.innerText);
-    verifica(/Azi, Ana e în/i.test(t) && /Primăvara ei interioară/.test(t) && /Ziua 9</.test(await page.locator('svg.inel').innerHTML()), 'el: Azi — primăvara, ziua 9');
-    verifica(/Cum o poți sprijini/.test(t) && /Ce urmează/.test(t) && /Următoarele luni/.test(t), 'el: sprijin, ce urmează, lunile următoare');
-    verifica(/Nu este o metodă de contracepție/.test(t), 'el: nota „estimare, nu contracepție”');
+    verifica(/Azi, Ana e în/i.test(t) && /Primăvara ei interioară/.test(t) && /Fecioara · Luna în creștere/.test(t) && /până în jur de \d+ \S+/.test(t), 'el: Azi — primăvara, arhetipul, luna, până în jur de');
+    verifica(!(await page.locator('svg.inel').count()) && !/Ziua \d|din 28/.test(t), 'el: fără inel și fără „Ziua N din L”');
+    verifica(/Ce trăiește acum/.test(t) && /Cum o poți sprijini/.test(t) && /Ce le spune Adela femeilor, în Magia Ciclului Feminin/i.test(t), 'el: ce trăiește, sprijin, citatul');
+    verifica(/Ce urmează/.test(t) && /Vara ei interioară · Mama, din jurul datei de \d+ \S+\./.test(t) && (await page.locator('.luni .r').count()) >= 3, 'el: „Ce urmează”, cu faza următoare și începuturile următoarelor săptămâni');
+    verifica(/Fazele sunt o estimare: nu sunt o metodă de contracepție\./.test(t), 'el: nota „estimare, nu contracepție”, cu cuvintele de pe site');
     verifica(!/NOTITA|mihai@|ana@/.test(await page.content()), 'el: nicio notiță sau adresă în pagină');
     await poza(page, 'el-1-azi');
     await poza(page, 'el-1-azi-toata', true);
     await page.click('.bara a[href="#invata"]'); await asteapta(400);
-    egal(await page.locator('.lista a').count(), 8, 'el: Învață — 8 pagini');
-    await poza(page, 'el-2-invata');
-    await page.click('.lista a[href="#invata/toamna"]'); await asteapta(400);
-    verifica(/Zilele dinaintea menstruației/.test(await page.evaluate(() => document.body.innerText)), 'el: pagina „Toamna ei”');
+    egal(await page.locator('.lista a').count(), 6, 'el: Învață — 6 pagini');
+    verifica(await page.locator('a.spp-carte').first().isVisible(), 'el (browser): cărțile se văd (rândul paginii ?ciclul-ei)');
+    await poza(page, 'el-2-invata', true);
+    await page.click('.lista a[href="#invata/faze"]'); await asteapta(400);
+    verifica(/Cele 4 faze ale ciclului feminin/.test(await page.evaluate(() => document.body.innerText)), 'el: pagina „Cele 4 faze”');
+    await poza(page, 'el-3-invata-faze', true);
+    await page.evaluate(() => { location.hash = '#invata/toamna'; }); await asteapta(400);
+    const tt = await page.evaluate(() => document.body.innerText);
+    verifica(/Toamna ei interioară/.test(tt) && /crește nivelul de intuiție/.test(tt) && /Cum o poți sprijini/.test(tt) && !/Zilele dinaintea menstruației/.test(tt), 'el: pagina „Toamna ei interioară”, doar din textele site-ului');
     await poza(page, 'el-3-invata-toamna', true);
-    await page.evaluate(() => { location.hash = '#invata/despre'; }); await asteapta(400);
-    verifica(await page.locator('a.spp-carte').first().isVisible(), 'el (browser): cărțile se văd');
-    await poza(page, 'el-4-invata-despre');
+    await page.evaluate(() => { location.hash = '#invata/podcast'; }); await asteapta(400);
+    egal(await page.locator('.pod').count(), 5, 'el: podcastul — episoadele 2–6');
+    await poza(page, 'el-4-invata-podcast', true);
     await page.click('#spp-set'); await asteapta(400);
     verifica(await page.locator('#spp-sw-email').isVisible() && !(await page.locator('#spp-sw-push').count()), 'el (browser): emailurile, fără notificări push');
     S.cereri = [];
@@ -248,8 +255,8 @@ const hApel = (page) => page.evaluate(() => JSON.parse(sessionStorage.getItem('h
     await page.click('#spp-anunt [data-a="push"]'); await asteapta(500);
     const pu = S.cereri.find((c) => c.p === '/wp-json/ah-spp/v1/push' && c.m === 'POST');
     egal(pu && pu.corp.platforma, 'ios', 'aplicație: tokenul FCM ajunge la /ah-spp/v1/push');
-    verifica(/Gata\. Îți dăm de veste/.test(await page.locator('#spp-anunt').innerText()), 'aplicație: confirmarea');
-    await page.evaluate(() => { location.hash = '#invata/despre'; }); await asteapta(400);
+    verifica(/Primești notificările fazelor/.test(await page.locator('#spp-anunt').innerText()), 'aplicație: confirmarea');
+    await page.evaluate(() => { location.hash = '#invata'; }); await asteapta(400);
     egal(await page.locator('.spp-carte').count(), 0, 'aplicație: fără linkuri spre cărți');
     await page.click('#spp-set'); await asteapta(300);
     verifica(await page.locator('#spp-sw-push').isVisible(), 'aplicație: comutatorul de notificări');
@@ -323,7 +330,7 @@ const hApel = (page) => page.evaluate(() => JSON.parse(sessionStorage.getItem('h
   }
 
   /* ===== 5. el: pauză, oprit, fără cont, link expirat ===== */
-  for (const [st, nume, re] of [['pauza', 'el-8-pauza', /Pentru moment, aici nu e nicio estimare\./], ['oprit', 'el-9-oprit', /Accesul tău la ciclul ei s-a oprit\./], ['iesit', 'el-10-fara-cont', /Deschide linkul primit pe email/], ['link', 'el-11-link-expirat', /Linkul acesta nu mai e valabil/]]) {
+  for (const [st, nume, re] of [['pauza', 'el-8-pauza', /Pentru moment, aici nu e nicio estimare\./], ['oprit', 'el-9-oprit', /Linkul a fost oprit[\s\S]*Linkul acesta nu mai e activ\./], ['iesit', 'el-10-fara-cont', /Deschide linkul primit pe email/], ['link', 'el-11-link-expirat', /Linkul acesta nu mai e valabil/]]) {
     S.el = st;
     const ctx = await browser.newContext({ ...ctxOpt, userAgent: UA_SAFARI });
     await ruta(ctx);
@@ -331,7 +338,7 @@ const hApel = (page) => page.evaluate(() => JSON.parse(sessionStorage.getItem('h
     await page.goto(SITE + '/pentru-el/'); await asteapta(700);
     const t = await page.evaluate(() => document.body.innerText);
     verifica(re.test(t), 'el: ' + st);
-    if (st === 'pauza') verifica(!/Primăvara|Iarna ei|Vara ei|Toamna ei|Ziua \d/.test(t.replace(/Între timp[\s\S]*/, '')) && !/hormonal|contracepție hormonală/i.test(await page.content()), 'el: pauza nu arată faze și nici situația ei');
+    if (st === 'pauza') verifica(!/Primăvara|Iarna ei|Vara ei|Toamna ei|Ziua \d/.test(t) && !/hormonal|contracepție hormonală/i.test(await page.content()), 'el: pauza nu arată faze și nici situația ei');
     if (st === 'iesit') {
       await page.fill('#spp-lpi', 'nu e un link'); await page.click('#spp-lpb'); await asteapta(150);
       verifica(/nu pare întreg/.test(await page.locator('#spp-lpm').innerText()), 'el fără cont: câmpul pentru linkul lipit, cu mesaj la greșeală');

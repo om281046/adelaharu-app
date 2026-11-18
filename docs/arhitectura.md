@@ -136,7 +136,7 @@ proprie, `/meditatii`, `/cursuri`, `/ciclu` etc.); din el se refolosesc trimiter
 Două feluri de cont în aceeași aplicație (și în browser):
 - **Ea**: Spațiul meu complet (mai sus).
 - **El**: un cont simplu, doar pentru ciclul ei: „Azi” (unde e ea, ce trăiește, cum o poate sprijini, ce urmează),
-  „Învață” (pagini scurte despre menstruație, cele 4 faze, sindromul premenstrual, cum vorbește cu ea) și
+  „Învață” (cele 4 faze, fiecare fază, podcastul; doar textele de pe site) și
   notificări la începutul fiecărei faze. Nimic de cumpărat, nimic din contul ei în afară de ciclu.
 
 Fragment nou, separat: `server/ah-sp-partener.php` („Spațiul meu – Pentru el”), aditiv, nu modifică 235.
@@ -153,8 +153,9 @@ cel vechi se anulează când îl folosește pe cel nou (review 18 nov.). Ea vede
 
 **Ce primește el (sincronizat, minim):** `GET /wp-json/ah-spp/v1/azi` (cookie `ah_spp` sau `?t=`) calculează pe server,
 din datele ei criptate (`ah_sp_ciclu`: `ciclu.starturi`, `lung`, `men`, `sit`), cu EXACT regula `CI.faze`/`CI.lung` din 235:
-`{nume_ea, stare:'ok'|'pauza'|'oprit', faza, zi, lungime, pana_la, urmatoarea:{faza, de_la}, inceputuri:[{faza,data}… 6 luni],
-texte:{ce, sprijin[], citate[]}}`. NICIODATĂ notițele ei, simptomele, situația (`sit`) sau zilele exacte notate.
+`{nume_ea, nume, stare:'ok'|'pauza'|'oprit', faza, pana_la, urmatoarea:{faza, de_la, sprijin, arhetip}, inceputuri:[{faza,data}… ~5 săptămâni],
+texte:{ce, sprijin[], citate[], arhetip, luna}, setari}` — doar ce arată pagina (fără `zi`, `lungime`, `harta`: pagina lui nu are
+inel și nici „Ziua N din L”, decizia lui Mircea, 18 nov.). NICIODATĂ notițele ei, simptomele, situația (`sit`) sau zilele exacte notate.
 Dacă `sit` nu e `natural`/`alaptare`/`perimenopauza` sau ea a șters ciclul → `stare:'pauza'` cu un text neutru
 („Pentru moment, aici nu e nicio estimare.”, fără motiv). La fel (decizie de confirmat, `docs/partener.md`): prima zi în viitor și
 menstruația întârziată, oricât de puțin (review 18 nov.: el nu vede întârzierea, nici ziua din ciclu peste lungime); `sit` lipsă
@@ -183,7 +184,11 @@ linkul copiat, care îl deschide în aplicație) sau „Trimite-mi din nou linku
 accesul din pagina lui; când ea își șterge contul (`sterge-cont`, cu numărul în emailul echipei: `pentru_el`) sau ciclul,
 rândurile lui și tokenurile lui push se șterg pe loc. Paragraf nou în Politica de confidențialitate.
 
-**Învață:** 6–8 pagini scurte, CIORNĂ pentru Adela, din textele ei existente (Harta ciclului 41, citatele din „Magia Ciclului
-Feminin” din 235, episoadele de podcast), fără afirmații medicale, cu nota „estimare, nu metodă de contracepție”.
+**Textele (Mircea, 18 nov.): niciun text nou.** Azi și Învață (6 pagini) se fac doar din ce e deja pe site: Harta ciclului 41
+(`pe_scurt`, `simti`, `ajuta`, `practica`, arhetip, luna, „Nota” din *Spre feminitate*), 235 (`sprijin`, citatele din „Magia Ciclului
+Feminin”, episoadele 2–6 ale podcastului, frazele paginii `?ciclul-ei`), cu nota „Fazele sunt o estimare: nu sunt o metodă de
+contracepție.” (41). Notificarea fazei: „Începe {Iarna ei interioară…}” + primul rând din `sprijin`. Emailurile lui numesc operatorul
+(HARU TRAINING SRL) și politica de confidențialitate; versiunea textului acordului ei (`acord_v`) stă lângă `acord`. Puținele rânduri
+funcționale fără sursă pe site: lista din `docs/partener.md`.
 Linkul vechi „Pentru el” (`?ciclul-ei` cu datele după #) continuă să meargă; în „Ciclul meu” generatorul vechi e înlocuit
 vizual de invitația nouă.

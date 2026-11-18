@@ -11,8 +11,8 @@
  *      Dacă ciclul ei nu e păstrat în cont, cardul îi cere întâi acordul pentru asta, prin butonul lui 235.
  *      Generatorul vechi de linkuri (?ciclul-ei) e ascuns; linkurile vechi merg mai departe (235 le servește).
  *   2. Pe ecranul de intrare din Spațiul meu: „Sunt partenerul ei” → „Deschide linkul primit pe email” / „Trimite-mi din nou linkul”.
- *   3. Pagina lui, /pentru-el/: „Azi” (unde e ea, ce trăiește, cum o poate sprijini, ce urmează), „Învață” (8 pagini scurte
- *      din textele Adelei) și Setări (notificări, email la începutul fazelor, Ieși, Șterge accesul meu).
+ *   3. Pagina lui, /pentru-el/: „Azi” (unde e ea, ce trăiește, cum o poate sprijini, citatul, ce urmează), „Învață” (6 pagini,
+ *      doar din textele de pe site) și Setări (notificări, emailurile fazelor, Ieși, Șterge accesul meu).
  *      Linkul /pentru-el/?t=<token> îl ține conectat un an (cookie semnat ah_spp), apoi adresa se curăță.
  *   4. REST ah-spp/v1: ale ei (parteneri, invita, opreste, retrimite), ale lui (azi, trimite-link, push, email, iesi, sterge).
  *      „azi” calculează pe server, din ciclul ei criptat (ah_sp_ciclu), cu EXACT regula CI.d / CI.lung / CI.faze / CI.azi
@@ -24,13 +24,16 @@
  * 1.1.0 (review 18 nov.): menstruația întârziată, oricât de puțin, ajunge la el doar ca pauză, cu un text care nu spune
  * de ce; „Trimite din nou invitația” (ea) dă și o sesiune nouă, deci deconectează orice telefon sau browser al lui;
  * „Trimite-mi din nou linkul” (el) nu mai anulează linkul vechi până nu e folosit cel nou și trimite emailul după răspuns.
+ * 1.2.0 (Mircea, 18 nov.): fără texte noi: tot ce citește el vine de pe site (41, 235, podcastul); fără inel și fără
+ * „Ziua N din L” (din „azi” au plecat zi, lungime, harta și azi; începuturile doar pe ~5 săptămâni, la „Ce urmează”);
+ * emailurile lui numesc operatorul (HARU TRAINING SRL) și politica; versiunea acordului ei (acord_v) stă lângă acord.
  *
  * Datele lui: prenume, email (criptat AES-256-GCM cu o cheie separată, plus o amprentă HMAC pentru căutare), tokenul (doar
  * sha256), tokenurile push, ultima vizită, alegerea emailurilor. Legătura cu ea: ah_sp_ciclu_cheie( emailul ei ), nu emailul.
  * Nu face nimic dacă lipsesc funcțiile lui 235 (ah_sp_email, ah_sp_ciclu_*). Aplicația nu vinde nimic: în aplicație, pagina
  * lui nu arată linkurile spre cărți.
  * Oprire: dezactivezi fragmentul. Linkurile din emailuri duc atunci la o pagină inexistentă; datele rămân în tabele până
- * la ștergerea lor (vezi docs/partener.md). Textele noi sunt CIORNĂ, de citit de Adela.
+ * la ștergerea lor (vezi docs/partener.md). Puținele rânduri funcționale fără echivalent pe site: lista din docs/partener.md.
  */
 if ( ! defined( 'ABSPATH' ) ) {
 	return;
@@ -38,13 +41,14 @@ if ( ! defined( 'ABSPATH' ) ) {
 if ( defined( 'AH_SPP' ) ) {
 	return; // încărcat deja (copie dublă a fragmentului)
 }
-define( 'AH_SPP', '1.1.0' );
+define( 'AH_SPP', '1.2.0' );
 define( 'AH_SPP_NS', 'ah-spp/v1' );
 define( 'AH_SPP_PAGINA', '/pentru-el/' );
 define( 'AH_SPP_MAX', 2 );              // parteneri activi pentru o femeie
-define( 'AH_SPP_TABEL_VER', '2' );       // 2: token_nou_h (linkul cerut de el nu-l anulează pe cel vechi până nu e folosit)
+define( 'AH_SPP_TABEL_VER', '3' );       // 2: token_nou_h (linkul cerut de el nu-l anulează pe cel vechi până nu e folosit); 3: acord_v
+define( 'AH_SPP_ACORD_V', '2026-11-18' ); // versiunea textului acordului ei (dovada acordului, GDPR art. 7 alin. 1), păstrată lângă `acord`
 define( 'AH_SPP_OPRIT_ZILE', 30 );      // rândurile oprite se șterg după atâtea zile
-define( 'AH_SPP_LUNI', 183 );           // câte zile înainte arată „începuturile” (6 luni)
+define( 'AH_SPP_URM_ZILE', 35 );        // câte zile înainte arată „începuturile” fazelor (la „Ce urmează”, ~5 săptămâni)
 define( 'AH_SPP_PUSH_MAX', 5 );         // telefoane cu notificări pentru el
 if ( ! defined( 'AH_SPP_LINK_MS' ) ) {
 	define( 'AH_SPP_LINK_MS', 1500 );  // timpul minim al /trimite-link, unde emailul nu poate pleca după răspuns
@@ -84,7 +88,7 @@ function ah_spp_db() {
 	$c = $wpdb->get_charset_collate();
 	$t = ah_spp_tabel();
 	$p = ah_spp_tabel_push();
-	dbDelta( "CREATE TABLE {$t} (\n id bigint(20) unsigned NOT NULL AUTO_INCREMENT,\n ea char(64) NOT NULL,\n nume varchar(60) NOT NULL DEFAULT '',\n nume_ea varchar(60) NOT NULL DEFAULT '',\n email_c text NOT NULL,\n email_h char(64) NOT NULL,\n token_h char(64) NOT NULL,\n token_nou_h char(64) NOT NULL DEFAULT '',\n ses char(32) NOT NULL,\n acord datetime NOT NULL,\n creat datetime NOT NULL,\n invitat datetime NOT NULL,\n intrat datetime DEFAULT NULL,\n vizita datetime DEFAULT NULL,\n oprit datetime DEFAULT NULL,\n email_faze tinyint(1) NOT NULL DEFAULT 0,\n faza_trimisa varchar(40) NOT NULL DEFAULT '',\n PRIMARY KEY  (id),\n UNIQUE KEY token_h (token_h),\n KEY ea (ea),\n KEY email_h (email_h),\n KEY token_nou_h (token_nou_h)\n) {$c};" );
+	dbDelta( "CREATE TABLE {$t} (\n id bigint(20) unsigned NOT NULL AUTO_INCREMENT,\n ea char(64) NOT NULL,\n nume varchar(60) NOT NULL DEFAULT '',\n nume_ea varchar(60) NOT NULL DEFAULT '',\n email_c text NOT NULL,\n email_h char(64) NOT NULL,\n token_h char(64) NOT NULL,\n token_nou_h char(64) NOT NULL DEFAULT '',\n ses char(32) NOT NULL,\n acord datetime NOT NULL,\n acord_v varchar(20) NOT NULL DEFAULT '',\n creat datetime NOT NULL,\n invitat datetime NOT NULL,\n intrat datetime DEFAULT NULL,\n vizita datetime DEFAULT NULL,\n oprit datetime DEFAULT NULL,\n email_faze tinyint(1) NOT NULL DEFAULT 0,\n faza_trimisa varchar(40) NOT NULL DEFAULT '',\n PRIMARY KEY  (id),\n UNIQUE KEY token_h (token_h),\n KEY ea (ea),\n KEY email_h (email_h),\n KEY token_nou_h (token_nou_h)\n) {$c};" );
 	dbDelta( "CREATE TABLE {$p} (\n id bigint(20) unsigned NOT NULL AUTO_INCREMENT,\n partener bigint(20) unsigned NOT NULL,\n token text NOT NULL,\n token_h char(64) NOT NULL,\n platforma varchar(10) NOT NULL DEFAULT '',\n creat datetime NOT NULL,\n vazut datetime NOT NULL,\n PRIMARY KEY  (id),\n UNIQUE KEY token_h (token_h),\n KEY partener (partener)\n) {$c};" );
 	update_option( 'ah_spp_tabel', AH_SPP_TABEL_VER, false );
 }
@@ -381,15 +385,18 @@ function ah_spp_ciclul_ei( $cheie, $azi0 ) {
 }
 
 /* ==================================================================
-   2. TEXTELE (CIORNĂ, de citit de Adela). Fazele și citatele: 41 și 235 (ah_sp_partener_texte), neschimbate.
+   2. TEXTELE: doar ce e deja pe site (decizia lui Mircea, 18 nov.). Fazele: Harta ciclului (41, ah_ciclu_faze);
+   citatele și „cum o poți sprijini”: 235 (ah_sp_partener_texte); podcastul: 235 (ah_sp_podcast); numele fazelor și
+   frazele paginii: pagina veche ?ciclul-ei din 235. Rândurile funcționale fără sursă pe site: docs/partener.md.
    ================================================================== */
 
+/** Numele și culorile fazelor, ca F din pagina ?ciclul-ei (235). */
 function ah_spp_nume_faze() {
 	return array(
-		'iarna'     => array( 'n' => 'Iarna ei interioară', 'f' => 'Faza menstruală', 'scurt' => 'Iarna ei', 'c' => '#7A5A75' ),
-		'primavara' => array( 'n' => 'Primăvara ei interioară', 'f' => 'Faza foliculară', 'scurt' => 'Primăvara ei', 'c' => '#56704D' ),
-		'vara'      => array( 'n' => 'Vara ei interioară', 'f' => 'Faza ovulatorie', 'scurt' => 'Vara ei', 'c' => '#9E533A' ),
-		'toamna'    => array( 'n' => 'Toamna ei interioară', 'f' => 'Faza luteală', 'scurt' => 'Toamna ei', 'c' => '#85622E' ),
+		'iarna'     => array( 'n' => 'Iarna ei interioară', 'f' => 'Faza menstruală', 'c' => '#7A5A75' ),
+		'primavara' => array( 'n' => 'Primăvara ei interioară', 'f' => 'Faza foliculară', 'c' => '#56704D' ),
+		'vara'      => array( 'n' => 'Vara ei interioară', 'f' => 'Faza ovulatorie', 'c' => '#9E533A' ),
+		'toamna'    => array( 'n' => 'Toamna ei interioară', 'f' => 'Faza luteală', 'c' => '#85622E' ),
 	);
 }
 /** Textele fiecărei faze pentru el: ce trăiește (41), cum o poate sprijini (235), citatele din Magia Ciclului Feminin (235). */
@@ -401,27 +408,34 @@ function ah_spp_texte_faze() {
 	$t = function_exists( 'ah_sp_partener_texte' ) ? (array) ah_sp_partener_texte() : array();
 	return $t;
 }
-/** Notificarea de la începutul fiecărei faze. CIORNĂ. */
+/** Notificarea de la începutul fiecărei faze: numele fazei și primul rând din „cum o poți sprijini” (ca fișierul .ics din 235). */
 function ah_spp_mesaj_faza( $f ) {
-	$m = array(
-		'iarna'     => array( 'Începe iarna ei interioară', 'Zile de odihnă pentru ea. Vezi cum o poți sprijini.' ),
-		'primavara' => array( 'Începe primăvara ei interioară', 'Energia ei se întoarce. Vezi ce o ajută acum.' ),
-		'vara'      => array( 'Începe vara ei interioară', 'Faza în care se deschide cel mai ușor. Vezi ce urmează.' ),
-		'toamna'    => array( 'Începe toamna ei interioară', 'Un timp de întoarcere spre sine. Vezi cum o poți sprijini.' ),
-	);
-	return $m[ $f ] ?? array( 'Ciclul ei', 'Vezi ce trăiește ea azi.' );
+	$N = ah_spp_nume_faze();
+	$T = ah_spp_texte_faze();
+	if ( ! isset( $N[ $f ] ) ) {
+		return array( 'Ciclul ei', '' );
+	}
+	return array( 'Începe ' . $N[ $f ]['n'], (string) ( $T[ $f ]['sprijin'][0] ?? '' ) );
 }
-/** Mesajele de stare pentru el. CIORNĂ. */
+/** Mesajele de stare pentru el. „oprit”: cuvintele paginii ?ciclul-ei (235); „pauza”: rând funcțional, neutru (nu spune de ce). */
 function ah_spp_mesaje() {
 	return array(
-		'pauza' => 'Pentru moment, aici nu e nicio estimare.',
-		'pauza_sub' => 'Când apare una nouă, o vezi aici. Paginile din Învață rămân deschise.',
-		'oprit' => 'Accesul tău la ciclul ei s-a oprit.',
-		'oprit_sub' => 'Ea a ales să oprească accesul. Dacă vrei să-l primești din nou, vorbește cu ea.',
+		'pauza'     => 'Pentru moment, aici nu e nicio estimare.',
+		'pauza_sub' => '',
+		'oprit'     => 'Linkul a fost oprit',
+		'oprit_sub' => 'Linkul acesta nu mai e activ. Dacă vrei să-l primești din nou, vorbește cu ea.',
 	);
 }
+/** Nota de sub fazele lui: 41 („Fazele sunt o estimare…”) + pagina ?ciclul-ei din 235. */
+function ah_spp_nota() {
+	return 'Fazele sunt o estimare: nu sunt o metodă de contracepție. Corpul ei poate avea alt ritm într-o lună sau alta; cel mai bun reper rămâne ce îți spune ea. Ea poate opri oricând acest link.';
+}
 
-/** „Învață”: 8 pagini scurte. CIORNĂ: textele fazelor și citatele sunt ale Adelei (41, 235, podcast), restul de citit de ea. */
+/**
+ * „Învață”: 6 pagini, doar din textele de pe site. 1: cele 4 faze (41: pe_scurt, plus primul paragraf al „Notei” din
+ * Spre feminitate, de pe Harta ciclului); 2–5: fiecare fază (41: pe_scurt, simti, ajuta, practica; 235: sprijin, citate);
+ * 6: episoadele 2–6 din podcastul Intim Feminin (titlul și descrierea de pe Resurse gratuite, fără „Mai departe”).
+ */
 function ah_spp_invata( $in_aplicatie = false ) {
 	$h  = function_exists( 'ah_ciclu_faze' ) ? (array) ah_ciclu_faze() : array();
 	$T  = ah_spp_texte_faze();
@@ -436,105 +450,51 @@ function ah_spp_invata( $in_aplicatie = false ) {
 	$H     = function ( $s ) { return array( 't' => 'h', 'text' => (string) $s ); };
 	$UL    = function ( $l ) { return array( 't' => 'ul', 'l' => array_values( array_filter( array_map( 'strval', (array) $l ) ) ) ); };
 	$CIT   = function ( $l, $sursa ) { return array( 't' => 'citat', 'l' => array_values( array_filter( array_map( 'strval', (array) $l ) ) ), 'sursa' => (string) $sursa ); };
+	$sub   = function ( $k ) use ( $N, $T ) {
+		return implode( ' · ', array_filter( array( $N[ $k ]['f'], (string) ( $T[ $k ]['arhetip'] ?? '' ), (string) ( $T[ $k ]['luna'] ?? '' ) ) ) );
+	};
 
 	$pag = array();
 
-	// 1. Cele patru anotimpuri
-	$b = array( $P( 'Adela vorbește despre ciclul feminin ca despre un an întreg trăit într-o lună: iarna, primăvara, vara și toamna. Fiecare anotimp are energia lui, iar ea trece prin toate, de la o menstruație la următoarea.' ) );
+	// 1. Cele 4 faze (titlul secțiunii de pe Harta ciclului)
+	$b = array();
 	foreach ( $harta as $k => $hk ) {
-		$b[] = $H( $N[ $k ]['scurt'] . ' · ' . $N[ $k ]['f'] );
+		$b[] = $H( $N[ $k ]['n'] );
+		$b[] = array( 't' => 'mic', 'text' => $sub( $k ) );
 		$b[] = $P( (string) ( $h[ $hk ]['pe_scurt'] ?? '' ) );
 	}
-	$b[]   = $P( 'Fazele sunt repere, nu reguli. Fiecare femeie are ritmul ei, iar el se poate schimba de la o lună la alta.' );
-	$pag[] = array( 'id' => 'anotimpuri', 'titlu' => 'Patru anotimpuri într-o lună', 'sub' => 'Cum arată ciclul ei, pe scurt', 'c' => '#964E46', 'b' => $b );
+	$b[]   = $CIT( array( 'Aceste faze sunt mai degrabă niște etape energetice corespunzătoare ciclului feminin, observate de-a lungul timpului de către multe femei conștiente de corpul și de ciclul lor.' ), 'Ce le spune Adela femeilor, în Spre feminitate' );
+	$pag[] = array( 'id' => 'faze', 'titlu' => 'Cele 4 faze ale ciclului feminin', 'sub' => 'Fragment din cartea Spre feminitate, de Adela Haru', 'c' => '#964E46', 'b' => $b );
 
-	// 2–5. Fiecare anotimp
-	$extra = array(
-		'iarna'     => array( 'titlu' => 'Iarna ei: menstruația', 'sub' => 'Odihnă, retragere, regenerare', 'pod' => 2 ),
-		'primavara' => array( 'titlu' => 'Primăvara ei', 'sub' => 'Energia care se întoarce', 'pod' => 0 ),
-		'vara'      => array( 'titlu' => 'Vara ei: ovulația', 'sub' => 'Deschidere, expresie, dăruire', 'pod' => 3 ),
-		'toamna'    => array( 'titlu' => 'Toamna ei și zilele dinaintea menstruației', 'sub' => 'Întoarcerea spre sine', 'pod' => 0 ),
-	);
+	// 2–5. Fiecare fază
 	foreach ( $harta as $k => $hk ) {
 		$f = $h[ $hk ] ?? array();
 		$x = $T[ $k ] ?? array();
-		$b = array( $P( (string) ( $f['pe_scurt'] ?? '' ) ) );
-		if ( ! empty( $f['simti'] ) ) {
-			$b[] = $H( 'Ce trăiește' );
-			$b[] = $P( $f['simti'] );
-		}
-		if ( ! empty( $f['ajuta'] ) ) {
-			$b[] = $CIT( $f['ajuta'], 'Ce le spune Adela femeilor pentru faza aceasta, în Spre feminitate' );
-		}
-		if ( 'toamna' === $k ) {
-			$b[] = $H( 'Zilele dinaintea menstruației' );
-			$b[] = $P( 'În zilele dinaintea menstruației, multe femei simt mai multă sensibilitate, oboseală sau nevoie de liniște. E un anotimp care cere mai multă blândețe, de la ea pentru ea și de la cei din jur.' );
-			$b[] = $P( 'Dacă zilele acestea îi sunt grele în fiecare lună, încurajeaz-o cu blândețe să vorbească și cu medicul ei.' );
-		}
+		$b = array( $P( (string) ( $f['pe_scurt'] ?? '' ) ), $P( (string) ( $f['simti'] ?? '' ) ) );
 		if ( ! empty( $x['sprijin'] ) ) {
 			$b[] = $H( 'Cum o poți sprijini' );
 			$b[] = $UL( $x['sprijin'] );
 		}
-		if ( ! empty( $x['citate'] ) ) {
-			$b[] = $CIT( $x['citate'], 'Din Magia Ciclului Feminin, de Adela Haru' );
-		}
-		if ( $extra[ $k ]['pod'] && isset( $ep[ $extra[ $k ]['pod'] ] ) ) {
-			$b[] = $ep[ $extra[ $k ]['pod'] ];
-		}
-		$pag[] = array( 'id' => $k, 'titlu' => $extra[ $k ]['titlu'], 'sub' => $extra[ $k ]['sub'], 'c' => $N[ $k ]['c'], 'b' => $b );
+		$b[] = $CIT( array_merge( (array) ( $f['ajuta'] ?? array() ), array( (string) ( $f['practica'] ?? '' ) ) ), 'Ce le spune Adela femeilor, în Spre feminitate' );
+		$b[] = $CIT( $x['citate'] ?? array(), 'Ce le spune Adela femeilor, în Magia Ciclului Feminin' );
+		$pag[] = array( 'id' => $k, 'titlu' => $N[ $k ]['n'], 'sub' => $sub( $k ), 'c' => $N[ $k ]['c'], 'b' => $b );
 	}
 
-	// 6. Cum vorbești cu ea
-	$b = array(
-		$P( 'Ce vezi aici e o estimare. Cel mai bun reper rămâne ce îți spune ea: corpul ei poate avea alt ritm într-o lună sau alta.' ),
-		$UL( array(
-			'Întreab-o simplu: „Cum te simți azi? De ce ai avea nevoie?”',
-			'Ascult-o până la capăt, fără să grăbești o soluție.',
-			'Lasă-i ei cuvintele despre corpul ei. Evită „e din cauza hormonilor”, chiar și în glumă.',
-			'Spune-i cu blândețe ce ai observat și întreab-o dacă se potrivește.',
-			'Ce vezi pe pagina aceasta rămâne între voi doi: e încrederea ei.',
-		) ),
-	);
-	foreach ( array( 4, 5 ) as $n ) {
+	// 6. Podcastul
+	$b = array();
+	foreach ( array( 2, 3, 4, 5, 6 ) as $n ) {
 		if ( isset( $ep[ $n ] ) ) {
 			$b[] = $ep[ $n ];
 		}
 	}
-	$pag[] = array( 'id' => 'vorbeste', 'titlu' => 'Cum vorbești cu ea', 'sub' => 'Despre ascultare și încredere', 'c' => '#6B5B8E', 'b' => $b );
-
-	// 7. Dorința și anotimpurile
-	$b = array(
-		$P( 'Dorința ei poate veni și pleca odată cu anotimpurile ciclului. E ritmul corpului ei, iar ea îl cunoaște cel mai bine. Întreab-o, ascult-o și lăsați loc și pentru apropiere fără așteptări.' ),
-	);
-	if ( ! empty( $T['iarna']['citate'][1] ) || ! empty( $T['vara']['citate'][1] ) ) {
-		$b[] = $CIT( array( $T['iarna']['citate'][1] ?? '', $T['vara']['citate'][1] ?? '' ), 'Din Magia Ciclului Feminin, de Adela Haru' );
+	if ( $b ) {
+		$pag[] = array( 'id' => 'podcast', 'titlu' => 'Din podcastul Intim Feminin', 'sub' => (string) ( $pc['titlu'] ?? '' ), 'c' => '#6B5B8E', 'b' => $b );
 	}
-	if ( isset( $ep[6] ) ) {
-		$b[] = $ep[6];
-	}
-	$pag[] = array( 'id' => 'dorinta', 'titlu' => 'Dorința și anotimpurile ei', 'sub' => 'Apropierea, în ritmul ei', 'c' => '#9E533A', 'b' => $b );
 
-	// 8. Despre pagina aceasta
-	$b = array(
-		$P( 'Ce vezi aici este o estimare, calculată din datele pe care ea le notează în Spațiul meu. Corpul ei poate avea alt ritm într-o lună sau alta.' ),
-		$P( 'Estimarea nu este o metodă de contracepție și nu spune nimic despre sănătatea ei. Pentru orice întrebare despre sănătate, cel mai bun drum rămâne medicul ei.' ),
-		$P( 'Ea a ales să-ți arate faza ei de azi și datele estimate ale fazelor următoare. Notițele ei, cum se simte și tot restul contului ei rămân doar ale ei. Poate opri accesul oricând.' ),
-		$P( 'Ce păstrăm despre tine: prenumele, adresa de email (criptată), ultima vizită și, dacă le pornești, notificările. Le ștergi oricând din Setări › Șterge accesul meu.' ),
-		array( 't' => 'link', 'text' => 'Politica de confidențialitate', 'url' => home_url( '/politica-de-confidentialitate/' ) ),
-	);
-	if ( ! $in_aplicatie ) {
-		// în aplicație nu trimitem spre cărți (aplicația nu vinde nimic); clasa spp-carte le ascunde și din stil
-		$b[] = array( 't' => 'carti', 'text' => 'Vrei să înțelegi mai mult? Cărțile Adelei Haru:', 'l' => array(
-			array( 'Magia Ciclului Feminin', home_url( '/product/magia-ciclului-feminin/' ) ),
-			array( 'Relațiile conștiente', home_url( '/product/relatiile-constiente/' ) ),
-		) );
-	}
-	$pag[] = array( 'id' => 'despre', 'titlu' => 'Despre pagina aceasta', 'sub' => 'O estimare, nu o metodă de contracepție', 'c' => '#7A5F51', 'b' => $b );
-
-	// fără blocuri goale (dacă 41 lipsește, rămân textele din 235 și cele noi)
+	// fără blocuri goale (dacă 41 lipsește, rămân textele din 235)
 	foreach ( $pag as &$p ) {
 		$p['b'] = array_values( array_filter( $p['b'], function ( $x ) {
-			return ! ( in_array( $x['t'], array( 'p', 'h' ), true ) && '' === trim( (string) $x['text'] ) ) && ! ( in_array( $x['t'], array( 'ul', 'citat' ), true ) && ! $x['l'] );
+			return ! ( in_array( $x['t'], array( 'p', 'h', 'mic' ), true ) && '' === trim( (string) $x['text'] ) ) && ! ( in_array( $x['t'], array( 'ul', 'citat' ), true ) && ! $x['l'] );
 		} ) );
 	}
 	unset( $p );
@@ -574,28 +534,22 @@ function ah_spp_azi_pentru( $r, $azi0 = null ) {
 	}
 	$inc = array();
 	if ( ! $z['peste'] ) {
-		for ( $k = 0; $k < 12 && count( $inc ) < 40; $k++ ) {
+		for ( $k = 0; $k < 3 && count( $inc ) < 12; $k++ ) {
 			foreach ( $fz as $p ) {
 				$d = $z['s0'] + $k * $z['L'] + $p['a'] - 1;
-				if ( $d > $azi0 && $d <= $azi0 + AH_SPP_LUNI ) {
+				if ( $d > $azi0 && $d <= $azi0 + AH_SPP_URM_ZILE ) {
 					$inc[] = array( 'faza' => $p['f'], 'data' => ah_spp_iso( $d ) );
 				}
 			}
 		}
 	}
-	$harta = array();
-	foreach ( $fz as $p ) {
-		$harta[] = array( 'faza' => $p['f'], 'a' => $p['a'], 'b' => $p['b'] );
-	}
+	// doar ce arată pagina (fără ziua din ciclu, lungimea sau harta ciclului: decizia lui Mircea, 18 nov.)
 	return $baza + array(
 		'stare'       => 'ok',
 		'faza'        => $z['f'],
-		'zi'          => (int) $z['zi'],
-		'lungime'     => floor( $z['L'] ) == $z['L'] ? (int) $z['L'] : $z['L'],
 		'pana_la'     => $pana,
 		'urmatoarea'  => array( 'faza' => $nx['f'], 'de_la' => $de_la, 'sprijin' => (string) ( $Y['sprijin'][0] ?? '' ), 'arhetip' => (string) ( $Y['arhetip'] ?? '' ) ),
 		'inceputuri'  => $inc,
-		'harta'       => $harta,
 		'texte'       => array(
 			'ce'      => (string) ( $X['ce'] ?? '' ),
 			'sprijin' => array_values( array_map( 'strval', (array) ( $X['sprijin'] ?? array() ) ) ),
@@ -603,7 +557,6 @@ function ah_spp_azi_pentru( $r, $azi0 = null ) {
 			'arhetip' => (string) ( $X['arhetip'] ?? '' ),
 			'luna'    => (string) ( $X['luna'] ?? '' ),
 		),
-		'azi'         => ah_spp_iso( $azi0 ),
 	);
 }
 
@@ -769,7 +722,7 @@ function ah_spp_noteaza_vizita( $r ) {
 }
 
 /* ==================================================================
-   5. EMAILURILE (cadrul comun: ah_mail_trimite / ah_mail_p, fragmentul 89). CIORNĂ.
+   5. EMAILURILE (cadrul comun: ah_mail_trimite / ah_mail_p, fragmentul 89). Cât mai puține cuvinte, din cele de pe site.
    ================================================================== */
 
 function ah_spp_p( $h, $x = '' ) {
@@ -786,6 +739,10 @@ function ah_spp_mail( $email, $subiect, $a ) {
 		. '<p style="font-size:13px;color:#8A776B">' . $a['motiv'] . ( ! empty( $a['dezabonare'] ) ? '<br>' . $a['dezabonare'] : '' ) . '</p></div></body></html>';
 	return (bool) wp_mail( $email, $subiect, $html, $h );
 }
+/** Sub fiecare email al lui: cine prelucrează datele și politica (GDPR art. 14; HARU TRAINING SRL, ca în subsolul site-ului). */
+function ah_spp_operator() {
+	return ' Datele tale sunt prelucrate de HARU TRAINING SRL, operatorul site-ului adelaharu.ro. <a href="' . esc_url( home_url( '/politica-de-confidentialitate/' ) ) . '" style="color:#8A776B">Politica de confidențialitate</a>';
+}
 function ah_spp_link( $tok ) {
 	return add_query_arg( 't', $tok, home_url( AH_SPP_PAGINA ) );
 }
@@ -801,17 +758,16 @@ function ah_spp_mail_invitatie( $r, $tok ) {
 	}
 	$ea   = esc_html( ah_spp_prenume( $r['nume_ea'], 'Ea' ) );
 	$el   = esc_html( ah_spp_prenume( $r['nume'], '' ) );
+	// rândul ei: textul pe care 235 îl punea în mesajul de WhatsApp al linkului „Pentru el”
 	$corp = ah_spp_p( ( '' !== $el ? 'Bună, ' . $el . ',' : 'Bună,' ) )
-		. ah_spp_p( $ea . ' te-a invitat să vezi, zi de zi, în ce anotimp al ciclului ei este, ce trăiește și cum o poți sprijini. Textele sunt ale Adelei Haru, din cărțile și podcastul ei.' )
-		. ah_spp_p( 'Vei vedea doar faza ei de azi și datele estimate ale fazelor următoare. Notițele ei și tot restul contului ei rămân doar ale ei. ' . $ea . ' poate opri accesul oricând.' );
+		. ah_spp_p( $ea . ': „Ți-am pregătit ceva, cu textele Adelei Haru: aici vezi în ce anotimp al ciclului sunt și cum mă poți sprijini.”' );
 	return ah_spp_mail( $em, $ea . ' te invită să-i cunoști ciclul', array(
-		'titlu'      => 'Ciclul ei, pe anotimpuri',
-		'eticheta'   => 'Pentru el',
-		'ton'        => 'cald',
-		'continut'   => $corp,
-		'buton'      => array( 'Deschide pagina ei', ah_spp_link( $tok ) ),
-		'dupa_buton' => ah_spp_p( 'Linkul e personal și te ține conectat pe telefonul pe care îl deschizi. Dacă ai aplicația Adela Haru, se deschide în ea. Dacă îl pierzi, ceri unul nou de pe adelaharu.ro/pentru-el.', 'font-size:15px;line-height:1.6;' ),
-		'motiv'      => 'Primești acest mesaj pentru că ' . $ea . ' a scris adresa ta în Spațiul meu, pe adelaharu.ro. Dacă nu te aștepți la el, îl poți ignora: fără linkul de mai sus nu vezi nimic și nu primești alte mesaje.',
+		'titlu'    => 'Ciclul ei',
+		'eticheta' => 'Pentru el',
+		'ton'      => 'cald',
+		'continut' => $corp,
+		'buton'    => array( 'Deschide pagina ei', ah_spp_link( $tok ) ),
+		'motiv'    => 'Primești acest mesaj pentru că ' . $ea . ' a scris adresa ta în Spațiul meu, pe adelaharu.ro.' . ah_spp_operator(),
 	) );
 }
 /** Linkul nou, cerut de el. */
@@ -825,9 +781,9 @@ function ah_spp_mail_link( $r, $tok ) {
 		'titlu'    => 'Linkul tău nou',
 		'eticheta' => 'Pentru el',
 		'ton'      => 'cald',
-		'continut' => ah_spp_p( 'Ai cerut pe adelaharu.ro un link nou spre pagina cu ciclul lui ' . $ea . '. Când îl deschizi, linkul vechi nu mai merge.' ),
+		'continut' => ah_spp_p( 'Ai cerut pe adelaharu.ro un link nou spre pagina lui ' . $ea . '.' ),
 		'buton'    => array( 'Deschide pagina ei', ah_spp_link( $tok ) ),
-		'motiv'    => 'Primești acest mesaj pentru că cineva a cerut un link nou pentru adresa ta. Dacă nu ai fost tu, poți ignora mesajul: linkul ajunge doar la tine.',
+		'motiv'    => 'Primești acest mesaj pentru că cineva a cerut pe adelaharu.ro un link nou pentru adresa ta. Dacă n-ai fost tu, îl poți ignora.' . ah_spp_operator(),
 	) );
 }
 /** Linkul de oprire a emailurilor fazelor (din orice email). */
@@ -855,17 +811,17 @@ function ah_spp_mail_faza( $r, $f ) {
 		$corp .= ah_spp_p( esc_html( $X['ce'] ) );
 	}
 	if ( ! empty( $X['sprijin'] ) ) {
-		$corp .= ah_spp_p( '<strong>Cum o poți sprijini</strong><br>' . implode( '<br>', array_map( function ( $s ) { return '· ' . esc_html( $s ); }, array_slice( (array) $X['sprijin'], 0, 3 ) ) ) );
+		$corp .= ah_spp_p( '<strong>Cum o poți sprijini</strong><br>' . implode( '<br>', array_map( function ( $s ) { return '· ' . esc_html( $s ); }, (array) $X['sprijin'] ) ) );
 	}
-	$corp .= ah_spp_p( 'Este o estimare. Cel mai bun reper rămâne ce îți spune ea.', 'font-size:15px;color:#8A776B;' );
+	$corp .= ah_spp_p( esc_html( ah_spp_nota() ), 'font-size:15px;color:#8A776B;' );
 	return ah_spp_mail( $em, $m[0], array(
 		'titlu'      => $m[0],
 		'eticheta'   => 'Pentru el',
 		'ton'        => 'cald',
 		'continut'   => $corp,
 		'buton'      => array( 'Vezi pagina ei', home_url( AH_SPP_PAGINA ) ),
-		'motiv'      => 'Primești acest mesaj pentru că ai cerut, pe pagina ei de pe adelaharu.ro, un email la începutul fiecărei faze.',
-		'dezabonare' => '<a href="' . esc_url( ah_spp_link_stop( $r['id'] ) ) . '" style="color:#8A776B">Nu mai vreau aceste emailuri</a>',
+		'motiv'      => 'Primești acest mesaj pentru că ai pornit emailurile fazelor pe adelaharu.ro.' . ah_spp_operator(),
+		'dezabonare' => '<a href="' . esc_url( ah_spp_link_stop( $r['id'] ) ) . '" style="color:#8A776B">Oprește emailurile</a>',
 	) );
 }
 
@@ -1129,6 +1085,7 @@ function ah_spp_r_invita( $q ) {
 		'token_h' => $th,
 		'ses'     => bin2hex( random_bytes( 16 ) ),
 		'acord'   => $acum,
+		'acord_v' => AH_SPP_ACORD_V,
 		'creat'   => $acum,
 		'invitat' => $acum,
 	) );
@@ -1413,7 +1370,6 @@ function ah_spp_cfg_el( $mesaj = '' ) {
 		ah_spp_noteaza_vizita( $r );
 		$azi = array( 'ok' => true ) + ah_spp_azi_pentru( $r ) + array( 'setari' => ah_spp_setari_lui( $r ) );
 	}
-	$pc = function_exists( 'ah_sp_podcast' ) ? (array) ah_sp_podcast() : array();
 	return array(
 		'api'     => esc_url_raw( rest_url( AH_SPP_NS . '/' ) ),
 		'app'     => $app,
@@ -1422,7 +1378,12 @@ function ah_spp_cfg_el( $mesaj = '' ) {
 		'mesaj'   => $mesaj,
 		'faze'    => ah_spp_nume_faze(),
 		'invata'  => ah_spp_invata( $app ),
-		'podcast' => array( 'spotify' => (string) ( $pc['spotify'] ?? '' ), 'apple' => (string) ( $pc['apple'] ?? '' ) ),
+		'nota'    => ah_spp_nota(),
+		// rândul despre cărți al paginii ?ciclul-ei (235); în aplicație nu (aplicația nu vinde nimic)
+		'carti'   => $app ? array() : array(
+			array( 'Magia Ciclului Feminin', esc_url_raw( home_url( '/product/magia-ciclului-feminin/' ) ) ),
+			array( 'Relațiile conștiente', esc_url_raw( home_url( '/product/relatiile-constiente/' ) ) ),
+		),
 		'gdpr'    => esc_url_raw( home_url( '/politica-de-confidentialitate/' ) ),
 		'sp'      => esc_url_raw( home_url( defined( 'AH_SP_PAGINA' ) ? AH_SP_PAGINA : '/spatiul-meu/' ) ),
 		'acasa'   => esc_url_raw( home_url( AH_SPP_PAGINA ) ),
@@ -1464,15 +1425,14 @@ section p,.card p{margin:0 0 8px}
 section p:last-child,.card p:last-child{margin-bottom:0}
 ul{margin:0;padding-left:20px;display:grid;gap:8px}
 li::marker{color:var(--c,var(--acc))}
-.inel{width:190px;height:190px;margin:6px auto 2px}
-.inel .zi{font:400 26px var(--disp);fill:var(--ink)}
-.inel .din{font:400 14px var(--text);fill:var(--soft)}
 .citat{--c:var(--acc)}
 .citat blockquote{margin:10px 0 0;padding-left:14px;border-left:3px solid var(--c);font:italic 400 20px/1.45 var(--quote);color:var(--ink)}
 .mic{font-size:15px;color:var(--soft);margin:4px 0 0}
 .nota{font-size:14.5px;color:var(--soft);margin:2px 4px}
-.urm{display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:center}
 .pt{width:14px;height:14px;border-radius:50%;background:var(--c);flex:none}
+.urm-tot{display:grid;gap:12px;border-left:4px solid var(--c);padding-left:14px;margin-bottom:14px}
+.urm-tot p{margin:0}
+.urm-tot b{font:400 24px/1.25 var(--disp);color:var(--c)}
 .luni{display:grid;gap:8px}
 .luni .r{display:flex;gap:12px;align-items:center;padding:10px 12px;border-radius:14px;background:rgba(255,255,255,.7);border:1px solid #fff}
 .luni .r b{font:400 17px var(--disp);color:var(--ink);flex:1}
@@ -1546,44 +1506,41 @@ if(D.app)document.documentElement.classList.add('spp-app');
 function cap(){return '<header class="cap"><a class="marca" href="#azi">Ciclul ei<small>Adela Haru</small></a>'+(A&&A.ok?'<button type="button" class="set" id="spp-set" aria-label="Setări">'+ic('set')+'</button>':'')+'</header>';}
 function bara(h){if(!(A&&A.ok))return '';var t=function(id,n,i){return '<a href="#'+id+'"'+(h===id?' aria-current="page"':'')+'>'+ic(i)+n+'</a>';};return '<nav class="bara" aria-label="Ciclul ei">'+t('azi','Azi','azi')+t('invata','Învață','invata')+'</nav>';}
 
-/* ---------- inelul (ca în Ciclul meu, 235) ---------- */
-function inel(){var L=A.lungime,R0=80,C0=100,u=function(z){return (z-1)/L*2*Math.PI-Math.PI/2;},pt=function(z){var a=u(z);return [C0+R0*Math.cos(a),C0+R0*Math.sin(a)];};
- var arc=(A.harta||[]).map(function(p){var a=pt(p.a),b=pt(p.b+1),mare=(p.b+1-p.a)/L>.5?1:0;return '<path d="M'+a[0].toFixed(1)+' '+a[1].toFixed(1)+'A'+R0+' '+R0+' 0 '+mare+' 1 '+b[0].toFixed(1)+' '+b[1].toFixed(1)+'" stroke="'+F[p.faza].c+'" stroke-width="13" fill="none" opacity="'+(p.faza===A.faza?1:.32)+'"/>';}).join('');
- var m=pt(Math.min(A.zi,L)+.5),c=F[A.faza].c;
- return '<svg class="inel" viewBox="0 0 200 200" role="img" aria-label="Ziua '+A.zi+' din '+Math.round(L)+'">'+arc+'<circle cx="'+m[0].toFixed(1)+'" cy="'+m[1].toFixed(1)+'" r="10" fill="#fff" stroke="'+c+'" stroke-width="4"/><text x="100" y="98" text-anchor="middle" class="zi">Ziua '+A.zi+'</text><text x="100" y="122" text-anchor="middle" class="din">din '+Math.round(L)+'</text></svg>';}
-
 /* ---------- Azi ---------- */
 function anunt(){var s=A.setari||{};if(s.push||PUSHLOC||s.email_faze||ls('spp_anunt_nu'))return '';
  var pushOk=PUSHOK;
- return '<section class="anunt" id="spp-anunt"><h2>Vrei să afli când începe o fază nouă?</h2><p>'+(pushOk?'Îți trimitem o notificare la începutul fiecărei faze, cu un rând despre cum o poți sprijini.':'Îți scriem un email scurt la începutul fiecărei faze, cu un rând despre cum o poți sprijini.')+'</p><div class="but"><button class="btn" type="button" data-a="'+(pushOk?'push':'email')+'">Da, anunță-mă</button><button class="leg" type="button" data-a="nu">Nu acum</button></div><p class="msg" id="spp-anunt-m" aria-live="polite"></p></section>';}
+ return '<section class="anunt" id="spp-anunt"><h2>Vrei să afli când începe o fază nouă?</h2><div class="but"><button class="btn" type="button" data-a="'+(pushOk?'push':'email')+'">Da, anunță-mă</button><button class="leg" type="button" data-a="nu">Nu acum</button></div><p class="msg" id="spp-anunt-m" aria-live="polite"></p></section>';}
 function azi(){
- if(A.stare==='oprit')return '<div class="ecran"><div class="card gol"><p class="et">Ciclul ei</p><h1>'+esc(A.mesaj)+'</h1><p>'+esc(A.sub)+'</p><button class="btn lite" type="button" data-a="sterge">Șterge datele mele de pe site</button></div></div>';
- if(A.stare!=='ok')return '<div class="ecran"><div class="card gol sus" style="--c:#7A5F51"><p class="et">'+esc(A.nume_ea||'Ea')+'</p><h1>'+esc(A.mesaj)+'</h1><p>'+esc(A.sub)+'</p></div><p class="nota">Între timp, în „Învață” găsești câteva pagini scurte despre ciclul ei.</p></div>';
+ if(A.stare==='oprit')return '<div class="ecran"><div class="card gol"><p class="et">Ciclul ei</p><h1>'+esc(A.mesaj)+'</h1><p>'+esc(A.sub)+'</p><button class="btn lite" type="button" data-a="sterge">Șterge accesul meu</button></div></div>';
+ if(A.stare!=='ok')return '<div class="ecran"><div class="card gol sus" style="--c:#7A5F51"><p class="et">'+esc(A.nume_ea||'Ea')+'</p><h1>'+esc(A.mesaj)+'</h1>'+(A.sub?'<p>'+esc(A.sub)+'</p>':'')+'</div></div>';
  var X=A.texte||{},C=F[A.faza],U=A.urmatoarea||{},N=F[U.faza]||{},c=C.c;
- var luni=(A.inceputuri||[]).slice(0,12).map(function(x){return '<div class="r" style="--c:'+F[x.faza].c+'"><span class="pt"></span><b>'+esc(F[x.faza].n)+'</b><span>'+esc(data(x.data))+'</span></div>';}).join('');
+ /* „Ce urmează”: faza următoare, mare, apoi începuturile fazelor din următoarele ~5 săptămâni (doar numele și data) */
+ var luni=(A.inceputuri||[]).filter(function(x,i){return !(i===0&&x.faza===U.faza);}).map(function(x){return '<div class="r" style="--c:'+F[x.faza].c+'"><span class="pt"></span><b>'+esc(F[x.faza].n)+'</b><span>'+esc(data(x.data))+'</span></div>';}).join('');
  return '<div class="ecran">'+
-  '<div class="card sus" style="--c:'+c+'"><p class="et">Azi, '+esc(A.nume_ea||'ea')+' e în</p><h1>'+esc(C.n)+'</h1><p class="arh">'+esc(X.arhetip||'')+(X.luna?' · '+esc(X.luna):'')+'</p>'+inel()+'<p class="mic">'+esc(C.f)+(A.pana_la?' · până în jur de '+esc(data(A.pana_la)):'')+'</p></div>'+
+  '<div class="card sus" style="--c:'+c+'"><p class="et">Azi, '+esc(A.nume_ea||'ea')+' e în</p><h1>'+esc(C.n)+'</h1><p class="arh">'+esc(X.arhetip||'')+(X.luna?' · '+esc(X.luna):'')+'</p>'+(A.pana_la?'<p class="mic">până în jur de '+esc(data(A.pana_la))+'</p>':'')+'</div>'+
   anunt()+
   (X.ce?'<section style="--c:'+c+'"><h2>Ce trăiește acum</h2><p>'+esc(X.ce)+'</p></section>':'')+
   ((X.sprijin||[]).length?'<section style="--c:'+c+'"><h2>Cum o poți sprijini</h2><ul>'+X.sprijin.map(function(s){return '<li>'+esc(s)+'</li>';}).join('')+'</ul></section>':'')+
   ((X.citate||[]).length?'<section class="citat" style="--c:'+c+'"><p class="et">Ce le spune Adela femeilor, în Magia Ciclului Feminin</p>'+X.citate.map(function(s){return '<blockquote>'+esc(s)+'</blockquote>';}).join('')+'</section>':'')+
-  '<section style="--c:'+N.c+'"><h2>Ce urmează</h2><div class="urm"><span class="pt"></span><p><b>'+esc(N.n||'')+'</b>'+(U.arhetip?' · '+esc(U.arhetip):'')+(U.de_la?', din jurul datei de '+esc(data(U.de_la))+'.':', în zilele următoare.')+'</p></div>'+(U.sprijin?'<p class="mic">'+esc(U.sprijin)+'</p>':'')+'</section>'+
-  (luni?'<section><h2>Următoarele luni</h2><p class="mic" style="margin:-4px 0 10px">Începutul fiecărei faze, estimat.</p><div class="luni">'+luni+'</div></section>':'')+
-  '<p class="nota">Este o estimare, pornind de la datele pe care le notează ea. Corpul ei poate avea alt ritm într-o lună sau alta; cel mai bun reper rămâne ce îți spune ea. Nu este o metodă de contracepție. Ea poate opri oricând accesul.</p>'+
+  '<section style="--c:'+N.c+'"><h2>Ce urmează</h2><div class="urm-tot"><p><b>'+esc(N.n||'')+'</b>'+(U.arhetip?' · '+esc(U.arhetip):'')+(U.de_la?', din jurul datei de '+esc(data(U.de_la)):'')+'.</p>'+(U.sprijin?'<p class="mic">'+esc(U.sprijin)+'</p>':'')+'</div>'+
+   (luni?'<div class="luni">'+luni+'</div>':'')+'</section>'+
+  '<p class="nota">'+esc(D.nota||'')+'</p>'+
  '</div>';}
 
 /* ---------- Învață ---------- */
 function invata(id){var L=D.invata||[];
- if(!id)return '<div class="ecran"><div style="margin-top:14px"><p class="et">Învață</p><h1 style="margin-top:4px">Ciclul ei, pe înțeles</h1><p class="mic">Pagini scurte, cu textele Adelei Haru.</p></div><div class="lista">'+L.map(function(p){return '<a href="#invata/'+esc(p.id)+'" style="--c:'+esc(p.c)+'"><span class="dot"></span><span class="t"><b>'+esc(p.titlu)+'</b><span>'+esc(p.sub)+'</span></span>'+ic('sageata')+'</a>';}).join('')+'</div></div>';
+ var K=D.carti||[];
+ if(!id)return '<div class="ecran"><div style="margin-top:14px"><h1>Învață</h1></div><div class="lista">'+L.map(function(p){return '<a href="#invata/'+esc(p.id)+'" style="--c:'+esc(p.c)+'"><span class="dot"></span><span class="t"><b>'+esc(p.titlu)+'</b><span>'+esc(p.sub)+'</span></span>'+ic('sageata')+'</a>';}).join('')+'</div>'+
+  '<p class="nota">'+esc(D.nota||'')+'</p>'+
+  (K.length?'<p class="nota spp-carte">Vrei să înțelegi mai mult? '+K.map(function(c){return '<a class="spp-carte" href="'+esc(c[1])+'">'+esc(c[0])+'</a>';}).join(' și ')+', cărțile Adelei Haru.</p>':'')+'</div>';
  var p=L.filter(function(x){return x.id===id;})[0];if(!p)return invata('');
  var b=p.b.map(function(x){
   if(x.t==='p')return '<p>'+esc(x.text)+'</p>';
   if(x.t==='h')return '<h3>'+esc(x.text)+'</h3>';
+  if(x.t==='mic')return '<p class="mic" style="margin:-4px 0 6px">'+esc(x.text)+'</p>';
   if(x.t==='ul')return '<ul>'+x.l.map(function(s){return '<li>'+esc(s)+'</li>';}).join('')+'</ul>';
   if(x.t==='citat')return '<div class="citat" style="--c:'+esc(p.c)+'"><p class="et" style="margin-top:12px">'+esc(x.sursa)+'</p>'+x.l.map(function(s){return '<blockquote>'+esc(s)+'</blockquote>';}).join('')+'</div>';
   if(x.t==='podcast')return '<div class="pod"><p class="et">Podcastul Intim Feminin</p><b>'+esc(x.titlu)+'</b><span class="mic">'+esc(x.meta)+'</span><p>'+esc(x.text)+'</p>'+(x.url?'<a href="'+esc(x.url)+'" target="_blank" rel="noopener">Ascultă episodul</a>':'')+'</div>';
-  if(x.t==='link')return '<p><a href="'+esc(x.url)+'">'+esc(x.text)+'</a></p>';
-  if(x.t==='carti')return '<p class="spp-carte mic">'+esc(x.text)+' '+x.l.map(function(c){return '<a class="spp-carte" href="'+esc(c[1])+'">'+esc(c[0])+'</a>';}).join(' și ')+'.</p>';
   return '';}).join('');
  return '<div class="ecran pag" style="--c:'+esc(p.c)+'"><button class="inapoi" type="button" data-a="inapoi-invata">'+ic('inapoi')+'Învață</button><section><p class="et">'+esc(p.sub)+'</p><h1 style="margin:4px 0 12px">'+esc(p.titlu)+'</h1>'+b+'</section></div>';}
 
@@ -1591,20 +1548,19 @@ function invata(id){var L=D.invata||[];
 function setari(){var s=A.setari||{},pushOk=PUSHOK;
  return '<div class="ecran"><button class="inapoi" type="button" data-a="inapoi">'+ic('inapoi')+'Înapoi</button><div><p class="et">Setări</p><h1 style="margin-top:4px">'+(A.nume?'Bună, '+esc(A.nume):'Setări')+'</h1></div>'+
   '<div class="lista">'+
-  (pushOk?'<button class="sw" type="button" role="switch" id="spp-sw-push" aria-checked="'+(PUSHLOC?'true':'false')+'"><span class="t"><b>Notificări</b><span>Când începe o fază nouă</span></span><i aria-hidden="true"></i></button>':'')+
-  (A.stare!=='oprit'?'<button class="sw" type="button" role="switch" id="spp-sw-email" aria-checked="'+(s.email_faze?'true':'false')+'"><span class="t"><b>Email la începutul fiecărei faze</b><span>Un email scurt, de patru ori pe lună. Îl oprești oricând.</span></span><i aria-hidden="true"></i></button>':'')+
+  (pushOk?'<button class="sw" type="button" role="switch" id="spp-sw-push" aria-checked="'+(PUSHLOC?'true':'false')+'"><span class="t"><b>Notificări</b></span><i aria-hidden="true"></i></button>':'')+
+  (A.stare!=='oprit'?'<button class="sw" type="button" role="switch" id="spp-sw-email" aria-checked="'+(s.email_faze?'true':'false')+'"><span class="t"><b>Emailurile fazelor</b></span><i aria-hidden="true"></i></button>':'')+
   '</div><p class="msg" id="spp-set-m" aria-live="polite"></p>'+
-  (D.app&&D.cont_ea?'<p class="mic">Pe acest telefon e deschis și contul ei din Spațiul meu, așa că notificările telefonului ajung la ea. Pe telefonul tău le poți porni de aici. <a href="'+esc(D.sp)+'">Deschide Spațiul meu</a></p>':'')+ /* CIORNĂ */
-  '<section><h2>Ce vezi aici</h2><p>Faza ei de azi și datele estimate ale fazelor următoare, cu textele Adelei Haru. '+esc(A.nume_ea||'Ea')+' a ales să ți le arate și poate opri accesul oricând.</p><p class="mic">Despre tine păstrăm prenumele, adresa de email (criptată), ultima vizită și alegerile de mai sus. <a href="'+esc(D.gdpr)+'">Politica de confidențialitate</a></p></section>'+
-  '<div class="but"><button class="btn lite" type="button" data-a="iesi">Ieși</button><button class="leg" type="button" data-a="sterge">Șterge accesul meu</button></div>'+
-  '<p class="mic">„Ieși” te scoate doar de pe acest telefon; intri din nou cu linkul din email. „Șterge accesul meu” șterge pe loc tot ce știm despre tine; ea vede că nu mai ai acces.</p></div>';}
+  (D.app&&D.cont_ea?'<p class="mic">Pe acest telefon e deschis contul ei, așa că notificările ajung la ea. <a href="'+esc(D.sp)+'">Spațiul meu</a></p>':'')+
+  '<div class="but"><button class="btn lite" type="button" data-a="iesi">Ieși din cont pe acest telefon</button><button class="leg" type="button" data-a="sterge">Șterge accesul meu</button></div>'+
+  '<p class="mic"><a href="'+esc(D.gdpr)+'">Politica de confidențialitate</a></p></div>';}
 
 /* ---------- fără cont ---------- */
 function intrare(){var m=D.mesaj==='link'?'<p class="msg">Linkul acesta nu mai e valabil. Cere unul nou mai jos.</p>':(D.mesaj==='fara_emailuri'?'<p class="msg" style="color:var(--ok,#56704D)">Gata, nu mai primești emailurile fazelor.</p>':'');
- return '<div class="ecran"><div class="card sus" style="--c:var(--ink)"><p class="et">Pentru el</p><h1>Ciclul ei</h1><p>Aici vezi, zi de zi, în ce anotimp al ciclului e ea și cum o poți sprijini, dacă te-a invitat din Spațiul meu.</p></div>'+m+
-  '<section><h2>Deschide linkul primit pe email</h2><p>Caută emailul „… te invită să-i cunoști ciclul” și atinge „Deschide pagina ei” pe acest telefon. Rămâi conectat aici.</p>'+
-  '<form id="spp-lp" novalidate><label class="l">Sau lipește aici linkul copiat<input type="url" id="spp-lpi" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://www.adelaharu.ro/pentru-el/?t=…"></label><p class="msg" id="spp-lpm" aria-live="polite"></p><button class="btn lite" id="spp-lpb">Deschide</button></form></section>'+
-  '<section><h2>Trimite-mi din nou linkul</h2><form id="spp-f" novalidate><label class="l">Adresa ta de email<input type="email" id="spp-e" autocomplete="email" inputmode="email" placeholder="numele@exemplu.ro"></label><input type="text" id="spp-s" name="site" tabindex="-1" autocomplete="off" style="position:absolute;left:-9999px" aria-hidden="true"><p class="msg" id="spp-m" aria-live="polite"></p><button class="btn" id="spp-b">Trimite-mi linkul</button></form><p class="mic">Linkul vechi nu mai merge după ce îl deschizi pe cel nou.</p></section>'+
+ return '<div class="ecran"><div class="card sus" style="--c:var(--ink)"><p class="et">Pentru el</p><h1>Ciclul ei</h1></div>'+m+
+  '<section><h2>Deschide linkul primit pe email</h2>'+
+  '<form id="spp-lp" novalidate><label class="l">Linkul copiat din email<input type="url" id="spp-lpi" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://www.adelaharu.ro/pentru-el/?t=…"></label><p class="msg" id="spp-lpm" aria-live="polite"></p><button class="btn lite" id="spp-lpb">Deschide</button></form></section>'+
+  '<section><h2>Trimite-mi din nou linkul</h2><form id="spp-f" novalidate><label class="l">Adresa ta de email<input type="email" id="spp-e" autocomplete="email" inputmode="email" placeholder="numele@exemplu.ro"></label><input type="text" id="spp-s" name="site" tabindex="-1" autocomplete="off" style="position:absolute;left:-9999px" aria-hidden="true"><p class="msg" id="spp-m" aria-live="polite"></p><button class="btn" id="spp-b">Trimite-mi linkul</button></form></section>'+
   (D.app?'<p class="nota"><a href="'+esc(D.sp)+'">Înapoi la Spațiul meu</a></p>':'')+'</div>';}
 
 /* ---------- desenarea ---------- */
@@ -1660,11 +1616,11 @@ function lega(){var g=function(id){return document.getElementById(id);};
   if(a==='inapoi'){mergiAzi();}
   else if(a==='inapoi-invata'){location.hash='#invata';}
   else if(a==='nu'){ls('spp_anunt_nu',1);var x=g('spp-anunt');if(x)x.remove();}
-  else if(a==='push'){b.disabled=true;pornestePush().then(function(ok){if(ok){A.setari=A.setari||{};A.setari.push=true;var x=g('spp-anunt');if(x)x.innerHTML='<p>Gata. Îți dăm de veste la începutul fiecărei faze.</p>';}else{b.disabled=false;g('spp-anunt-m').textContent='Notificările sunt oprite pentru aplicație. Le poți porni din setările telefonului.';}});}
-  else if(a==='email'){b.disabled=true;cere('email',{method:'POST',body:{on:true}}).then(function(j){if(j&&j.ok){A.setari=A.setari||{};A.setari.email_faze=true;var x=g('spp-anunt');if(x)x.innerHTML='<p>Gata. Primești un email la începutul fiecărei faze. Îl oprești oricând din Setări.</p>';}else{b.disabled=false;g('spp-anunt-m').textContent='N-a mers. Mai încearcă o dată.';}});}
+  else if(a==='push'){b.disabled=true;pornestePush().then(function(ok){if(ok){A.setari=A.setari||{};A.setari.push=true;var x=g('spp-anunt');if(x)x.innerHTML='<p>Primești notificările fazelor.</p>';}else{b.disabled=false;g('spp-anunt-m').textContent='Notificările sunt oprite pentru aplicație. Le poți porni din setările telefonului.';}});}
+  else if(a==='email'){b.disabled=true;cere('email',{method:'POST',body:{on:true}}).then(function(j){if(j&&j.ok){A.setari=A.setari||{};A.setari.email_faze=true;var x=g('spp-anunt');if(x)x.innerHTML='<p>Primești emailurile fazelor.</p>';}else{b.disabled=false;g('spp-anunt-m').textContent='N-a mers. Mai încearcă o dată.';}});}
   else if(a==='iesi'){opresteePush().then(function(){return cere('iesi',{method:'POST',body:{}});}).then(function(){A=null;if(D.app&&D.sp){location.href=D.sp;return;}location.hash='';arata();});}
-  else if(a==='sterge'){if(!window.confirm('Ștergi accesul tău la ciclul ei? Tot ce știm despre tine se șterge pe loc. Ca să revii, ar trebui să te invite din nou.'))return;
-   opresteePush().then(function(){return cere('sterge',{method:'POST',body:{confirmare:true}});}).then(function(j){if(j&&j.ok){A=null;D.mesaj='';location.hash='';R.innerHTML=cap()+'<div class="ecran"><div class="card gol"><h1>Accesul tău a fost șters</h1><p>Nu mai păstrăm nimic despre tine. Îți mulțumim că ai fost alături de ea.</p></div></div>';}});}
+  else if(a==='sterge'){if(!window.confirm('Ștergi accesul tău la ciclul ei?'))return;
+   opresteePush().then(function(){return cere('sterge',{method:'POST',body:{confirmare:true}});}).then(function(j){if(j&&j.ok){A=null;D.mesaj='';location.hash='';R.innerHTML=cap()+'<div class="ecran"><div class="card gol"><h1>Accesul tău a fost șters</h1></div></div>';}});}
  };});}
 window.addEventListener('hashchange',function(){arata();window.scrollTo(0,0);});
 document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible'&&A&&A.ok&&(!hash()||hash()==='azi'))reincarca();});
@@ -1738,12 +1694,13 @@ function carte(){
  var j=S.j,x=ls('ahsp_ciclu')||{},sit=x.sit,faraFaze=sit==='hormonal'||sit==='sarcina',L=j&&j.parteneri||[];
  if(!j)return '<div class="spp-card" aria-busy="true"><p class="mic">Se încarcă…</p></div>';
  if(faraFaze&&!L.length)return '';
- var h='<div class="spp-intro"><p>Invită-l să vadă, zi de zi, în ce anotimp al ciclului ești, ce trăiești și cum te poate sprijini, cu textele Adelei Haru. Primește un email cu un link personal; în aplicația Adela Haru are un cont simplu, doar pentru asta.</p><p class="mic">Vede doar faza ta de azi și datele estimate ale fazelor următoare. Notițele tale, cum te simți și restul contului tău rămân doar ale tale. Când menstruația întârzie sau datele nu sunt la zi, el vede doar un mesaj neutru, fără motiv.</p></div>';
+ /* textul blocului „Pentru partenerul tău” din 235 (paBloc), fără frazele despre linkul vechi */
+ var h='<div class="spp-intro"><p>Un link în care el vede doar în ce anotimp ești azi, ce trăiești și cum te poate sprijini, cu rânduri ale Adelei din <i>Magia Ciclului Feminin</i>.</p></div>';
  if(faraFaze)h+='<p class="ci-sit">Cât timp situația ta e „'+(sit==='hormonal'?'Contracepție hormonală':'Sunt însărcinată')+'”, el vede doar că estimările sunt în pauză.</p>';
  if(L.length)h+='<div class="spp-lista">'+L.map(function(p){var intrat=p.stare==='a_intrat';return '<div class="spp-p" data-id="'+p.id+'"><div class="spp-p-t"><b>'+esc(p.nume)+'</b><span>'+esc(p.email)+'</span></div><p class="spp-st'+(intrat?' da':'')+'"><i></i>'+(intrat?'A intrat'+(p.vizita?' · ultima vizită: '+esc(data(p.vizita)):''):'Invitat pe '+esc(data(p.creat))+' · încă nu a intrat')+'</p><div class="ci-but"><button class="btn lite" type="button" data-spp="retrimite">Trimite din nou invitația</button><button class="legatura" type="button" data-spp="opreste">Oprește accesul</button></div></div>';}).join('')+'</div>';
  var plin=L.length>=(X.max||2);
  if(!j.ciclu){
-  h+='<div class="ci-bloc"><h3>Întâi, ciclul tău în cont</h3><p>Ca el să vadă faza ta pe telefonul lui, ciclul tău trebuie păstrat în contul tău. Acum stă doar pe acest telefon. În contul tău e păstrat criptat, îl ai pe orice telefon și îl poți șterge oricând.</p><div class="ci-but"><button class="btn" type="button" data-spp="sync">Păstrează-l în contul meu</button></div><p class="mic">Dacă ștergi mai târziu ciclul din cont, accesul lui se oprește singur.</p></div>';
+  h+='<div class="ci-bloc"><h3>Păstrează-ți datele în cont</h3><p>Ca el să vadă faza ta, ciclul tău trebuie păstrat în contul tău.</p><div class="ci-but"><button class="btn" type="button" data-spp="sync">Păstrează-le în contul meu</button></div></div>';
  }else if(plin){
   h+='<p class="mic">Ai invitat '+L.length+' persoane, cât se poate. Oprește un acces ca să inviți pe altcineva.</p>';
  }else if(L.length&&!S.form){
@@ -1753,7 +1710,7 @@ function carte(){
    '<label class="ci-acord"><input type="checkbox" id="spp-acord"><span id="spp-acord-t">'+acordTxt('')+'</span></label>'+
    '<button class="btn" type="submit" id="spp-trimite">Trimite invitația</button></div></form>';
  }
- if(d.getElementById('ci-pa-link'))h+='<p class="spp-vechi">Ai și un link vechi „Pentru el”. Merge în continuare, cu datele din ziua în care l-ai făcut. <button class="legatura" type="button" data-spp="vechi">Oprește linkul vechi</button></p>';
+ if(d.getElementById('ci-pa-link'))h+='<p class="spp-vechi">Ai și un link vechi „Pentru el”. <button class="legatura" type="button" data-spp="vechi">Oprește linkul vechi</button></p>';
  h+='<p class="ci-msg" id="spp-msg" aria-live="polite">'+esc(S.msg)+'</p>';
  return '<div class="spp-card">'+h+'</div>';}
 function deseneazaCard(){var loc=d.getElementById('spp-loc');if(!loc)return;var c=loc.querySelector('.spp-c');var h=carte();
@@ -1799,9 +1756,9 @@ function ciclu(ecran){
 function intrare(){var f=d.getElementById('ahsp-f');if(!f||!d.getElementById('ahsp-e'))return;var cut=f.closest('.cutie');if(!cut||cut.querySelector('#spp-el'))return;
  var b=d.createElement('button');b.type='button';b.className='legatura spp-el';b.id='spp-el';b.textContent='Sunt partenerul ei';cut.appendChild(b);
  b.onclick=function(){var w=d.createElement('div');w.className='cutie spp-cutie-el';w.id='spp-cutie-el';
-  w.innerHTML='<p class="logo">Adela Haru</p><h1>Pentru el</h1><p>Ea te-a invitat din Spațiul meu? Ai primit pe email un link personal spre pagina ei.</p>'+
-   '<div class="spp-pas"><b>Deschide linkul primit pe email</b><p class="mic">Caută emailul „… te invită să-i cunoști ciclul” și atinge „Deschide pagina ei” pe acest telefon. Rămâi conectat.</p>'+
-   '<form id="spp-lp" novalidate style="display:grid;gap:10px"><input type="url" id="spp-lpi" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Sau lipește aici linkul copiat" aria-label="Linkul copiat din email"><p class="mesaj" id="spp-lpm" aria-live="polite"></p><button class="btn" id="spp-lpb">Deschide linkul</button></form></div>'+
+  w.innerHTML='<p class="logo">Adela Haru</p><h1>Pentru el</h1>'+
+   '<div class="spp-pas"><b>Deschide linkul primit pe email</b>'+
+   '<form id="spp-lp" novalidate style="display:grid;gap:10px"><input type="url" id="spp-lpi" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Linkul copiat din email" aria-label="Linkul copiat din email"><p class="mesaj" id="spp-lpm" aria-live="polite"></p><button class="btn" id="spp-lpb">Deschide linkul</button></form></div>'+
    '<div class="spp-pas"><b>Trimite-mi din nou linkul</b><form id="spp-lf" novalidate style="display:grid;gap:10px"><input type="email" id="spp-le" autocomplete="email" inputmode="email" placeholder="numele@exemplu.ro" aria-label="Adresa ta de email"><p class="mesaj" id="spp-lm" aria-live="polite"></p><button class="btn" id="spp-lb">Trimite-mi linkul</button></form></div>'+
    '<button class="legatura" type="button" id="spp-inapoi">Înapoi la intrarea în Spațiul meu</button>';
   cut.style.display='none';cut.parentNode.insertBefore(w,cut.nextSibling);
