@@ -102,3 +102,45 @@ descărcate cu player (Media Session), butonul „Încearcă din nou”. Fără 
 Păstrăm: proiectul Capacitor și folderele native, construirea automată (`.github/`, `fastlane/`), documentele pentru
 magazine (de actualizat), ghidul `docs/release.md`. Renunțăm: ecranele React și `server/ah-app-api.php` (logarea
 proprie, `/meditatii`, `/cursuri`, `/ciclu` etc.); din el se refolosesc trimiterea FCM, `.well-known` și testele utile.
+
+## Contul pentru el (partenerul ei) — decizie Mircea, 18 nov. 2026
+
+Două feluri de cont în aceeași aplicație (și în browser):
+- **Ea**: Spațiul meu complet (mai sus).
+- **El**: un cont simplu, doar pentru ciclul ei: „Azi” (unde e ea, ce trăiește, cum o poate sprijini, ce urmează),
+  „Învață” (pagini scurte despre menstruație, cele 4 faze, sindromul premenstrual, cum vorbește cu ea) și
+  notificări la începutul fiecărei faze. Nimic de cumpărat, nimic din contul ei în afară de ciclu.
+
+Fragment nou, separat: `server/ah-sp-partener.php` („Spațiul meu – Pentru el”), aditiv, nu modifică 235.
+Merge și în browser, și în aplicație; în aplicație ascunde linkurile spre cărți/produse (ca modul aplicație).
+
+**Invitația (din „Ciclul meu” al ei):** prenumele lui, emailul lui și o bifă separată, obligatorie:
+„Sunt de acord ca [prenume] să vadă faza mea de azi și datele estimate ale fazelor următoare. Pot opri oricând.”
+Dacă ciclul ei nu e încă salvat în cont (`ah_sp_ciclu`), invitația îi cere întâi acordul pentru salvare (ca în 235).
+El primește un email (cadrul comun al emailurilor) cu un link personal permanent: `/pentru-el/?t=<token>`
+(32 de octeți aleatori; pe server doar sha256). Linkul deschide aplicația (universal link) sau pagina din browser și
+îl ține conectat (cookie semnat `ah_spp`, 1 an). Link pierdut: „Trimite-mi din nou linkul” cu emailul lui → token nou,
+cel vechi se anulează. Ea vede în „Ciclul meu”: cine e invitat, dacă a intrat, ultima vizită; „Oprește accesul” (pe loc)
+și „Trimite din nou invitația”. Cel mult 2 parteneri activi.
+
+**Ce primește el (sincronizat, minim):** `GET /wp-json/ah-spp/v1/azi` (cookie `ah_spp` sau `?t=`) calculează pe server,
+din datele ei criptate (`ah_sp_ciclu`: `ciclu.starturi`, `lung`, `men`, `sit`), cu EXACT regula `CI.faze`/`CI.lung` din 235:
+`{nume_ea, stare:'ok'|'pauza'|'oprit', faza, zi, lungime, pana_la, urmatoarea:{faza, de_la}, inceputuri:[{faza,data}… 6 luni],
+texte:{ce, sprijin[], citate[]}}`. NICIODATĂ notițele ei, simptomele, situația (`sit`) sau zilele exacte notate.
+Dacă `sit` nu e `natural`/`alaptare`/`perimenopauza` sau ea a șters ciclul → `stare:'pauza'` cu un text neutru
+(„Pentru moment, ea a oprit estimările.”). Accesul oprit → `stare:'oprit'`.
+
+**Notificări pentru el:** în aplicație, push (FCM) din cron-ul zilnic, la începutul fiecărei faze, doar dacă s-a schimbat faza
+(la fel și când ea notează o menstruație nouă care mută faza). Fără aplicație: email la începutul fiecărei faze, doar dacă
+bifează asta pe pagina lui (oprire din orice email). Tokenurile push ale lui sunt separate de ale ei.
+
+**În aplicație:** pe ecranul de intrare apare „Sunt partenerul ei” → „Deschide linkul primit pe email” sau „Trimite-mi din nou
+linkul”. Apple: același cont simplu (fără parolă, fără cumpărături).
+
+**Datele lui:** prenume, email (criptat; hash pentru căutare), token (hash), tokenuri push, ultima vizită. El își poate șterge
+accesul din pagina lui; când ea își șterge contul sau ciclul, rândurile lui se șterg. Paragraf nou în Politica de confidențialitate.
+
+**Învață:** 6–8 pagini scurte, CIORNĂ pentru Adela, din textele ei existente (Harta ciclului 41, citatele din „Magia Ciclului
+Feminin” din 235, episoadele de podcast), fără afirmații medicale, cu nota „estimare, nu metodă de contracepție”.
+Linkul vechi „Pentru el” (`?ciclul-ei` cu datele după #) continuă să meargă; în „Ciclul meu” generatorul vechi e înlocuit
+vizual de invitația nouă.
