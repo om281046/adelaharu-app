@@ -1,3 +1,5 @@
+> **ÎNLOCUIT (18 nov. 2026):** contractul v1 nu mai e valabil; sursa de adevăr pentru v2 este [`arhitectura.md`](arhitectura.md). Păstrat doar ca istoric.
+
 # Contractul API: aplicația mobilă ↔ adelaharu.ro
 
 Versiunea 1 (3 nov. 2026). Sursa de adevăr pentru echipa server și echipa aplicație.

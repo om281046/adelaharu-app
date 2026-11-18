@@ -1,4 +1,6 @@
-# Verificări la fiecare pull request: aplicația (lint, tipuri, teste, build) și serverul (php -l + teste).
+# Verificări la fiecare pull request (v2, docs/arhitectura.md):
+# - aplicația = shell Capacitor + pagina offline locală (lint, tipuri, teste, build, configurația shell-ului);
+# - fragmentul server/ah-sp-aplicatie.php (php -l pe toate fișierele PHP din server/ + testele din server/tests/).
 name: CI
 
 on:
@@ -14,7 +16,7 @@ concurrency:
 
 jobs:
   aplicatia:
-    name: Aplicația (lint, typecheck, test, build)
+    name: Aplicația (lint, typecheck, test, build offline.html)
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     defaults:
@@ -40,11 +42,14 @@ jobs:
       - name: Teste
         run: npm test
 
-      - name: Build
-        run: npm run build
+      - name: Build (pagina offline, un singur fișier)
+        run: |
+          npm run build
+          test -s dist/offline.html || { echo "::error::Lipsește dist/offline.html"; exit 1; }
+          test -s dist/index.html || { echo "::error::Lipsește dist/index.html"; exit 1; }
 
-      - name: Build cu datele de probă (mock)
-        run: npm run build:mock --if-present
+      - name: Configurația shell-ului (server.url, errorPath, User-Agent)
+        run: node ../.github/scripts/verifica-shell.mjs
 
   serverul:
     name: Serverul PHP ${{ matrix.php }}
@@ -64,16 +69,22 @@ jobs:
           tools: none
           coverage: none
 
-      - name: php -l
+      - name: php -l (toate fișierele PHP din server/)
         run: |
-          shopt -s nullglob
-          fisiere=(server/*.php server/tests/*.php)
-          [ ${#fisiere[@]} -gt 0 ] || { echo "Niciun fișier PHP în server/"; exit 0; }
+          mapfile -t fisiere < <(find server -name '*.php' -type f | sort)
+          [ ${#fisiere[@]} -gt 0 ] || { echo "::error::Niciun fișier PHP în server/"; exit 1; }
           for f in "${fisiere[@]}"; do php -l "$f"; done
+
+      - name: Fragmentul (antetul și paza)
+        run: |
+          F=server/ah-sp-aplicatie.php
+          test -f "$F" || { echo "::error::Lipsește $F"; exit 1; }
+          grep -q "defined( 'AH_SPA' )" "$F" || { echo "::error::$F nu are paza AH_SPA"; exit 1; }
+          php .github/scripts/prefix-fragment.php "$F"
 
       - name: Testele serverului
         run: |
-          if [ -f server/tests/run.php ]; then php server/tests/run.php; else echo "Fără teste."; fi
+          if [ -f server/tests/run.php ]; then php server/tests/run.php; else echo "::warning::Fără server/tests/run.php"; fi
 
   workflows:
     name: actionlint

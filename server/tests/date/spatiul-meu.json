@@ -1,0 +1,76 @@
+{
+  "stare": "cont",
+  "api": "https://www.adelaharu.ro/wp-json/ah-sp/v1/",
+  "nume": "Ana",
+  "email": "ana@exemplu.ro",
+  "gand": "Ia-ți un moment doar pentru tine.",
+  "cursuri": [
+    {"titlu": "Yin Nourish", "pana": "", "link": "https://www.adelaharu.ro/spatiul-meu/?mergi=sala&comanda=15001&curs=yin-nourish", "stare": "activ", "progres": [3, 8], "imagine": "/img/curs-1.svg"},
+    {"titlu": "Wild Love", "pana": "12 martie 2027", "link": "https://www.adelaharu.ro/spatiul-meu/?mergi=sala&comanda=15002&curs=wild-love", "stare": "activ", "progres": [0, 6], "imagine": "/img/curs-2.svg"},
+    {"titlu": "Feminitatea conștientă", "pana": "1 octombrie 2026", "link": "https://www.adelaharu.ro/spatiul-meu/?mergi=sala&comanda=14100&curs=feminitatea", "stare": "expirat", "progres": null, "imagine": "/img/curs-3.svg"}
+  ],
+  "inchise": [
+    {"titlu": "HER BREATH, HER RESET", "link": "https://www.adelaharu.ro/practici-de-respiratie-constienta-pentru-femei-ocupate/", "imagine": "/img/curs-4.svg"},
+    {"titlu": "Magia Ciclului Feminin – cursul", "link": "https://www.adelaharu.ro/product/magia-ciclului-curs/", "imagine": ""}
+  ],
+  "carti": [
+    {"slug": "spre", "titlu": "Spre feminitate", "capitole": 14, "coperta": "/img/carte-1.svg", "link": "https://www.adelaharu.ro/spatiul-meu/?mergi=carte&comanda=15003"},
+    {"slug": "magia", "titlu": "Magia Ciclului Feminin", "capitole": 9, "coperta": "/img/carte-2.svg", "link": "https://www.adelaharu.ro/spatiul-meu/?mergi=carte&comanda=15003"}
+  ],
+  "meditatii": {"link": "", "rezumat": "Abonament Inner Temple", "titluri": []},
+  "dar": {"titlu": "Întoarcerea acasă, în corp", "durata": "7 minute", "descriere": ["O meditație scurtă, de la Adela, pentru oricând simți nevoia să revii la tine."], "imagine": "/img/dar.svg", "player": "", "audio": "https://www.adelaharu.ro/audio/dar.wav"},
+  "podcast": {
+    "titlu": "Intim Feminin, cu Adela Haru",
+    "text": "Nouă conversații despre feminitate, corp, ciclul feminin, sexualitate și relații, între 22 și 33 de minute fiecare.",
+    "spotify": "https://open.spotify.com/show/36dsYnxW0VgGyrN9bDFKo2",
+    "apple": "https://podcasts.apple.com/ro/podcast/intim-feminin-cu-adela-haru/id1486663684",
+    "episoade": [
+      {"nr": 1, "titlu": "Cum ne putem trezi senzualitatea", "meta": "6 noiembrie 2019 · 22 minute", "desc": "O perspectivă diferită despre senzualitate și pasiune, în cuplu și în viața de zi cu zi.", "embed": "https://embed.podcasts.apple.com/ro/podcast/x/id1486663684?i=1000456094034&theme=light", "apple": "https://podcasts.apple.com/ro/podcast/x/id1486663684?i=1000456094034", "mai": ["Wild Love", "https://www.adelaharu.ro/cursuri/wild-love/"]},
+      {"nr": 2, "titlu": "Ciclul feminin, prietenul tău", "meta": "13 noiembrie 2019 · 28 minute", "desc": "Cele patru anotimpuri ale ciclului și cum le trăim cu blândețe.", "embed": "https://embed.podcasts.apple.com/ro/podcast/y/id1486663684?i=1000456094035&theme=light", "apple": "https://podcasts.apple.com/ro/podcast/y/id1486663684?i=1000456094035", "mai": ["Magia Ciclului Feminin", "https://www.adelaharu.ro/product/magia-ciclului-feminin/"]},
+      {"nr": 3, "titlu": "Relațiile conștiente", "meta": "20 noiembrie 2019 · 33 minute", "desc": "Despre iubire, limite și întâlnirea cu celălalt.", "embed": "https://embed.podcasts.apple.com/ro/podcast/z/id1486663684?i=1000456094036&theme=light", "apple": "https://podcasts.apple.com/ro/podcast/z/id1486663684?i=1000456094036", "mai": null}
+    ]
+  },
+  "ciclu": {
+    "faze": {
+      "iarna": {"arhetip": "Vrăjitoarea", "luna": "Luna nouă", "pe_scurt": "Timpul retragerii și al odihnei.", "simti": "Poți simți nevoia de liniște și de mai puțin zgomot.", "ajuta": ["somn mai mult", "căldură", "jurnal"], "practica": "Ascultă-ți pântecul și notează ce lași să plece."},
+      "primavara": {"arhetip": "Fecioara", "luna": "Luna în creștere", "pe_scurt": "Energia urcă din nou.", "simti": "Curiozitate, chef de nou, claritate.", "ajuta": ["plimbări", "planuri mici", "mișcare blândă"], "practica": "Alege o intenție pentru ciclul acesta."},
+      "vara": {"arhetip": "Mama", "luna": "Luna plină", "pe_scurt": "Expansiune, căldură, conectare.", "simti": "Mai multă energie și deschidere spre ceilalți.", "ajuta": ["întâlniri", "creativitate", "odihnă între ele"], "practica": "Dăruiește fără să te golești."},
+      "toamna": {"arhetip": "Fermecătoarea", "luna": "Luna în descreștere", "pe_scurt": "Întoarcerea spre interior.", "simti": "Sensibilitate, intuiție, nevoie de spațiu.", "ajuta": ["limite blânde", "ordine", "ceai cald"], "practica": "Spune nu la ce nu te hrănește."}
+    },
+    "produse": {
+      "iarna": {"nume": "Meditația pentru iarna interioară", "text": "O meditație pentru zilele menstruației.", "link": "https://www.adelaharu.ro/product/meditatie-iarna/", "are": true, "tip": "med"},
+      "primavara": {"nume": "Spre feminitate", "text": "Cartea care te însoțește în primăvara ta.", "link": "https://www.adelaharu.ro/product/spre-feminitate/", "are": false, "tip": "curs"},
+      "vara": {"nume": "Wild Love", "text": "Cursul pentru vara ta interioară.", "link": "https://www.adelaharu.ro/product/wild-love/", "are": false, "tip": "curs"},
+      "toamna": {"nume": "Magia Ciclului Feminin", "text": "Cartea pentru toamna ta.", "link": "https://www.adelaharu.ro/product/magia-ciclului-feminin/", "are": false, "tip": "curs"}
+    },
+    "api": "https://www.adelaharu.ro/wp-json/adela/v1/ciclu/"
+  },
+  "med_toate": [
+    {"id": 501, "titlu": "Respirația inimii", "text": "Așază-te comod.\nUrmează vocea Adelei.", "categorie": "Relaxare", "durata": 960, "poza": "/img/med-1.svg", "gratuita": false, "acces": true, "cumpara": "", "abonament": true, "are_video": false, "pret": ""},
+    {"id": 502, "titlu": "Pântecul, centrul tău", "text": "O meditație pentru energia creatoare.", "categorie": "Feminitate", "durata": 1320, "poza": "/img/med-2.svg", "gratuita": false, "acces": true, "cumpara": "", "abonament": true, "are_video": true, "pret": ""},
+    {"id": 503, "titlu": "Somn liniștit", "text": "", "categorie": "Somn", "durata": 1800, "poza": "/img/med-3.svg", "gratuita": false, "acces": true, "cumpara": "", "abonament": true, "are_video": false, "pret": ""},
+    {"id": 504, "titlu": "Un dar pentru tine", "text": "", "categorie": "Gratuită", "durata": 420, "poza": "/img/med-4.svg", "gratuita": true, "acces": true, "cumpara": "", "abonament": false, "are_video": false, "pret": ""},
+    {"id": 505, "titlu": "Manifestarea intențiilor", "text": "O meditație scurtă despre intenție.", "categorie": "Intenție", "durata": 900, "poza": "/img/med-5.svg", "gratuita": false, "acces": false, "cumpara": "https://www.adelaharu.ro/product/meditatie-pentru-manifestarea-intentiilor/", "abonament": false, "are_video": false, "pret": "49 lei"},
+    {"id": 506, "titlu": "Iertarea", "text": "", "categorie": "Vindecare", "durata": 1500, "poza": "/img/med-6.svg", "gratuita": false, "acces": false, "cumpara": "https://www.adelaharu.ro/product/meditatie-iertare/", "abonament": false, "are_video": false, "pret": "59 lei"},
+    {"id": 507, "titlu": "Luna plină", "text": "", "categorie": "Ciclu", "durata": 1100, "poza": "/img/med-7.svg", "gratuita": false, "acces": false, "cumpara": "", "abonament": true, "are_video": false, "pret": ""}
+  ],
+  "med_api": "https://www.adelaharu.ro/?ah_med_api=biblioteca",
+  "med_app": "https://www.adelaharu.ro/meditatiile-mele/",
+  "abonamente": [
+    {"titlu": "Inner Temple · lunar", "detaliu": "Acces plătit până pe 18 decembrie 2026", "link": "https://www.adelaharu.ro/spatiul-meu/?mergi=abonament&tip=it"},
+    {"titlu": "HER BREATH, HER RESET", "detaliu": "Încheiat pe 2 noiembrie 2026", "link": "https://www.adelaharu.ro/spatiul-meu/?mergi=abonament&comanda=14900&tip=hb"}
+  ],
+  "comenzi": [
+    {"nr": "15210", "data": "16 noiembrie 2026", "total": "149 lei", "stare": "Așteaptă plata", "produse": "Magia Ciclului Feminin (ebook)", "plata": "https://www.adelaharu.ro/checkout/order-pay/15210/?pay_for_order=true&key=wc_order_abc"},
+    {"nr": "15003", "data": "2 noiembrie 2026", "total": "89 lei", "stare": "Finalizată", "produse": "Spre feminitate (ebook), Magia Ciclului Feminin (ebook)", "plata": null},
+    {"nr": "14621", "data": "18 octombrie 2026", "total": "79 lei", "stare": "Finalizată", "produse": "Inner Temple · lunar", "plata": null}
+  ],
+  "linkuri": {
+    "recomanda": "https://www.adelaharu.ro/recomanda/",
+    "cadou": "https://www.adelaharu.ro/card-cadou/",
+    "site": "https://www.adelaharu.ro/",
+    "cursuri": "https://www.adelaharu.ro/cursuri-online/",
+    "yin": "https://www.adelaharu.ro/yin-nourish-program-saptamanal-de-revitalizare-feminina/",
+    "whatsapp": "https://wa.me/40742709306?text=Bun%C4%83"
+  }
+}

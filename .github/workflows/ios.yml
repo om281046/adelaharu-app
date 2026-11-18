@@ -1,4 +1,5 @@
-# iOS: arhivă semnată + TestFlight, doar la cerere (minutele macOS costă de 10 ori mai mult).
+# iOS (v2: shell Capacitor care deschide Spațiul meu + pagina offline locală, docs/arhitectura.md).
+# Arhivă semnată + TestFlight, doar la cerere (minutele macOS costă de 10 ori mai mult).
 # Semnarea: fastlane match (certificatele într-un repo Git privat, criptate) + cheia App Store Connect API.
 # De ce așa și pașii pentru proprietară: docs/release.md
 name: iOS
@@ -69,12 +70,8 @@ jobs:
       - name: Dependențe
         run: npm ci
 
-      - name: Construiește aplicația web
-        env:
-          GOOGLE_SERVICE_INFO_PLIST: ${{ secrets.GOOGLE_SERVICE_INFO_PLIST }}
-        run: |
-          if [ -n "$GOOGLE_SERVICE_INFO_PLIST" ]; then export VITE_PUSH=1; fi
-          npm run build
+      - name: Pagina offline (dist/offline.html)
+        run: npm run build
 
       - name: Proiectul iOS (dacă lipsește din repo)
         run: |
@@ -90,12 +87,19 @@ jobs:
           if [ -n "$GOOGLE_SERVICE_INFO_PLIST" ]; then
             printf '%s' "$GOOGLE_SERVICE_INFO_PLIST" > ios/App/App/GoogleService-Info.plist
             plutil -lint ios/App/App/GoogleService-Info.plist
+            # Push pe iOS cere și SDK-ul Firebase Messaging (SPM) + fișierul în „Copy Bundle Resources” (app/README.md, „Push").
+            if ! grep -q "GoogleService-Info.plist" ios/App/App.xcodeproj/project.pbxproj; then
+              echo "::warning::GoogleService-Info.plist nu e în proiectul Xcode: versiunea NU va avea notificări push (vezi app/README.md, Push)."
+            fi
           else
             echo "::warning::Fără GOOGLE_SERVICE_INFO_PLIST: versiunea NU va avea notificări push."
           fi
 
       - name: Capacitor sync
         run: npx cap sync ios
+
+      - name: Configurația shell-ului (server.url de producție, offline.html, User-Agent)
+        run: node ../.github/scripts/verifica-shell.mjs ios/App/App/capacitor.config.json
 
       - uses: ruby/setup-ruby@de492cf36cbab201753d720ce4f4e336cd688c94 # v1.336.0
         with:

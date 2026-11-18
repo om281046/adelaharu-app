@@ -1,3 +1,5 @@
+> **v1, doar istoric (18 nov. 2026):** în v2 regula fazelor e cea din Spațiul meu (`CI.faze` / `CI.lung` din sn235: `oS=max(L-16,m+2)`, `oE=min(oS+4,L-2)`), portată în `app/src/offline/ciclu.ts` și verificată diferențial cu `app/src/offline/fixtures/sn235-ci.js`; vezi `arhitectura.md` și `app/README.md`. Fișierele `app/src/ciclu/*` amintite mai jos nu mai există.
+
 # Calculul fazelor ciclului (identic cu `sn41`)
 
 Sursa: `reference/sn41.php` („Harta ciclului tău”), funcțiile PHP `ah_ciclu_limite`, `ah_ciclu_faza_zilei`, `ah_ciclu_unde`, `ah_ciclu_data_faza`, `ah_ciclu_medie`, `ah_ciclu_data_valida`, `ah_ciclu_ics` și scriptul JS al paginii (`lim`, `fazaZilei`, `unde`, `medie`, `startNou`, trimiterea formularului, „următoarele faze”, `luna`).

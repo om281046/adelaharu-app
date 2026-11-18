@@ -1,7 +1,10 @@
-# Clasificarea pe vârste și clasificarea conținutului
+# Clasificarea pe vârste și clasificarea conținutului (v2)
 
-**Întrebarea pentru Adela, înainte de răspunsuri:** există în cursuri (ex. „Wild Love”) sau în meditații conținut
-despre sexualitate, nuditate (inclusiv în videouri sau poze) sau limbaj explicit? Tot ce se vede în aplicație
+În v2 aplicația arată Spațiul meu: cursurile (toate lecțiile, video și audio), Inner Temple, cărțile electronice,
+Ciclul meu (cu notițe), întâlnirile live și înregistrările lor, podcastul. Răspunsurile acoperă tot ce se vede acolo.
+
+**Întrebarea pentru Adela, înainte de răspunsuri:** există în cursuri (ex. „Wild Love”), în cărți, în înregistrările
+întâlnirilor sau în meditații conținut despre sexualitate, nuditate (inclusiv în videouri sau poze) sau limbaj explicit? Tot ce se vede în aplicație
 contează, inclusiv lecțiile cursurilor. Răspunsurile de mai jos presupun **„nu”**; dacă e „da”, vezi notele.
 
 ## Apple: Age Rating (App Store Connect › App Information › Age Rating)
@@ -12,9 +15,9 @@ Ratingul îl calculează Apple din răspunsuri; nu se alege direct.
 | Întrebare | Răspuns |
 |---|---|
 | Parental controls / age assurance în aplicație | Nu |
-| Unrestricted web access (navigare liberă pe internet) | Nu (deschidem doar pagini adelaharu.ro: player, termeni) |
-| User-generated content | Nu |
-| Messaging and chat | Nu |
+| Unrestricted web access (navigare liberă pe internet) | Nu: în aplicație rămân doar paginile contului de pe adelaharu.ro și playerele Vimeo / Apple Podcasts; orice altă adresă se deschide în browserul sau aplicația telefonului, iar restul site-ului se întoarce în cont |
+| User-generated content | Nu (notițele ciclului sunt private, nu le vede nimeni altcineva) |
+| Messaging and chat | Nu (întâlnirile live sunt pe Zoom, în afara aplicației; WhatsApp se deschide separat) |
 | Advertising | Nu |
 | Profanity or crude humor | None |
 | Horror / fear themes | None |
@@ -46,7 +49,7 @@ Infrequent/Mild” și, după caz, „Sexual content: Infrequent/Mild”; rating
 | Substanțe controlate (droguri, alcool, tutun) | Nu |
 | Umor vulgar | Nu |
 | Jocuri de noroc (reale sau simulate) | Nu |
-| Utilizatorii pot interacționa sau schimba conținut între ei | Nu |
+| Utilizatorii pot interacționa sau schimba conținut între ei | Nu (linkul pentru partener e un link trimis de ea, în afara aplicației; întâlnirile sunt pe Zoom) |
 | Aplicația partajează locația utilizatorului cu alții | Nu |
 | **Aplicația permite cumpărarea de bunuri digitale** | **Nu** (nimic nu se vinde în aplicație) |
 | Acces nerestricționat la internet | Nu |

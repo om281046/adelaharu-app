@@ -1,5 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  v2: aplicația deschide Spațiul meu (www.adelaharu.ro) și adaugă funcții de telefon.
+  Fără urmărire, fără reclame, fără analiză terță în aplicație. Datele de mai jos sunt cele ale contului
+  de pe site, folosite doar ca aplicația să funcționeze. Etichetele din App Store Connect se completează LA FEL
+  (de verificat de Mircea: dacă pe /spatiul-meu/ rulează în aplicație scripturi de analiză, ele trebuie declarate
+  sau oprite de fragmentul ah-sp-aplicatie.php).
+-->
 <plist version="1.0">
 <dict>
 	<key>NSPrivacyTracking</key>
@@ -8,7 +15,7 @@
 	<array/>
 	<key>NSPrivacyAccessedAPITypes</key>
 	<array>
-		<!-- @capacitor/preferences: tokenul de intrare, datele ciclului și setările, doar pentru aplicația noastră -->
+		<!-- @capacitor/preferences: datele ciclului pentru pagina offline, lista descărcărilor, setările aplicației -->
 		<dict>
 			<key>NSPrivacyAccessedAPIType</key>
 			<string>NSPrivacyAccessedAPICategoryUserDefaults</string>
@@ -17,7 +24,7 @@
 				<string>CA92.1</string>
 			</array>
 		</dict>
-		<!-- @capacitor/filesystem: stat() citește datele fișierelor descărcate de aplicație -->
+		<!-- @capacitor/filesystem: stat() citește datele fișierelor meditațiilor descărcate de aplicație -->
 		<dict>
 			<key>NSPrivacyAccessedAPIType</key>
 			<string>NSPrivacyAccessedAPICategoryFileTimestamp</string>
@@ -29,7 +36,7 @@
 	</array>
 	<key>NSPrivacyCollectedDataTypes</key>
 	<array>
-		<!-- emailul de intrare în cont -->
+		<!-- emailul contului (intrarea în Spațiul meu, cookie-ul ah_sp) -->
 		<dict>
 			<key>NSPrivacyCollectedDataType</key>
 			<string>NSPrivacyCollectedDataTypeEmailAddress</string>
@@ -42,7 +49,20 @@
 				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
 			</array>
 		</dict>
-		<!-- datele ciclului (PUT /ciclu), doar cu bifa separată de acord -->
+		<!-- numele din cont, afișat în Spațiul meu -->
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeName</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<!-- datele ciclului: în cont doar cu acordul ei (Ciclul meu → „păstrează în cont”); altfel rămân pe telefon -->
 		<dict>
 			<key>NSPrivacyCollectedDataType</key>
 			<string>NSPrivacyCollectedDataTypeHealth</string>
@@ -55,10 +75,10 @@
 				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
 			</array>
 		</dict>
-		<!-- id-ul generat de aplicație + numele telefonului (limita de telefoane pe cont) -->
+		<!-- starea abonamentelor și accesul la cursuri/cărți/meditații (doar afișat, fără cumpărare în aplicație) -->
 		<dict>
 			<key>NSPrivacyCollectedDataType</key>
-			<string>NSPrivacyCollectedDataTypeDeviceID</string>
+			<string>NSPrivacyCollectedDataTypePurchaseHistory</string>
 			<key>NSPrivacyCollectedDataTypeLinked</key>
 			<true/>
 			<key>NSPrivacyCollectedDataTypeTracking</key>
@@ -68,10 +88,23 @@
 				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
 			</array>
 		</dict>
-		<!-- poziția în meditații și minutele ascultate, progresul la cursuri -->
+		<!-- progresul la cursuri și unde a rămas în meditații -->
 		<dict>
 			<key>NSPrivacyCollectedDataType</key>
 			<string>NSPrivacyCollectedDataTypeProductInteraction</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<!-- tokenul de notificări push (FCM), legat de cont, șters la ieșire sau la ștergerea contului -->
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeDeviceID</string>
 			<key>NSPrivacyCollectedDataTypeLinked</key>
 			<true/>
 			<key>NSPrivacyCollectedDataTypeTracking</key>

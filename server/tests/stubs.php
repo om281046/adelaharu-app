@@ -1,8 +1,8 @@
 <?php
 /**
- * Înlocuitori minimi pentru funcțiile WordPress folosite de ah-app-api.php, ca logica pură
- * (tokenuri, coduri, semnături, limite, ciclul) să poată fi testată fără WordPress.
- * Nu reproduc WordPress întreg: doar cât trebuie testelor.
+ * Înlocuitori minimi pentru WordPress, ca fragmentul ah-sp-aplicatie.php să poată fi încărcat și testat fără site.
+ * Cârligele se țin minte (ca testele să le poată rula), $wpdb e un SQLite în memorie (interogările sunt SQL adevărat).
+ * Nu reproduc WordPress întreg: doar cât trebuie testelor și harnașului vizual.
  */
 
 define( 'ABSPATH', __DIR__ . '/' );
@@ -11,84 +11,105 @@ define( 'HOUR_IN_SECONDS', 3600 );
 define( 'DAY_IN_SECONDS', 86400 );
 define( 'YEAR_IN_SECONDS', 31536000 );
 define( 'ARRAY_A', 'ARRAY_A' );
+define( 'COOKIE_DOMAIN', false );
 date_default_timezone_set( 'Europe/Bucharest' );
 
 $GLOBALS['ah_test_hooks']      = array();
 $GLOBALS['ah_test_options']    = array();
 $GLOBALS['ah_test_transients'] = array();
 $GLOBALS['ah_test_mail']       = array();
-$GLOBALS['ah_test_timp']       = 0; // decalaj față de time(), pentru expirări
+$GLOBALS['ah_test_cron']       = array();
+$GLOBALS['ah_test_posts']      = array();
+$GLOBALS['ah_test_meta']       = array();
+$GLOBALS['ah_test_jurnal_do']  = array();
+$GLOBALS['ah_test_email']      = '';   // ce întoarce ah_sp_email() (clienta intrată în Spațiul meu)
 
-function add_action( $h, $cb, $p = 10, $n = 1 ) { $GLOBALS['ah_test_hooks'][] = array( $h, $p ); return true; }
-function add_filter( $h, $cb, $p = 10, $n = 1 ) { $GLOBALS['ah_test_hooks'][] = array( $h, $p ); return true; }
-function do_action( $h, ...$a ) {}
+/* ---------- cârlige ---------- */
+function add_action( $h, $cb, $p = 10, $n = 1 ) { $GLOBALS['ah_test_hooks'][ $h ][] = array( $cb, $p, $n ); return true; }
+function add_filter( $h, $cb, $p = 10, $n = 1 ) { return add_action( $h, $cb, $p, $n ); }
+function do_action( $h, ...$a ) { $GLOBALS['ah_test_jurnal_do'][] = $h; }
 function apply_filters( $h, $v, ...$a ) { return $v; }
+function did_action( $h ) { return 0; }
+/** Rulează callback-urile fragmentului legate de un cârlig (în ordinea priorității) ca filtru. */
+function ah_test_filtru( $h, $v, ...$a ) {
+	$l = $GLOBALS['ah_test_hooks'][ $h ] ?? array();
+	usort( $l, function ( $x, $y ) { return $x[1] <=> $y[1]; } );
+	foreach ( $l as $c ) { $v = call_user_func_array( $c[0], array_slice( array_merge( array( $v ), $a ), 0, max( 1, $c[2] ) ) ); }
+	return $v;
+}
+/** Rulează callback-urile unei acțiuni și întoarce ce au tipărit. */
+function ah_test_actiune( $h, ...$a ) {
+	$l = $GLOBALS['ah_test_hooks'][ $h ] ?? array();
+	usort( $l, function ( $x, $y ) { return $x[1] <=> $y[1]; } );
+	ob_start();
+	foreach ( $l as $c ) { call_user_func_array( $c[0], array_slice( $a, 0, $c[2] ) ); }
+	return ob_get_clean();
+}
 
+/* ---------- opțiuni, tranzitorii ---------- */
 function wp_salt( $s = 'auth' ) { return 'sare-de-test-' . $s; }
-
 function get_option( $k, $d = false ) { return array_key_exists( $k, $GLOBALS['ah_test_options'] ) ? $GLOBALS['ah_test_options'][ $k ] : $d; }
 function update_option( $k, $v, $a = null ) { $GLOBALS['ah_test_options'][ $k ] = $v; return true; }
+function add_option( $k, $v, $d = '', $a = null ) { if ( ! array_key_exists( $k, $GLOBALS['ah_test_options'] ) ) { $GLOBALS['ah_test_options'][ $k ] = $v; } return true; }
 function delete_option( $k ) { unset( $GLOBALS['ah_test_options'][ $k ] ); return true; }
-
-function get_transient( $k ) {
-	$t = $GLOBALS['ah_test_transients'][ $k ] ?? null;
-	if ( ! $t || $t[1] < time() + $GLOBALS['ah_test_timp'] ) { return false; }
-	return $t[0];
-}
-function set_transient( $k, $v, $e = 0 ) { $GLOBALS['ah_test_transients'][ $k ] = array( $v, time() + $GLOBALS['ah_test_timp'] + ( $e ? $e : 1e9 ) ); return true; }
+function get_transient( $k ) { $t = $GLOBALS['ah_test_transients'][ $k ] ?? null; return ( ! $t || $t[1] < time() ) ? false : $t[0]; }
+function set_transient( $k, $v, $e = 0 ) { $GLOBALS['ah_test_transients'][ $k ] = array( $v, time() + ( $e ? $e : 1e9 ) ); return true; }
 function delete_transient( $k ) { unset( $GLOBALS['ah_test_transients'][ $k ] ); return true; }
 
+/* ---------- texte, adrese ---------- */
 function sanitize_email( $e ) { return preg_replace( '/[^a-zA-Z0-9@._+\-]/', '', (string) $e ); }
 function is_email( $e ) { return (bool) filter_var( $e, FILTER_VALIDATE_EMAIL ); }
-function sanitize_text_field( $s ) { return trim( strip_tags( (string) $s ) ); }
+function sanitize_text_field( $s ) { return trim( preg_replace( '/[\r\n\t ]+/', ' ', strip_tags( (string) $s ) ) ); }
 function sanitize_key( $s ) { return preg_replace( '/[^a-z0-9_\-]/', '', strtolower( (string) $s ) ); }
 function wp_unslash( $s ) { return $s; }
 function absint( $n ) { return abs( (int) $n ); }
 function esc_html( $s ) { return htmlspecialchars( (string) $s, ENT_QUOTES, 'UTF-8' ); }
 function esc_attr( $s ) { return esc_html( $s ); }
-function esc_url( $s ) { return (string) $s; }
-function esc_url_raw( $s ) { return (string) $s; }
-function wp_json_encode( $d, $f = 0 ) { return json_encode( $d, $f | JSON_UNESCAPED_UNICODE ); }
+function esc_textarea( $s ) { return esc_html( $s ); }
+function esc_url( $s ) { return esc_html( $s ); }
+function esc_url_raw( $s ) { $s = trim( (string) $s ); return preg_match( '~^https?://~i', $s ) ? $s : ''; }
+function wp_json_encode( $d, $f = 0 ) { return json_encode( $d, $f ); }
+function wp_parse_url( $u, $c = -1 ) { return parse_url( (string) $u, $c ); }
 function home_url( $p = '/' ) { return 'https://www.adelaharu.ro' . $p; }
-function rest_url( $p = '' ) { return 'https://www.adelaharu.ro/wp-json/' . $p; }
+function rest_url( $p = '' ) { return 'https://www.adelaharu.ro/wp-json/' . ltrim( $p, '/' ); }
+function admin_url( $p = '' ) { return 'https://www.adelaharu.ro/wp-admin/' . $p; }
+function add_query_arg( $args, $url, $url3 = null ) {
+	if ( ! is_array( $args ) ) { $args = array( $args => $url ); $url = $url3; } // forma add_query_arg( cheie, valoare, url )
+	$h = ''; if ( false !== ( $i = strpos( $url, '#' ) ) ) { $h = substr( $url, $i ); $url = substr( $url, 0, $i ); }
+	return $url . ( false === strpos( $url, '?' ) ? '?' : '&' ) . http_build_query( $args ) . $h;
+}
 function wp_date( $f, $t = null ) { return date( $f, null === $t ? time() : $t ); }
 function current_time( $t ) { return date( 'Y-m-d H:i:s' ); }
-function wp_timezone() { return new DateTimeZone( 'Europe/Bucharest' ); }
-function wp_generate_password( $n = 12, $s = true, $x = false ) { return substr( bin2hex( random_bytes( $n ) ), 0, $n ); }
-function remove_accents( $s ) { return strtr( (string) $s, array( 'ă' => 'a', 'â' => 'a', 'î' => 'i', 'ș' => 's', 'ț' => 't', 'Ă' => 'A', 'Â' => 'A', 'Î' => 'I', 'Ș' => 'S', 'Ț' => 'T' ) ); }
-function sanitize_title( $s ) { return trim( preg_replace( '/[^a-z0-9]+/', '-', strtolower( (string) $s ) ), '-' ); }
+function wp_rand( $a = 0, $b = 0 ) { return random_int( 0, 1000000 ); }
+function is_ssl() { return true; }
+function is_admin() { return false; }
+function wp_doing_ajax() { return false; }
+function nocache_headers() {}
+function status_header( $c ) { $GLOBALS['ah_test_status'] = $c; }
+function wp_check_filetype( $f ) { return array( 'ext' => 'mp3', 'type' => 'audio/mpeg' ); }
 function wp_mail( $to, $s, $b, $h = array() ) { $GLOBALS['ah_test_mail'][] = array( $to, $s, $b ); return true; }
-function get_user_by( $f, $v ) { return false; }
-/* Cron: evenimentele programate se țin într-o listă, ca testele să le poată rula de mână. */
-$GLOBALS['ah_test_cron'] = array();
+function current_user_can( $c ) { return false; }
+function is_wp_error( $x ) { return false; }
+
+/* Redirecționarea: o excepție, ca testul să vadă unde ar fi plecat. */
+class Ah_Test_Redirect extends Exception { public $loc; public function __construct( $l ) { $this->loc = $l; parent::__construct( $l ); } }
+function wp_safe_redirect( $l, $s = 302, $x = '' ) { throw new Ah_Test_Redirect( $l ); }
+function wp_redirect( $l, $s = 302 ) { throw new Ah_Test_Redirect( $l ); }
+
+/* ---------- cron ---------- */
 function wp_schedule_single_event( $t, $h, $a = array() ) { $GLOBALS['ah_test_cron'][] = array( $t, $h, $a ); return true; }
 function wp_schedule_event( $t, $r, $h, $a = array() ) { $GLOBALS['ah_test_cron'][] = array( $t, $h, $a, $r ); return true; }
 function wp_next_scheduled( $h, $a = array() ) { foreach ( $GLOBALS['ah_test_cron'] as $e ) { if ( $e[1] === $h && $e[2] === $a ) { return $e[0]; } } return false; }
-function wp_clear_scheduled_hook( $h, $a = array() ) {
-	$GLOBALS['ah_test_cron'] = array_values( array_filter( $GLOBALS['ah_test_cron'], function ( $e ) use ( $h, $a ) { return ! ( $e[1] === $h && $e[2] === $a ); } ) );
-	return 1;
-}
-/** Scoate din listă următorul eveniment cu cârligul dat (cum face wp-cron înainte să-l ruleze). */
-function ah_test_cron_scoate( $h ) {
-	foreach ( $GLOBALS['ah_test_cron'] as $i => $e ) {
-		if ( $e[1] === $h ) { unset( $GLOBALS['ah_test_cron'][ $i ] ); $GLOBALS['ah_test_cron'] = array_values( $GLOBALS['ah_test_cron'] ); return $e; }
-	}
-	return null;
-}
 
-/* Articole: doar câmpurile citite de declanșatorul push. */
-$GLOBALS['ah_test_posts'] = array();
-$GLOBALS['ah_test_meta']  = array();
-function get_post_status( $id ) { return $GLOBALS['ah_test_posts'][ $id ]['status'] ?? false; }
-function get_the_title( $id ) { return $GLOBALS['ah_test_posts'][ $id ]['titlu'] ?? ''; }
+/* ---------- articole ---------- */
+function get_post( $id ) { $p = $GLOBALS['ah_test_posts'][ (int) $id ] ?? null; return $p ? (object) $p : null; }
+function get_post_status( $id ) { return $GLOBALS['ah_test_posts'][ (int) $id ]['post_status'] ?? false; }
+function get_the_title( $id ) { return $GLOBALS['ah_test_posts'][ (int) $id ]['post_title'] ?? ''; }
+function get_the_post_thumbnail_url( $id, $m = '' ) { return $GLOBALS['ah_test_posts'][ (int) $id ]['poza'] ?? false; }
 function get_post_meta( $id, $k, $single = false ) { return $GLOBALS['ah_test_meta'][ $id ][ $k ] ?? ''; }
 function update_post_meta( $id, $k, $v ) { $GLOBALS['ah_test_meta'][ $id ][ $k ] = $v; return true; }
 
-function add_query_arg( $args, $url ) {
-	$q = http_build_query( $args );
-	return $url . ( false === strpos( $url, '?' ) ? '?' : '&' ) . $q;
-}
-
+/* ---------- REST ---------- */
 class WP_HTTP_Response {
 	public $data; public $status; public $headers = array();
 	public function __construct( $d = null, $s = 200, $h = array() ) { $this->data = $d; $this->status = $s; $this->headers = $h; }
@@ -98,123 +119,45 @@ class WP_HTTP_Response {
 	public function get_status() { return $this->status; }
 }
 class WP_REST_Response extends WP_HTTP_Response {}
-class WP_REST_Request implements ArrayAccess {
-	private $h = array();
-	private $j = null;
-	private $u = array();
-	public function __construct( $h = array(), $json = null, $url = array() ) { $this->h = $h; $this->j = $json; $this->u = $url; }
-	public function get_header( $k ) { return $this->h[ $k ] ?? null; }
+class WP_REST_Request {
+	private $h; private $j; private $p; private $route;
+	public function __construct( $h = array(), $json = null, $param = array(), $route = '/' ) {
+		$this->h = array(); foreach ( $h as $k => $v ) { $this->h[ strtolower( str_replace( '-', '_', $k ) ) ] = $v; }
+		$this->j = $json; $this->p = $param; $this->route = $route;
+	}
+	public function get_header( $k ) { return $this->h[ strtolower( str_replace( '-', '_', $k ) ) ] ?? null; }
 	public function get_json_params() { return $this->j; }
-	public function get_body_params() { return array(); }
-	public function get_route() { return '/ah-app/v1/test'; }
-	public function offsetExists( $o ): bool { return isset( $this->u[ $o ] ); }
-	public function offsetGet( $o ): mixed { return $this->u[ $o ] ?? null; }
-	public function offsetSet( $o, $v ): void { $this->u[ $o ] = $v; }
-	public function offsetUnset( $o ): void { unset( $this->u[ $o ] ); }
+	public function get_param( $k ) { return $this->p[ $k ] ?? ( is_array( $this->j ) ? ( $this->j[ $k ] ?? null ) : null ); }
+	public function get_route() { return $this->route; }
 }
 
-/**
- * Un $wpdb în memorie: înțelege doar interogările simple din snippet (WHERE col = %s / %d,
- * opțional „AND id > %d” și „LIMIT %d”).
- * Tabelul codurilor (ah_app_coduri) merge într-un SQLite adevărat, ca interogarea atomică a
- * încercărilor (UPDATE … CASE … WHERE n < 5) să fie rulată ca SQL, nu imitată.
- */
+/* ---------- $wpdb: SQLite în memorie ---------- */
 class Ah_Test_Wpdb {
-	public $prefix  = 'wp_';
-	public $options = 'wp_options';
-	public $t = array();
-	private $id = 0;
-	public $sql;
+	public $prefix = 'wp_';
+	public $pdo;
 	public function __construct() {
-		$this->sql = new PDO( 'sqlite::memory:' );
-		$this->sql->setAttribute( PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION );
-		$this->sql->exec( "CREATE TABLE wp_ah_app_coduri ( email varchar(190) NOT NULL PRIMARY KEY, hash char(64) NOT NULL DEFAULT '', n integer NOT NULL DEFAULT 0, exp integer NOT NULL DEFAULT 0, zi_n integer NOT NULL DEFAULT 0, zi_start integer NOT NULL DEFAULT 0 )" );
+		$this->pdo = new PDO( 'sqlite::memory:' );
+		$this->pdo->setAttribute( PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION );
+		$this->pdo->exec( 'CREATE TABLE wp_ah_spa_push ( id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT NOT NULL, token TEXT NOT NULL, token_h TEXT NOT NULL UNIQUE, platforma TEXT DEFAULT \'\', versiune TEXT DEFAULT \'\', disp TEXT DEFAULT \'\', creat TEXT, vazut TEXT )' );
+		$this->pdo->exec( 'CREATE TABLE wp_ah_sp_ciclu ( id INTEGER PRIMARY KEY AUTOINCREMENT, cheie TEXT UNIQUE, date TEXT, acord TEXT, actualizat TEXT )' );
+		$this->pdo->exec( 'CREATE TABLE wp_ah_ciclu ( id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT UNIQUE, token TEXT, start TEXT )' );
 	}
-	private function e_sql( $x ) { return false !== strpos( is_array( $x ) ? $x[0] : (string) $x, 'ah_app_coduri' ); }
-	public function esc_like( $s ) { return addcslashes( (string) $s, '_%\\' ); }
+	public function get_charset_collate() { return ''; }
 	public function prepare( $q, ...$a ) {
-		if ( $this->e_sql( $q ) ) {
-			$i = 0;
-			$sql = $this->sql;
-			return preg_replace_callback( '/%[sd]/', function ( $m ) use ( &$i, $a, $sql ) { $v = $a[ $i++ ]; return '%d' === $m[0] ? (string) (int) $v : $sql->quote( (string) $v ); }, $q );
-		}
-		return array( $q, $a );
+		$i = 0; $pdo = $this->pdo;
+		return preg_replace_callback( '/%[sd]/', function ( $m ) use ( &$i, $a, $pdo ) { $v = $a[ $i++ ]; return '%d' === $m[0] ? (string) (int) $v : $pdo->quote( (string) $v ); }, $q );
 	}
-	private function filtreaza( $p ) {
-		list( $q, $a ) = is_array( $p ) ? $p : array( $p, array() );
-		if ( ! preg_match( '/FROM\s+(\S+)(?:\s+WHERE\s+(\w+)\s*=\s*%[sd])?/i', $q, $m ) ) { return array(); }
-		$rows = $this->t[ $m[1] ] ?? array();
-		if ( ! empty( $m[2] ) ) {
-			$rows = array_filter( $rows, function ( $r ) use ( $m, $a ) { return (string) ( $r[ $m[2] ] ?? '' ) === (string) $a[0]; } );
-		}
-		if ( preg_match( '/AND id > %d/', $q ) ) {
-			$rows = array_filter( $rows, function ( $r ) use ( $a ) { return (int) $r['id'] > (int) $a[1]; } );
-		}
-		$rows = array_values( $rows );
-		if ( preg_match( '/LIMIT %d\s*$/', $q ) ) {
-			$rows = array_slice( $rows, 0, (int) end( $a ) );
-		}
-		return $rows;
-	}
-	public function get_row( $p, $o = null ) {
-		if ( $this->e_sql( $p ) ) { $r = $this->sql->query( $p )->fetch( PDO::FETCH_ASSOC ); return $r ? $r : null; }
-		$r = $this->filtreaza( $p ); return $r ? $r[0] : null;
-	}
-	public function get_results( $p, $o = null ) { return $this->filtreaza( $p ); }
-	public function get_col( $p ) {
-		list( $q, $a ) = $p;
-		if ( preg_match( '/FROM wp_options WHERE option_name LIKE %s/', $q ) ) {
-			$re = ''; $esc = false;
-			foreach ( str_split( (string) $a[0] ) as $c ) {
-				if ( $esc ) { $re .= preg_quote( $c, '/' ); $esc = false; }
-				elseif ( '\\' === $c ) { $esc = true; }
-				elseif ( '%' === $c ) { $re .= '.*'; }
-				elseif ( '_' === $c ) { $re .= '.'; }
-				else { $re .= preg_quote( $c, '/' ); }
-			}
-			$re = '/^' . $re . '$/';
-			return array_values( array_filter( array_keys( $GLOBALS['ah_test_options'] ), function ( $k ) use ( $re ) { return preg_match( $re, $k ); } ) );
-		}
-		return array_column( $this->filtreaza( $p ), 0 );
-	}
-	public function get_var( $p ) {
-		$r = $this->filtreaza( $p );
-		if ( is_array( $p ) && preg_match( '/COUNT\(\*\)/i', $p[0] ) ) { return count( $r ); }
-		return $r ? reset( $r[0] ) : null;
-	}
-	public function query( $p ) {
-		if ( $this->e_sql( $p ) ) { return $this->sql->exec( $p ); }
-		return 0;
-	}
-	private function sql_where( $w ) {
-		return implode( ' AND ', array_map( function ( $k, $v ) { return $k . ' = ' . $this->sql->quote( (string) $v ); }, array_keys( $w ), $w ) );
-	}
-	public function insert( $t, $d ) {
-		if ( $this->e_sql( $t ) ) {
-			try {
-				return $this->sql->exec( 'INSERT INTO ' . $t . ' (' . implode( ',', array_keys( $d ) ) . ') VALUES (' . implode( ',', array_map( array( $this->sql, 'quote' ), array_map( 'strval', $d ) ) ) . ')' );
-			} catch ( PDOException $e ) { return false; }
-		}
-		$d['id'] = ++$this->id; $this->t[ $t ][ $d['id'] ] = $d; return 1;
-	}
-	private function potriveste( $r, $w ) { foreach ( $w as $k => $v ) { if ( (string) ( $r[ $k ] ?? '' ) !== (string) $v ) { return false; } } return true; }
-	public function update( $t, $d, $w ) {
-		if ( $this->e_sql( $t ) ) {
-			return $this->sql->exec( 'UPDATE ' . $t . ' SET ' . implode( ', ', array_map( function ( $k, $v ) { return $k . ' = ' . $this->sql->quote( (string) $v ); }, array_keys( $d ), $d ) ) . ' WHERE ' . $this->sql_where( $w ) );
-		}
-		$n = 0;
-		foreach ( $this->t[ $t ] ?? array() as $id => $r ) {
-			if ( $this->potriveste( $r, $w ) ) { $this->t[ $t ][ $id ] = array_merge( $r, $d ); $n++; }
-		}
-		return $n;
-	}
-	public function delete( $t, $w ) {
-		if ( $this->e_sql( $t ) ) { return $this->sql->exec( 'DELETE FROM ' . $t . ' WHERE ' . $this->sql_where( $w ) ); }
-		$n = 0;
-		foreach ( $this->t[ $t ] ?? array() as $id => $r ) {
-			if ( $this->potriveste( $r, $w ) ) { unset( $this->t[ $t ][ $id ] ); $n++; }
-		}
-		return $n;
-	}
+	public function get_row( $q, $o = null ) { $r = $this->pdo->query( $q )->fetch( PDO::FETCH_ASSOC ); return $r ? $r : null; }
+	public function get_results( $q, $o = null ) { return $this->pdo->query( $q )->fetchAll( PDO::FETCH_ASSOC ); }
+	public function get_var( $q ) { $r = $this->pdo->query( $q )->fetch( PDO::FETCH_NUM ); return $r ? $r[0] : null; }
+	private function where( $w ) { return implode( ' AND ', array_map( function ( $k, $v ) { return $k . ' = ' . $this->pdo->quote( (string) $v ); }, array_keys( $w ), $w ) ); }
+	public function insert( $t, $d ) { return $this->pdo->exec( 'INSERT INTO ' . $t . ' (' . implode( ',', array_keys( $d ) ) . ') VALUES (' . implode( ',', array_map( array( $this->pdo, 'quote' ), array_map( 'strval', $d ) ) ) . ')' ); }
+	public function update( $t, $d, $w ) { return $this->pdo->exec( 'UPDATE ' . $t . ' SET ' . implode( ', ', array_map( function ( $k, $v ) { return $k . ' = ' . $this->pdo->quote( (string) $v ); }, array_keys( $d ), $d ) ) . ' WHERE ' . $this->where( $w ) ); }
+	public function delete( $t, $w ) { return $this->pdo->exec( 'DELETE FROM ' . $t . ' WHERE ' . $this->where( $w ) ); }
+	public function query( $q ) { return $this->pdo->exec( $q ); }
 }
 $GLOBALS['wpdb'] = new Ah_Test_Wpdb();
+
+/* ---------- fragmentele site-ului de care se leagă modulul (doar ce folosește) ---------- */
+function ah_sp_email() { return $GLOBALS['ah_test_email']; }
+function ah_sp_e_pagina() { return ! empty( $GLOBALS['ah_test_e_pagina'] ); }

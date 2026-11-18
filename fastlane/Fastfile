@@ -1,4 +1,5 @@
-# fastlane pentru aplicația Adela Haru (ro.adelaharu.app).
+# fastlane pentru aplicația Adela Haru (ro.adelaharu.app), v2: shell Capacitor care deschide Spațiul meu
+# (docs/arhitectura.md). Build-ul web e doar pagina offline; conținutul vine de pe site, fără versiune nouă.
 # Rulat din rădăcina repo-ului:  bundle exec fastlane ios testflight_beta  |  bundle exec fastlane android interna
 # (BUNDLE_GEMFILE=fastlane/Gemfile). Variabilele vin din secretele GitHub, vezi docs/release.md.
 

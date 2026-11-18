@@ -1,18 +1,19 @@
 {
   "name": "adelaharu-app",
   "private": true,
-  "version": "1.0.0",
+  "version": "2.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "dev:mock": "VITE_MOCK=1 vite",
-    "build": "tsc -b && vite build",
-    "build:mock": "tsc -b && VITE_MOCK=1 vite build --outDir dist-mock",
-    "typecheck": "tsc -b --noEmit",
+    "dev": "vite --open /offline.html",
+    "build": "tsc -p . && vite build",
+    "typecheck": "tsc -p .",
     "test": "vitest run",
-    "preview:mock": "vite preview --outDir dist-mock",
-    "screenshots": "npm run build:mock && node scripts/screenshots.cjs",
-    "cap:sync": "npm run build && cap sync"
+    "ci:verifica": "node scripts/extrage-ci.mjs --verifica",
+    "screenshots": "npm run build && node scripts/capturi.cjs",
+    "icoane": "node scripts/icoane.cjs && npx @capacitor/assets generate --android --ios --iconBackgroundColor '#F6E3DA' --iconBackgroundColorDark '#221922' --splashBackgroundColor '#FBF6F3' --splashBackgroundColorDark '#221922'",
+    "sync": "npm run build && cap sync",
+    "sync:android": "npm run build && cap sync android",
+    "sync:ios": "npm run build && cap sync ios"
   },
   "dependencies": {
     "@capacitor/android": "^8.6.0",
@@ -26,18 +27,17 @@
     "@capacitor/local-notifications": "^8.3.1",
     "@capacitor/preferences": "^8.0.1",
     "@capacitor/push-notifications": "^8.1.3",
+    "@capacitor/splash-screen": "^8.0.2",
+    "@capacitor/status-bar": "^8.0.4",
     "@fontsource/cormorant-garamond": "^5.3.0",
     "@fontsource/figtree": "^5.3.0",
-    "@fontsource/gilda-display": "^5.3.0",
-    "react": "^19.3.1",
-    "react-dom": "^19.3.1"
+    "@fontsource/gilda-display": "^5.3.0"
   },
   "devDependencies": {
+    "@capacitor/assets": "^4.0.0",
     "@capacitor/cli": "^8.6.0",
     "@types/node": "^26.6.6",
-    "@types/react": "^19.3.0",
-    "@types/react-dom": "^19.3.0",
-    "@vitejs/plugin-react": "^6.2.1",
+    "jsdom": "^31.0.1",
     "typescript": "^7.0.2",
     "vite": "^8.3.5",
     "vitest": "^5.1.0"

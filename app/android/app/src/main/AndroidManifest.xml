@@ -19,18 +19,26 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- App Links: linkul din emailul cu codul (/app/intra) și căile vechi deschid aplicația.
-                 Verificarea folosește https://www.adelaharu.ro/.well-known/assetlinks.json -->
+            <!-- App Links (verificate cu https://www.adelaharu.ro/.well-known/assetlinks.json, din fragmentul
+                 ah-sp-aplicatie.php): Spațiul meu (și linkul personal ?cont= din emailuri) și /app/intra
+                 deschid aplicația; App.addListener('appUrlOpen') din punte duce WebView-ul acolo. -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="https" android:host="www.adelaharu.ro" android:path="/app/intra" />
-                <data android:scheme="https" android:host="www.adelaharu.ro" android:pathPrefix="/meditatiile-mele" />
-                <data android:scheme="https" android:host="www.adelaharu.ro" android:pathPrefix="/sala-de-curs" />
-                <data android:scheme="https" android:host="www.adelaharu.ro" android:pathPrefix="/cursurile-mele" />
+                <data android:scheme="https" />
+                <data android:host="www.adelaharu.ro" />
+                <data android:pathPrefix="/spatiul-meu" />
+                <data android:pathPrefix="/app/intra" />
             </intent-filter>
         </activity>
+
+        <!-- AhMedia: meditația din WebView ține aplicația vie cu ecranul blocat și are comenzi în notificare -->
+        <service
+            android:name=".AhMediaService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback"
+        />
 
         <provider
             android:name="androidx.core.content.FileProvider"
@@ -45,7 +53,10 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <!-- notificările fazelor la ora exactă (9:00); fără ea, Android le poate întârzia puțin -->
+    <!-- serviciul de prim-plan pentru redarea meditațiilor (AhMediaService) -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <!-- notificările locale ale fazelor ciclului la ora exactă (Android ≤ 12); fără ea, Android le poate întârzia puțin -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
