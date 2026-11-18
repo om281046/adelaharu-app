@@ -29,6 +29,7 @@ execFileSync('php', [path.join(__dirname, 'construieste.php'), TMP], { stdio: 'i
 
 const UA_SAFARI = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Mobile/15E148 Safari/604.1';
 const UA_APP = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 AdelaHaruApp/1.0.0 (ios)';
+const UA_ANDROID = 'Mozilla/5.0 (Linux; Android 14; Pixel 7 Build/AP2A; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/131.0.0.0 Mobile Safari/537.36 AdelaHaruApp/2.0.0 (android)';
 const SITE = 'https://www.adelaharu.ro';
 
 let ok = 0, rau = 0;
@@ -59,6 +60,8 @@ async function ruta(context, varianta, jurnal) {
     if (!p.startsWith('/fonts/') && !p.startsWith('/img/')) jurnal.push({ m: req.method(), u: req.url(), corp: req.postData(), h: req.headers()['x-ah-app'] || '' });
     if (p === '/spatiul-meu/') return route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: fs.readFileSync(path.join(TMP, `sp-${varianta}.html`)) });
     if (p === '/sala-de-curs/') return route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: fs.readFileSync(path.join(TMP, `sala-${varianta}.html`)) });
+    if (p === '/termeni-si-conditii/') return route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: fs.readFileSync(path.join(TMP, `termeni-${varianta}.html`)) });
+    if (p === '/' && u.searchParams.has('ah_sc_ics')) return route.fulfill({ status: 200, contentType: 'text/calendar; charset=utf-8', headers: { 'Content-Disposition': 'attachment; filename="ritmul-meu.ics"' }, body: 'BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n' });
     if (p.startsWith('/img/')) return route.fulfill({ status: 200, contentType: 'image/svg+xml', body: svg(p) });
     if (p === '/fonts/fonts.css') return route.fulfill({ status: 200, contentType: 'text/css', body: FONTS_CSS });
     if (p.startsWith('/fonts/')) { const f = path.join(FONT, p.slice(7)); return fs.existsSync(f) ? route.fulfill({ status: 200, path: f }) : route.fulfill({ status: 404, body: '' }); }
@@ -92,6 +95,12 @@ function capacitor(opt) {
   const P = {
     App: { addListener: on('App'), getLaunchUrl: () => Promise.resolve({}) },
     Device: { getId: () => Promise.resolve({ identifier: 'iphone-de-proba-1' }) },
+    AhApp: { info: () => Promise.resolve({ push: ${JSON.stringify(opt.push !== false)}, versiune: '2.0.0', build: '2', mediaNativ: ${JSON.stringify(opt.platforma === 'android')} }) },
+    AhMedia: ${JSON.stringify(opt.platforma === 'android')} ? {
+      addListener: on('AhMedia'),
+      actualizeaza: (a) => { rec('AhMedia', 'actualizeaza', a); return Promise.resolve(); },
+      opreste: () => { rec('AhMedia', 'opreste'); return Promise.resolve(); },
+    } : undefined,
     PushNotifications: {
       addListener: on('PushNotifications'),
       checkPermissions: () => Promise.resolve({ receive: perm() }),
@@ -118,12 +127,13 @@ function capacitor(opt) {
       deleteFile: (a) => { rec('Filesystem', 'deleteFile', a); return Promise.resolve(); },
       rmdir: (a) => { rec('Filesystem', 'rmdir', a); return Promise.resolve(); },
     },
+    Browser: { open: (a) => { rec('Browser', 'open', a); return Promise.resolve(); } },
     FileTransfer: {
       addListener: on('FileTransfer'),
       downloadFile: (a) => { rec('FileTransfer', 'downloadFile', a); setTimeout(() => emit('FileTransfer.progress', { type: 'download', url: a.url, bytes: 420000, contentLength: 1000000, lengthComputable: true }), 80); return new Promise((r) => setTimeout(() => r({ path: a.path }), 700)); },
     },
   };
-  window.Capacitor = { isNativePlatform: () => true, getPlatform: () => 'ios', Plugins: P };
+  window.Capacitor = { isNativePlatform: () => true, getPlatform: () => ${JSON.stringify(opt.platforma || 'ios')}, Plugins: P };
   window.__emit = emit;
 })();`;
 }
@@ -136,6 +146,7 @@ const LOCAL = `(() => { try { if (window.top !== window || location.protocol !==
   localStorage.setItem('ahsp_ciclu', ${JSON.stringify(JSON.stringify(CICLU))});
   localStorage.setItem('ahsp_med_502', JSON.stringify({ t: 420, f: 0 }));
   localStorage.setItem('ahspx_viz', JSON.stringify({ n: 1, zi: '' }));
+  localStorage.setItem('ahsp_partener', JSON.stringify({ k: 'k0123456789', s: ${JSON.stringify(zi(8))}, c: 28, m: 5, n: 'Ana', creat: ${JSON.stringify(zi(1))} }));
 })();`;
 
 /* mementourile așteptate, calculate cu Ciclul meu din 235 (nu cu puntea) */
@@ -149,14 +160,15 @@ const FT = { 'Iarna ta interioară': 'iarna', 'Primăvara ta interioară': 'prim
 const ziOra = (iso) => { const d = new Date(iso); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
 
 /* ce nu are voie să se vadă în aplicație (texte și prețuri) */
-const INTERZIS = [/\d+\s?lei\b/i, /Plătește/, /plătit/i, /Card cadou/i, /Dă mai departe/, /Women Empower/i, /\bComenzi\b/, /Comenzile mele/, /Gestionează/, /Black Friday/i, /Încă închise/, /Încă nedeschise/, /Vezi cursurile/, /Descoperă cursul/, /Ai o plată/, /Înapoi pe site/, /Mai departe:/, /Revino/, /Abonamentul meu/, /Oprești abonamentul/, /Vezi detalii/, /te poți abona/i, /Pune pe ecranul telefonului/, /Practicile pentru fiecare fază/];
+const INTERZIS = [/\d+\s?lei\b/i, /Plătește/, /plătit/i, /Card cadou/i, /Dă mai departe/, /Women Empower/i, /\bComenzi\b/, /Comenzile mele/, /Gestionează/, /Black Friday/i, /Încă închise/, /Încă nedeschise/, /Vezi cursurile/, /Descoperă cursul/, /Ai o plată/, /Înapoi pe site/, /Mai departe:/, /Revino/, /Abonamentul meu/, /Oprești abonamentul/, /Vezi detalii/, /te poți abona/i, /Pune pe ecranul telefonului/, /Practicile pentru fiecare fază/, /^Mai departe$/m, /Vezi programul/, /Vreau să continui/, /te invit să aduci respirația/, /Vezi ofertele/, /\bShop\b/, /\bCart\b/, /Magazin/, /Cursuri online/];
 async function nimicDeCumparat(page, unde) {
   const r = await page.evaluate((re) => {
     const txt = document.body.innerText;
     const gasite = re.map((s) => new RegExp(s.src, s.f)).filter((x) => x.test(txt)).map(String);
     const linkuri = [];
     document.querySelectorAll('a[href]').forEach((a) => { const b = a.getBoundingClientRect(), cs = getComputedStyle(a); if (b.width > 0 && b.height > 0 && cs.visibility !== 'hidden' && window.AHApp.blocat(a.getAttribute('href'))) linkuri.push(a.getAttribute('href') + ' «' + a.textContent.trim().slice(0, 40) + '»'); });
-    const el = document.querySelectorAll('#ahsp .cov.inchis, #ahsp .cov-pret, #ahsp .curs.inchis, #ahsb, #rsg, .ah-bf-banda, #ah-bf-bara').length;
+    const vazut = (x) => { const b = x.getBoundingClientRect(); return b.width > 0 && b.height > 0 && getComputedStyle(x).visibility !== 'hidden'; };
+    const el = [...document.querySelectorAll('#ahsp .cov.inchis, #ahsp .cov-pret, #ahsp .curs.inchis, #ahsb, #rsg, .ah-bf-banda, #ah-bf-bara, #ahs-urmator, #ah-dar7-curs, .elementor-location-header, .elementor-location-footer, #ahbq-banda')].filter(vazut).length;
     return { gasite, linkuri, el };
   }, INTERZIS.map((x) => ({ src: x.source, f: x.flags })));
   egal(r.gasite, [], `aplicație ${unde}: niciun text de cumpărare`);
@@ -193,6 +205,9 @@ const poza = async (page, nume) => { nr++; await page.screenshot({ path: path.jo
     await poza(page, 'browser-10-podcast-episod');
     await page.goto(SITE + '/sala-de-curs/?comanda=14770&cheie=wc_order_r'); await asteapta(500);
     await poza(page, 'browser-11-sala-de-curs');
+    await page.goto(SITE + '/termeni-si-conditii/'); await asteapta(400);
+    verifica(/\bShop\b/.test(await page.evaluate(() => document.body.innerText)) && await page.locator('#ah-bf-banda').isVisible(), 'browser (martor): pe Termeni se văd magazinul și Black Friday');
+    await poza(page, 'browser-12-termeni');
     egal(erori, [], 'browser: fără erori JS');
     await ctx.close();
   }
@@ -232,6 +247,12 @@ const poza = async (page, nume) => { nr++; await page.screenshot({ path: path.jo
       await poza(page, `aplicatie-${String(i + 1).padStart(2, '0')}-${SECT[i][0]}${SECT[i][0] === 'comenzi' ? '-ascunsa' : ''}`);
     }
     egal(await page.evaluate(() => [...document.querySelectorAll('#ahsp .bara a')].map((a) => a.textContent.trim())), ['Acasă', 'Ciclul', 'Cursuri', 'Inner Temple', 'Mai mult'], 'aplicație: bara de jos fără Comenzi');
+    /* Ciclul meu › Pentru partenerul tău: linkul e întreg (CI.paLink = D.linkuri.site + '?ciclul-ei#d=…') */
+    await page.evaluate(() => { location.hash = '#ciclu'; }); await asteapta(600);
+    const pa = await page.evaluate(() => ({ v: (document.getElementById('ci-pa-link') || {}).value || '', wa: (document.getElementById('ci-pa-wa') || { getAttribute: () => '' }).getAttribute('href') || '' }));
+    verifica(pa.v.startsWith(SITE + '/?ciclul-ei#d='), 'Ciclul meu: „Linkul pentru el” începe cu https:// (' + pa.v.slice(0, 50) + ')');
+    verifica(decodeURIComponent(pa.wa.split('text=')[1] || '').includes(' ' + SITE + '/?ciclul-ei#d='), 'Ciclul meu: „Trimite pe WhatsApp” poartă linkul întreg');
+    verifica(await page.evaluate(() => !window.AHApp.blocat(document.getElementById('ci-pa-link').value)), 'Ciclul meu: linkul pentru partener e permis și în aplicație');
     /* descărcarea unei meditații */
     await page.evaluate(() => { location.hash = '#meditatii'; }); await asteapta(600);
     egal(await page.locator('#ahsp .cov-grila .spa-dl').count(), 4, 'Descarcă: lângă fiecare meditație pe care o poate asculta');
@@ -324,7 +345,63 @@ const poza = async (page, nume) => { nr++; await page.screenshot({ path: path.jo
     await page.evaluate(() => document.querySelector('audio').play().catch(() => {})); await asteapta(600);
     egal(await page.evaluate(() => navigator.mediaSession.metadata && navigator.mediaSession.metadata.artist), 'Adela Haru', 'sala: ecranul blocat și pentru sunetul lecției');
     await poza(page, 'aplicatie-19-sala-de-curs');
+    /* „Adaugă în calendarul meu” (44): rămâne și se deschide în browserul din aplicație */
+    const ics = page.locator('a[href*="ah_sc_ics="]');
+    verifica(await ics.isVisible(), 'sala: „Adaugă în calendarul meu” rămâne');
+    await ics.click(); await asteapta(400);
+    const bo = (await apeluri(page)).filter((x) => x[0] === 'Browser' && x[1] === 'open');
+    verifica(bo.length === 1 && /^https:\/\/www\.adelaharu\.ro\/\?ah_sc_ics=14770&s=/.test(bo[0][2].url), 'sala: fișierul de calendar se deschide cu Browser.open');
+    verifica(new URL(page.url()).pathname === '/sala-de-curs/', 'sala: pagina rămâne pe loc');
     egal(erori, [], 'sala în aplicație: fără erori JS');
+    await ctx.close();
+  }
+  /* ===== 5. Android fără Firebase: fără push (register ar opri aplicația); ecranul blocat prin AhMedia ===== */
+  {
+    const jurnal = [], ctx = await browser.newContext({ ...ctxOpt, userAgent: UA_ANDROID });
+    await ruta(ctx, 'aplicatie', jurnal); await ctx.addInitScript(capacitor({ platforma: 'android', push: false, perm: 'granted', prefs: { ah_deschideri: '3', ah_push_on: '1' } })); await ctx.addInitScript(LOCAL);
+    const page = await ctx.newPage(); const erori = []; page.on('pageerror', (e) => erori.push(e.message));
+    await page.goto(SITE + '/spatiul-meu/#acasa'); await asteapta(3400);
+    verifica(!(await page.locator('.ahspa-foaie').count()), 'Android fără Firebase: nu întreabă de notificări');
+    await page.evaluate(() => { location.hash = '#mai'; }); await asteapta(900);
+    egal(await page.evaluate(() => [...document.querySelectorAll('#ahsp .spa-mai .rand b')].map((b) => b.textContent)), ['Mementourile ciclului', 'Șterge contul'], 'Android fără Firebase: fără comutatorul Notificări');
+    await page.evaluate(() => window.AHApp.push.porneste()); await asteapta(300);
+    await page.evaluate(() => { location.hash = '#meditatii'; }); await asteapta(600);
+    await page.click('[data-play="502"]'); await asteapta(1200);
+    let a5 = await apeluri(page);
+    verifica(!a5.some((x) => x[0] === 'PushNotifications' && (x[1] === 'register' || x[1] === 'unregister')), 'Android fără Firebase: niciun register/unregister');
+    const am = a5.filter((x) => x[0] === 'AhMedia' && x[1] === 'actualizeaza').pop();
+    verifica(am && am[2].titlu === 'Pântecul, centrul tău' && am[2].artist === 'Adela Haru' && am[2].canta === true && /^https:\/\//.test(am[2].poza || '') && am[2].durata > 0, 'Android: AhMedia primește titlul, poza, durata și „cântă” (' + JSON.stringify(am && am[2]) + ')');
+    await page.evaluate(() => window.__emit('AhMedia.actiune', { tip: 'pause' })); await asteapta(300);
+    verifica(await page.evaluate(() => { const a = window.AHApp.mediaNativ.el; return !!a && a.paused; }), 'Android: „pauză” de pe ecranul blocat oprește sunetul din pagină');
+    a5 = await apeluri(page);
+    egal(a5.filter((x) => x[0] === 'AhMedia' && x[1] === 'actualizeaza').pop()[2].canta, false, 'Android: AhMedia află de pauză');
+    // serverul harnașului nu răspunde la „Range”, deci <audio> nu se poate muta: verificăm comenzile pe un element imitat
+    const sk = await page.evaluate(() => { const am = window.AHApp.mediaNativ, real = am.el, f = { currentTime: 20, duration: 30, paused: true, ended: false, play() {}, pause() {} };
+      am.el = f; window.__emit('AhMedia.actiune', { tip: 'seek', pozitie: 12 }); const r = [f.currentTime];
+      window.__emit('AhMedia.actiune', { tip: 'inainte' }); r.push(f.currentTime); window.__emit('AhMedia.actiune', { tip: 'inapoi' }); window.__emit('AhMedia.actiune', { tip: 'inapoi' }); r.push(f.currentTime);
+      am.el = real; return r; });
+    egal(sk, [12, 27, 0], 'Android: „seek”, +15 s și −15 s de pe ecranul blocat mută sunetul');
+    await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pagehide'))); await asteapta(200);
+    a5 = await apeluri(page);
+    verifica(a5.some((x) => x[0] === 'AhMedia' && x[1] === 'opreste'), 'Android: la plecarea din pagină, notificarea AhMedia se oprește');
+    egal(erori, [], 'Android: fără erori JS');
+    await ctx.close();
+  }
+  /* ===== 5. Termeni și condiții în aplicație (din ecranul de înscriere și din bannerul de cookie-uri) ===== */
+  {
+    const jurnal = [], ctx = await browser.newContext({ ...ctxOpt, userAgent: UA_APP });
+    await ruta(ctx, 'aplicatie', jurnal); await ctx.addInitScript(capacitor({ perm: 'granted', prefs: { ah_push_intrebat: '1' } }));
+    const page = await ctx.newPage(); const erori = []; page.on('pageerror', (e) => erori.push(e.message));
+    await page.goto(SITE + '/termeni-si-conditii/'); await asteapta(700);
+    await nimicDeCumparat(page, 'Termeni și condiții');
+    const t = await page.evaluate(() => document.body.innerText);
+    verifica(/Dreptul de retragere/.test(t) && /de exemplu, Magia Ciclului Feminin\)/.test(t), 'Termeni: textul legal rămâne întreg (linkul spre produs devine text)');
+    egal(await page.evaluate(() => [...document.querySelectorAll('.entry-content a')].map((a) => a.textContent)), ['contact@adelaharu.ro', 'Politica de confidențialitate', 'Politica de cookie-uri'], 'Termeni: rămân doar linkurile permise');
+    verifica(await page.locator('.ahspa-inapoi a').isVisible(), 'Termeni: bara „Înapoi în Spațiul meu”');
+    await poza(page, 'aplicatie-20-termeni');
+    await page.click('.ahspa-inapoi a'); await page.waitForURL(/\/spatiul-meu\//, { timeout: 4000 }).catch(() => {});
+    verifica(new URL(page.url()).pathname === '/spatiul-meu/', 'Termeni: „Înapoi” duce în Spațiul meu');
+    egal(erori, [], 'Termeni în aplicație: fără erori JS');
     await ctx.close();
   }
   await browser.close();

@@ -1,33 +1,55 @@
-# Cum publicăm aplicația Adela Haru în App Store și Google Play
+# Cum publicăm aplicația Adela Haru în App Store și Google Play (v2)
 
-Ghid pas cu pas pentru proprietară (HARU TRAINING SRL). Nu e nevoie de cunoștințe tehnice; unde e nevoie de un
-calculator cu programe speciale, scrie clar. Partea pentru programator e la final („Pentru programator”).
+Ghid pas cu pas pentru proprietară (HARU TRAINING SRL) și pentru Mircea. Nu e nevoie de cunoștințe tehnice; unde
+e nevoie de un calculator cu programe speciale, scrie clar. Partea pentru programator e la final.
 
-Situația la 3 nov. 2026. Regulile magazinelor se schimbă des: unde am scris **(de verificat)** nu sunt sigur că
-informația e încă exactă și merită o privire pe pagina oficială în ziua în care faceți pasul.
+Situația la 18 nov. 2026. Regulile magazinelor se schimbă des: unde am scris **(de verificat)** merită o privire pe
+pagina oficială în ziua în care faceți pasul.
+
+## Ce e nou în v2 (pe scurt)
+
+Aplicația v2 **deschide Spațiul meu de pe site** (`https://www.adelaharu.ro/spatiul-meu/`) și adaugă doar ce
+site-ul nu poate face: notificări, meditații descărcate pentru ascultat fără internet, sunet cu ecranul blocat,
+mementouri pentru fazele ciclului, linkurile din emailuri care deschid aplicația, o pagină pentru când nu e internet.
+De aceea are **două părți** care se lansează în ordine:
+
+1. **Fragmentul de pe site** `server/ah-sp-aplicatie.php` („Spațiul meu – modul aplicație”, Code Snippets). Lucrează
+   doar când pagina e deschisă din aplicație; în browser site-ul rămâne exact cum e. Are pagina lui de setări:
+   **Setări › Aplicația mobilă** (pasul 8).
+2. **Aplicația** (Android și iPhone), construită automat în GitHub (pașii 5–6, 9–10).
+
+Al doilea fragment, `server/ah-sp-partener.php` („Spațiul meu – Pentru el”, contul simplu pentru partenerul ei),
+se lansează la fel, separat, **după** modulul aplicație (pasul 10, aceeași regulă: inactiv, OK, activat, verificat).
+
+Ce adaugă echipa pe site (meditații, cursuri, înregistrări) apare singur în aplicație, **fără versiune nouă**.
+O versiune nouă a aplicației e nevoie doar când se schimbă partea de telefon.
+
+Detaliile tehnice: `docs/arhitectura.md`. Planul și riscurile: `docs/strategie-v2.md`.
 
 ## Pe scurt: ce urmează și cât durează
 
 | Pas | Cine | Cât durează (estimat) | Cost |
 |---|---|---|---|
 | 1. Numărul D-U-N-S al firmei | proprietara | 0 zile (dacă există) până la 1–2 săptămâni | gratuit |
-| 2. Apple Developer Program (organizație) | proprietara | 2–14 zile după D-U-N-S | 99 USD pe an (sau echivalentul local; în UE de obicei 99 EUR, cu TVA) **(de verificat)** |
-| 3. Google Play Console (organizație) | proprietara | câteva zile până la 2 săptămâni (verificarea firmei) | 25 USD o singură dată |
-| 4. Fișele aplicației în magazine | proprietara (+ programatorul) | 1–2 ore | gratuit |
+| 2. Apple Developer Program (organizație) | proprietara | 2–14 zile după D-U-N-S | 99 USD pe an **(de verificat)** |
+| 3. Google Play Console (organizație) | proprietara | câteva zile până la 2 săptămâni | 25 USD o singură dată |
+| 4. Fișele aplicației în magazine + paginile de pe site (suport, ștergerea contului, politica) | proprietara (+ Adela pentru texte) | 2–3 ore | gratuit |
 | 5. Cheia de încărcare Android | programatorul, cu proprietara | 15 minute | gratuit |
 | 6. Cheia App Store Connect API + repo-ul de certificate | proprietara (+ programatorul) | 30 de minute | gratuit |
 | 7. Firebase (notificări) | proprietara (+ programatorul) | 30 de minute | gratuit |
-| 8. Secretele în GitHub | proprietara sau programatorul | 20 de minute | gratuit (vezi nota despre minutele GitHub) |
-| 9. Prima versiune și recenzia | programatorul + proprietara | Apple 1–3 zile, Google 1–7 zile (prima dată poate dura mai mult) | gratuit |
+| 8. Secretele în GitHub și setările fragmentului | proprietara sau programatorul | 30 de minute | gratuit |
+| 9. Proba pe telefon | programatorul + Mircea | o zi de încercări | gratuit |
+| 10. Lansarea, în ordine | Mircea (OK), programatorul | Apple 1–3 zile, Google 1–7 zile de recenzie | gratuit |
 
 Realist, de la zero până în magazine: **3–6 săptămâni**, cele mai multe fiind așteptare (D-U-N-S, verificări).
-Pașii 1, 2 și 3 se pot începe azi, în paralel cu construirea aplicației.
+Pașii 1, 2 și 3 se pot începe azi.
 
 **Ce NU trebuie:** contract de plăți cu Apple („Paid Apps Agreement”), date bancare sau fiscale în magazine,
 Google Play Billing. Aplicația e gratuită și nu vinde nimic, deci ajunge acordul gratuit, care e implicit.
 
 **Păstrați într-un manager de parole** (1Password, Bitwarden, iCloud Keychain): toate parolele și fișierele de mai
-jos (cheia Android, fișierele `.p8`, parola match). Unele se pot descărca **o singură dată**.
+jos (cheia Android, fișierele `.p8`, parola match, cheia Firebase, codul contului de recenzie). Unele se pot descărca
+**o singură dată**.
 
 ---
 
@@ -64,7 +86,7 @@ Pași:
    **sunteți comerciant** (firmă). Apple cere adresa, telefonul și emailul, le verifică și le **afișează public** în
    App Store în UE. Fără acest pas aplicația nu poate fi publicată în UE.
 7. Notați **Team ID** (10 caractere): https://developer.apple.com/account › Membership details. Îl folosiți la pașii 6 și 8
-   și în admin-ul site-ului (câmpul „iOS Team ID”).
+   și în Setări › Aplicația mobilă pe site (câmpul „Apple Team ID”).
 
 ## 3. Google Play Console, cont de organizație
 
@@ -87,34 +109,37 @@ Textele de lipit, răspunsurile la întrebări și planul pozelor sunt în folde
 | Fișier | Ce conține |
 |---|---|
 | `store/listing.md` | nume, subtitlu, descrieri, cuvinte cheie, noutăți, categorii, linkuri |
-| `store/screenshots.md` | ce capturi de ecran, la ce dimensiuni |
-| `store/privacy-answers.md` | App Privacy (Apple), Data safety și Health apps (Google), alte declarații Play |
+| `store/screenshots.md` | ce capturi de ecran, la ce dimensiuni (din aplicația reală, cu contul de recenzie) |
+| `store/privacy-answers.md` | App Privacy (Apple), Data safety și Health apps (Google), servicii în prim-plan, alte declarații Play |
 | `store/content-rating.md` | vârsta (Apple) și chestionarul IARC (Google) |
-| `store/review-notes.md` | contul de recenzie și notele pentru recenzori |
+| `store/review-notes.md` | notele pentru recenzori (de ce nu e „site într-o ramă”, nimic de cumpărat), riscurile |
+| `review-account.md` | contul de recenzie: ce face fragmentul și ce comenzi pregătiți |
 | `store/privacy-policy-addendum.md` | paragraful de pus în Politica de confidențialitate a site-ului |
+
+**Pe site, înainte de trimitere** (fără ele recenzia se oprește): paragraful din Politica de confidențialitate,
+pagina de suport (ex. `/contact/`) și pagina publică despre ștergerea contului (textul în `privacy-answers.md`).
 
 ### Apple
 1. https://developer.apple.com/account › Certificates, IDs & Profiles › **Identifiers** › „+” › App IDs › App.
    - Description: `Adela Haru`, Bundle ID **Explicit**: `ro.adelaharu.app`.
-   - La Capabilities bifați: **Associated Domains** și **Push Notifications**. Register.
+   - La Capabilities bifați: **Associated Domains** (linkurile din emailuri) și **Push Notifications**. Register.
 2. https://appstoreconnect.apple.com › Apps › „+” › **New App**:
    - Platforms: iOS · Name: `Adela Haru` · Primary Language: **Romanian** · Bundle ID: `ro.adelaharu.app` ·
      SKU: `ADELAHARU-APP` · User Access: Full Access.
 3. App Information: categoria Health & Fitness (secundară Lifestyle), „Content Rights”: aplicația **nu** conține
-   conținut al altora (meditațiile și videourile sunt ale voastre), Age Rating (vezi `content-rating.md`).
-4. Pricing and Availability: **Free**, toate țările (românce sunt peste tot). App Privacy: din `privacy-answers.md`,
-   plus linkul politicii de confidențialitate.
-5. La versiunea 1.0: textele, capturile, „App Review Information” (vezi `review-notes.md`). Build-ul vine din GitHub (pasul 9).
+   conținut al altora (meditațiile, cursurile și videourile sunt ale voastre), Age Rating (`content-rating.md`).
+4. Pricing and Availability: **Free**. App Privacy: din `privacy-answers.md`, plus linkul politicii.
+5. La versiune: textele, capturile, „App Review Information” (`review-notes.md`). Build-ul vine din GitHub (pasul 10).
 
 ### Google
 1. Play Console › **Creați o aplicație**: numele `Adela Haru`, limba prestabilită **română (ro)**, Aplicație (nu joc),
    **Gratuită**, bifați declarațiile.
-2. Panoul aplicației vă arată lista „Configurați aplicația”. Completați toate secțiunile din **Conținutul aplicației**
-   (politica de confidențialitate, reclame: nu, acces la aplicație, clasificare, public țintă 18+, siguranța datelor,
-   aplicații de sănătate, ștergerea contului) din `privacy-answers.md` și `content-rating.md`.
+2. Completați toate secțiunile din **Conținutul aplicației** (politica de confidențialitate, reclame: nu, acces la
+   aplicație, clasificare, public țintă 18+, siguranța datelor, aplicații de sănătate, ștergerea contului,
+   **permisiuni pentru servicii în prim-plan** cu videoul cerut) din `privacy-answers.md` și `content-rating.md`.
 3. **Fișa magazinului principală**: din `listing.md` și `screenshots.md`.
-4. **Semnarea aplicației de către Google Play** (Play App Signing): lăsați varianta implicită (Google păstrează cheia
-   de semnare). Voi păstrați doar **cheia de încărcare** (pasul 5).
+4. **Semnarea aplicației de către Google Play** (Play App Signing): lăsați varianta implicită. Voi păstrați doar
+   **cheia de încărcare** (pasul 5).
 
 ## 5. Cheia de încărcare Android (upload keystore)
 
@@ -189,14 +214,16 @@ Secretele: `MATCH_GIT_URL` (ex. `https://github.com/utilizator/adelaharu-certifi
      **Download** (fișier `.p8`, o singură dată). Notați Key ID.
    - Firebase › Project settings (rotița) › **Cloud Messaging** › Apple app configuration › APNs Authentication Key ›
      Upload: fișierul `.p8`, Key ID și Team ID.
-5. **Cheia pentru server** (cu ea site-ul trimite notificările):
-   Firebase › Project settings › **Service accounts** › „Generate new private key” › se descarcă un fișier JSON.
-   Deschideți-l cu un editor de text, copiați tot și lipiți-l în **WordPress › Meditațiile mele › Aplicația mobilă ›
-   „Cheia Firebase”** (opțiunea `ah_app_fcm`). **Nu îl puneți în GitHub.** Apoi „Trimite o notificare de probă”.
+5. **Cheia pentru site** (cu ea fragmentul trimite notificările): Firebase › Project settings › **Service accounts** ›
+   „Generate new private key” › se descarcă un fișier JSON. Îl lipiți în **Setări › Aplicația mobilă › Cheia
+   Firebase** (pasul 8), nu altundeva. **Nu îl puneți în GitHub, în emailuri sau în chat.**
 
-Secretele GitHub: `GOOGLE_SERVICES_JSON` (conținutul fișierului `google-services.json`, copiat ca text) și
-`GOOGLE_SERVICE_INFO_PLIST` (conținutul `GoogleService-Info.plist`, ca text). Fără ele aplicația se construiește
-fără notificări push (restul merge).
+Secretele GitHub: `GOOGLE_SERVICES_JSON` (conținutul `google-services.json`, ca text) și `GOOGLE_SERVICE_INFO_PLIST`
+(conținutul `GoogleService-Info.plist`, ca text). Fără ele aplicația se construiește **fără notificări** (restul merge,
+iar puntea nici nu cere permisiunea). Pe iPhone e nevoie în plus de o schimbare făcută o dată de programator în
+proiectul Xcode (vezi „Pentru programator”); până atunci build-ul iOS **nu se încarcă în TestFlight** cât timp e bifat
+„Versiunea promite notificări push pe iPhone” (`push_ios`). Fără push pe iPhone, debifați-l și scoateți push-ul din
+notele Apple și din fișa App Store (`store/review-notes.md`, `store/listing.md`).
 
 ### Contul de serviciu pentru Google Play (încărcarea automată a versiunilor)
 1. https://console.cloud.google.com › alegeți proiectul Firebase de mai sus (e și proiect Google Cloud).
@@ -211,7 +238,9 @@ fără notificări push (restul merge).
 
 Secretul: `PLAY_SERVICE_ACCOUNT_JSON` (conținutul fișierului JSON, ca text).
 
-## 8. Secretele în GitHub (unde exact)
+## 8. Secretele în GitHub și setările fragmentului
+
+### Secretele în GitHub (unde exact)
 
 În repo-ul aplicației pe GitHub: **Settings › Secrets and variables › Actions › tab „Secrets” ›
 „New repository secret”**. Numele exact (cu majuscule), valoarea lipită, „Add secret”. GitHub nu le mai arată
@@ -234,34 +263,124 @@ niciodată după salvare (doar le poate înlocui), iar ele nu apar în jurnalele
 | `MATCH_PASSWORD` | pasul 6 | iOS |
 | `GOOGLE_SERVICE_INFO_PLIST` | pasul 7.3 | iOS, notificări (opțional) |
 
-**Și în admin-ul site-ului** (Meditațiile mele › Aplicația mobilă): iOS Team ID (pasul 2.7); Android SHA-256: din
-Play Console › Testare și lansare › Integritatea aplicației › **Semnarea aplicației**, ambele amprente SHA-256
-(„cheia de semnare a aplicației” și „cheia de încărcare”), câte una pe rând; Cheia Firebase (pasul 7.5); linkurile
-din magazine, după publicare.
+### Setările fragmentului de pe site (Setări › Aplicația mobilă)
 
-## 9. Cum scoatem o versiune
+Pagina de setări apare doar când fragmentul e activ, deci le completați imediat după activare (pasul 10.3),
+în aceeași sesiune.
+
+| Câmp | De unde | La ce folosește |
+|---|---|---|
+| Apple Team ID | pasul 2.7 (10 caractere) | `/.well-known/apple-app-site-association`: linkurile din emailuri deschid aplicația pe iPhone |
+| Amprentele SHA-256 (Android) | Play Console › Testare și lansare › Integritatea aplicației › **Semnarea aplicației**: „cheia de semnare a aplicației” și „cheia de încărcare”, câte una pe rând | `/.well-known/assetlinks.json`: același lucru pe Android |
+| Link App Store / Link Google Play | după publicare (pasul 10.7) | pagina `/app/intra` (pentru cine deschide un link fără aplicație) și banda „Actualizează” |
+| Versiunea minimă iPhone / Android | gol la început | sub ea, aplicația arată o bandă cu „Actualizează” (de folosit doar dacă o versiune veche se strică) |
+| Mesajul din bandă | opțional | textul benzii de actualizare (CIORNĂ, Adela) |
+| Cheia Firebase | pasul 7.5 (tot fișierul JSON) | notificările. Fără ea nu pleacă nimic; apar doar în jurnalul de jos al paginii |
+| Ce anunțăm | bifele: meditație nouă, înregistrare „Respiră-te acasă”, întâlnire în 15 minute | ce notificări pleacă |
+| Emailul echipei | implicit `contact@adelaharu.ro` | aici vine anunțul când o clientă își șterge contul din aplicație |
+| Probă | adresa voastră | trimite o notificare de probă telefoanelor acelei adrese (trebuie să fi intrat în aplicație și să fi permis notificările) |
+| Contul de recenzie (**încă nu există în fragment**; după ce colegul îl adaugă) | adresa și codul fix (`docs/review-account.md`) | ca Apple și Google să poată intra fără email |
+
+Sub formular sunt linkurile de verificat (`apple-app-site-association`, `assetlinks.json`, `/app/intra`, `config`):
+fiecare trebuie să se deschidă fără eroare. Tot acolo e jurnalul (ultimele rânduri).
+
+**Pe server, o dată** (de verificat cu găzduirea):
+- **LiteSpeed Cache › Excludes › „Do Not Cache URIs”**: `/wp-json/ah-spa/`, `/app/`, `/.well-known/` (fragmentul
+  trimite deja „no-cache”, asta e plasa de siguranță). Pagina `/spatiul-meu/` nu se cachează nici azi.
+- **`/.well-known/`**: dacă există un folder real (de la certificatul SSL), `apple-app-site-association` și
+  `assetlinks.json` trebuie să ajungă la WordPress. Verificare: `https://www.adelaharu.ro/.well-known/assetlinks.json`
+  se deschide (cod 200, JSON) **fără redirect** (Apple nu urmează redirecturi).
+- Pluginurile de securitate care blochează REST API-ul pentru vizitatori trebuie să lase liber `ah-spa/v1` și `ah-sp/v1`.
+
+## 9. Proba pe telefon (înainte de orice trimitere)
+
+Aplicația încarcă **site-ul live**, deci proba se face cu fragmentul activ (pasul 10.3). Nimic din aplicație nu
+scrie pe site altceva decât ar scrie o clientă (intrare, ciclu, notificări).
+
+**Cum ajunge aplicația pe telefon:**
+- **Android:** GitHub › Actions › „Android” › ultima rulare verde de pe `main` › Artifacts › `adelaharu-debug-…`
+  (zip cu un `.apk`). Pe telefon: deschideți fișierul, permiteți „instalarea din surse necunoscute” pentru acea
+  aplicație, Instalați. Sau, după primul pas din 10.4, din Google Play (testare internă).
+- **iPhone:** doar prin **TestFlight** (pasul 10.4) sau, pentru programator, din Xcode pe un Mac.
+
+**Lista de încercat** (iPhone și Android, cu contul vostru și cu contul de recenzie):
+1. Intrarea cu emailul și codul; închideți aplicația de tot și redeschideți-o a doua zi: trebuie să fie tot în cont.
+2. Fiecare secțiune: Acasă, Ciclul, Cursuri, Inner Temple, Cărți, Abonamente, Podcast, Mai mult. **Nicăieri** preț,
+   „cumpără”, „reînnoiește”, portalul de plată, card cadou, „Recomandă”, Black Friday, sugestii de produse, fila
+   Comenzi (lista completă: `store/review-notes.md`, „Riscuri”, punctul 1). Orice link spre restul site-ului trebuie
+   să vă întoarcă în cont.
+3. Inner Temple: „Descarcă” la o meditație; mod avion; redeschideți aplicația: apare pagina „Nu avem internet acum”
+   cu faza de azi și meditația descărcată; o ascultați; blocați ecranul: titlul, poza și butoanele apar pe ecranul
+   blocat, sunetul continuă. „Șterge descărcarea” o scoate.
+4. Ciclul: în „Mai mult” › „Aplicația” porniți „Mementourile ciclului” și permiteți notificările; puneți prima zi
+   în Ciclul meu (programatorul poate muta data ca să vedeți o notificare a doua zi). Apoi: Web Inspector /
+   `chrome://inspect` › ștergeți `localStorage` (cum face iOS după zile fără folosire) › redeschideți: ciclul
+   trebuie să fie tot acolo, refăcut din copia de pe telefon, iar mementourile programate (**18 nov.: încă nu**, vezi
+   „Ce mai trebuie”).
+5. Notificări: de la **a doua** deschidere, aplicația întreabă **o singură dată**, cu un ecran de explicație.
+   Acceptați; din Setări › Aplicația mobilă › Probă trimiteți-vă o notificare; atingeți-o: deschide locul potrivit.
+   Pe iPhone, doar dacă build-ul are Firebase și `aps-environment`; altfel nu apare nicio întrebare (normal) și
+   push-ul se scoate din notele Apple și din fișa App Store.
+6. Un video Vimeo dintr-o lecție și din explicațiile meditațiilor pornește în aplicație.
+7. Linkul personal din emailul Spațiului meu (`?cont=…`), atins pe telefon, deschide **aplicația**, deja în cont.
+8. Zoom, WhatsApp, Spotify / Apple Podcasts se deschid în aplicațiile lor; întoarcerea vă aduce în aplicație.
+9. „Mai mult” › „Aplicația” › „Șterge contul” pe contul de recenzie. Intrați din nou cu codul fix: conținutul
+   cumpărat (cursul, Inner Temple, cartea) apare din nou, pentru că vine din comenzi, dar ciclul, notițele,
+   telefoanele și notificările nu mai sunt. Exact asta spun notele pentru Apple (recenzorii fac și ei proba asta).
+   Dacă „Pentru el” e activ: invitați o adresă de probă, deschideți linkul ei pe alt telefon (se deschide aplicația,
+   ecranul „Azi” al lui), opriți accesul din contul ei (pagina lui arată că accesul e oprit).
+10. În browserul calculatorului și al telefonului, Spațiul meu arată **exact ca înainte** (fragmentul nu atinge
+    browserele). Aceasta e cea mai importantă verificare a site-ului.
+
+## 10. Lansarea, în ordine
+
+Regula: **nimic nu se urcă pe site fără OK-ul lui Mircea**, iar fragmentul se urcă **inactiv**, cu copie de
+siguranță. Fiecare pas se face doar după ce cel dinainte e verificat.
+
+1. **Copie de siguranță** a site-ului (fișiere + bază de date), din găzduire sau din pluginul de backup.
+2. **Fragmentul, inactiv.** Code Snippets › Add New › PHP: titlul „Spațiul meu – modul aplicație”, conținutul lui
+   `server/ah-sp-aplicatie.php` **fără** prima linie `<?php`, „Run everywhere”, **Save Changes** (nu „and Activate”).
+   Înainte: `php -l` pe fișier trece (îl face și CI-ul la fiecare schimbare).
+3. **OK de la Mircea → Activare**, într-un moment liniștit (dimineața), apoi **imediat**:
+   - în browser (calculator și telefon): Spațiul meu, sala de curs, Meditațiile mele, Cărțile mele, pagina de
+     cumpărare a unui curs: totul ca înainte (punctul 9.10);
+   - Setări › Aplicația mobilă: se completează (pasul 8); linkurile de verificat se deschid;
+   - dacă ceva nu e în regulă în browser: **dezactivați fragmentul** (site-ul revine exact cum era) și anunțați
+     programatorul.
+   - „Pentru el” (`ah-sp-partener.php`), dacă e gata: aceiași pași (copie, inactiv, OK Mircea, activare), **după**
+     ce modulul aplicație merge; verificare: invitație de probă, linkul lui în browser și în aplicație, „Oprește
+     accesul”.
+4. **Testare internă:** Android (primul AAB de mână, apoi automat; vezi mai jos) și iPhone prin TestFlight.
+   Proba de la pasul 9, pe cel puțin un iPhone și un Android, cu contul vostru și cu cel de recenzie.
+5. **Contul de recenzie** pregătit (`review-account.md`) și încercat în build-ul de testare.
+6. **Trimiterea la recenzie** (Apple și Google), cu notele din `store/review-notes.md`. Apple: „Manually release this
+   version” (o publicați voi după aprobare), ca să alegeți ziua.
+7. **După aprobare:** publicați; puneți linkurile din magazine în Setări › Aplicația mobilă; anunțați clientele
+   (email, Instagram) cu linkul `/app/intra`.
 
 ### Prima dată (o singură dată)
 1. **Android, primul AAB se încarcă de mână** (Google nu acceptă încărcarea automată pentru o aplicație nouă).
    GitHub › **Actions** › „Android” › **Run workflow** › branch `main`, **debifați „Încarcă…”** › Run.
-   După ~15 minute, în pagina rulării, la „Artifacts”, descărcați `adelaharu-1.0.0-…-aab` (zip; dezarhivați).
+   După ~15 minute, în pagina rulării, la „Artifacts”, descărcați `adelaharu-2.0.0-…-aab` (zip; dezarhivați).
    Play Console › Testare › **Testare internă** › Creați o versiune › încărcați fișierul `.aab` › Salvați › Lansați
-   pentru testare internă. La „Testeri” adăugați-vă adresa (și a programatorului).
+   pentru testare internă. La „Testeri” adăugați adresele voastre.
 2. **iOS, prima rulare creează certificatul**: Actions › „iOS” › Run workflow › bifați **„Prima rulare / capabilități
-   noi…”** › Run (~25–40 minute). Build-ul apare în App Store Connect › TestFlight după 10–30 de minute de procesare.
-3. Instalați TestFlight pe iPhone și Google Play (link de testare internă) pe Android; încercați aplicația cu contul
-   vostru și cu contul de recenzie.
+   noi…”** › Run (~25–40 minute). Build-ul apare în App Store Connect › TestFlight după 10–30 de minute.
+3. Instalați TestFlight pe iPhone și linkul de testare internă pe Android.
 
 ### De fiecare dată
-1. Programatorul crește versiunea în `app/package.json` (ex. `1.0.0` → `1.0.1`) și o pune pe `main`.
-   (Numărul intern de build crește singur.)
+1. Programatorul crește versiunea în `app/package.json` (ex. `2.0.0` → `2.0.1`; aceeași apare în User-Agent, după
+   care o recunoaște fragmentul) și o pune pe `main`. (Numărul intern de build crește singur.)
 2. **Android:** Actions › Android › Run workflow (bifat „Încarcă…”, stare `completed`) › în Play Console versiunea
    apare la Testare internă › o încercați › **„Promovați versiunea” › Producție** › notele de lansare › Trimiteți la
    recenzie. (Dacă Play răspunde „Only releases with status draft may be created on draft app”, rulați cu stare
    `draft` și lansați-o de mână din consolă.)
 3. **iOS:** Actions › iOS › Run workflow (nebifat „Prima rulare…”) › App Store Connect › TestFlight o încercați ›
-   tab-ul App Store › „+” versiune nouă (ex. 1.0.1) › alegeți Build-ul › „Ce este nou” › **Add for Review / Submit**.
-4. După aprobare: puneți linkurile din magazine în admin (prima dată) și, dacă e cazul, „Versiunea minimă”.
+   tab-ul App Store › „+” versiune nouă › alegeți Build-ul › „Ce este nou” › **Add for Review / Submit**.
+4. **Schimbări doar pe site** (fragmentul): fără versiune nouă de aplicație. Aceeași regulă: copie de siguranță,
+   versiunea nouă a fragmentului urcată ca fragment **nou, inactiv**, OK Mircea, se dezactivează cel vechi și se
+   activează cel nou, verificare imediată în browser și în aplicație. (Paza `AH_SPA` oprește două copii active
+   deodată, dar nu vă bazați pe ea.)
 
 ### O dată pe an
 - Apple Developer Program se reînnoiește (99 USD). Certificatul iOS expiră după 1 an: rulați „iOS” cu
@@ -282,52 +401,69 @@ schimbare. Peste limită, GitHub cere card și taxează pe minut.
 ## Pentru programator
 
 ### Fișierele
-- `.github/workflows/ci.yml`: la fiecare PR, aplicația (`npm run lint --if-present`, `typecheck`, `test`, `build`,
-  `build:mock`), serverul (`php -l server/*.php server/tests/*.php` pe PHP 8.1 și 8.4, `php server/tests/run.php`)
-  și `actionlint` pe workflow-uri.
-- `.github/workflows/android.yml`: la push pe `main` ⇒ APK debug ca artefact (14 zile); la `workflow_dispatch` ⇒
-  AAB semnat (artefact 30 de zile) + `fastlane android interna` (Play, track `internal`).
-- `.github/workflows/ios.yml`: doar `workflow_dispatch` ⇒ `fastlane ios testflight_beta`.
-- `fastlane/Fastfile`, `Appfile`, `Gemfile`, `Gemfile.lock` (fastlane 2.241.x; folosit cu
-  `BUNDLE_GEMFILE=fastlane/Gemfile`, din rădăcina repo-ului).
-- Toate acțiunile sunt fixate pe SHA-ul commit-ului (comentariul arată versiunea). Dependabot/Renovate le poate
-  actualiza.
+- `.github/workflows/ci.yml`: la fiecare PR: aplicația (`npm run lint --if-present`, `typecheck`, `test`, `build`
+  cu verificarea că există `dist/offline.html` și `dist/index.html`, apoi `.github/scripts/verifica-shell.mjs`);
+  serverul pe PHP 8.1 și 8.4 (`php -l` pe **toate** fișierele PHP din `server/`, paza `AH_SPA`, prefixul `ah_spa_`
+  al tuturor funcțiilor fragmentului (și `ah_spp_` pentru `ah-sp-partener.php`, când există) cu `.github/scripts/prefix-fragment.php` (tokenizer, deci ignoră JavaScript-ul
+  din șiruri), `php server/tests/run.php`); `actionlint` pe workflow-uri.
+- `.github/workflows/android.yml`: la push pe `main` care atinge `app/**` ⇒ APK debug (14 zile); la
+  `workflow_dispatch` ⇒ AAB semnat (30 de zile) + `fastlane android interna` (Play, track `internal`).
+- `.github/workflows/ios.yml`: doar `workflow_dispatch` ⇒ `fastlane ios testflight_beta`. Intrarea `push_ios`
+  (implicit bifată) pornește `.github/scripts/verifica-push-ios.sh`: la încărcare în TestFlight, cade dacă lipsește
+  `aps-environment` = `production` din `App.entitlements`, pachetul `firebase-ios-sdk` din proiect sau
+  `GoogleService-Info.plist` din `App.xcodeproj` (notele promit push). CI-ul verifică sintaxa scriptului.
+- `.github/scripts/verifica-shell.mjs`: după `cap sync`, pe `capacitor.config.json` generat (Android:
+  `app/src/main/assets/`, iOS: `App/App/`), iar în CI pe configul rezolvat (`npx cap config --json`). Cade dacă
+  `server.url` nu e `https://www.adelaharu.ro/spatiul-meu/`, dacă `errorPath` nu e `offline.html`, dacă User-Agent-ul
+  nu e `AdelaHaruApp/<versiunea din package.json> (ios|android)`, dacă `allowNavigation` are o gazdă care nu e în
+  `docs/arhitectura.md` sau dacă e pornit `cleartext` / `allowMixedContent`. Prinde mai ales un `server.url` lăsat pe
+  un calculator de test după o probă locală.
+- `fastlane/Fastfile`, `Appfile`, `Gemfile`, `Gemfile.lock` (fastlane 2.241.x, `BUNDLE_GEMFILE=fastlane/Gemfile`).
+- Toate acțiunile sunt fixate pe SHA (comentariul arată versiunea).
+
+### Ce s-a schimbat față de v1 în pipeline
+- Build-ul web e doar pagina offline (`app/offline.html` → `dist/offline.html` + `dist/index.html`), fără ecranele
+  React, fără `build:mock` și fără `VITE_PUSH`: push-ul se hotărăște **la rulare** (`AhApp.info().push`), după
+  existența `google-services.json` / Firebase Messaging în build.
+- Testele serverului sunt ale fragmentului v2 (`server/tests/run.php`, stuburi în `server/tests/stubs.php`).
+- `reference/` e în `.gitignore`: testul diferențial al ciclului (`ciclu.diferential.test.ts`) rulează pe
+  `app/src/offline/fixtures/sn235-ci.js` (copiat în repo) și sare doar partea „e la zi cu sn235” în CI.
+  După o schimbare a lui 235 pe site: `node scripts/extrage-ci.mjs` local, apoi commit.
 
 ### Detalii
-- Node 22, JDK 21 (Temurin), Ruby 3.3, Xcode `latest-stable` pe `macos-latest`. Apple cere SDK-ul iOS 26 (Xcode 26)
-  pentru încărcări din aprilie 2026 **(de verificat)**; Google cere target API 35 de la 31 aug. 2025 și API 36 de la
-  31 aug. 2026 **(de verificat)**; proiectul are `targetSdkVersion = 36`.
-- **Android:** semnarea fără modificări în `build.gradle`, prin `-Pandroid.injected.signing.*` (aceleași proprietăți
-  pe care le folosește Android Studio). `versionCode = 100 + github.run_number`, `versionName` = `app/package.json`
-  `version`, puse cu `sed` în `app/android/app/build.gradle` (pasul cade dacă nu găsește `versionCode N`, ex. dacă
-  proiectul trece la Kotlin DSL). Verificare semnătură pe AAB: ieșirea `jarsigner -verify` trebuie să conțină „jar verified” (codul de ieșire e 0 și pe un AAB nesemnat), iar amprenta SHA-256 a certificatului din AAB (`keytool -printcert -jarfile`) trebuie să fie aceeași cu a cheii de încărcare. Cheia se șterge de pe runner la final.
-- **iOS:** `setup_ci` (keychain temporar) › `match(type: appstore, readonly)` › `update_code_signing_settings`
-  (manual, „Apple Distribution”, profilul match, doar ținta `App`, doar Release) › `build_app` cu
-  `CURRENT_PROJECT_VERSION=<ultimul build TestFlight + 1>` și `MARKETING_VERSION=<package.json>` ca `xcargs`
-  (Info.plist folosește deja `$(MARKETING_VERSION)` / `$(CURRENT_PROJECT_VERSION)`) › `upload_to_testflight`
-  fără așteptarea procesării. Proiectul folosește SPM (`CapApp-SPM`), fără CocoaPods; dacă apare `App.xcworkspace`,
-  Fastfile îl folosește. `aps-environment` din entitlements e rescris în `production` de exportul App Store.
-  Inputul „creează certificate” pune `readonly: false, force: true` (profil nou, ex. după o capabilitate nouă).
-- Dacă `app/android` sau `app/ios` lipsesc din repo, workflow-urile fac `npx cap add` cu avertisment, dar
-  setările native (Info.plist, entitlements, manifest) se pierd; **folderele native trebuie să fie în git.**
-- `google-services.json` / `GoogleService-Info.plist` se scriu din secrete doar dacă există, și atunci build-ul web
-  primește `VITE_PUSH=1` (vezi `app/src/lib/push.ts`).
+- Node 22, JDK 21 (Temurin), Ruby 3.3, Xcode `latest-stable` pe `macos-latest` (Apple cere SDK-ul iOS 26 pentru
+  încărcări **(de verificat)**; Google cere target API 36 de la 31 aug. 2026 **(de verificat)**).
+- **Android:** semnarea prin `-Pandroid.injected.signing.*`; `versionCode = 100 + github.run_number`, `versionName`
+  din `app/package.json`, puse cu `sed` în `app/android/app/build.gradle`. Verificarea semnăturii AAB: textul
+  „jar verified” și aceeași amprentă SHA-256 ca a cheii de încărcare. Cheia se șterge de pe runner la final.
+- **iOS:** `setup_ci` › `match(appstore, readonly)` › `update_code_signing_settings` (manual, doar ținta `App`,
+  Release) › `build_app` cu `CURRENT_PROJECT_VERSION=<ultimul build TestFlight + 1>` și `MARKETING_VERSION=<package.json>`
+  › `upload_to_testflight`. Proiectul folosește SPM (`CapApp-SPM`), fără CocoaPods. Inputul „creează certificate”
+  pune `readonly: false, force: true` (profil nou, ex. după Push / Associated Domains).
+- Folderele native trebuie să fie în git (Info.plist cu `UIBackgroundModes audio`, `App.entitlements` cu
+  `applinks:www.adelaharu.ro`, `PrivacyInfo.xcprivacy`, manifestul Android cu App Links și `AhMediaService`).
 
-### Ce trebuie să mai facă aplicația (nu e în pipeline)
-1. **FCM pe iOS:** `@capacitor/push-notifications` dă pe iOS tokenul **APNs**, nu tokenul FCM, iar serverul trimite
-   prin FCM HTTP v1. E nevoie de Firebase Messaging pe iOS (ex. `@capacitor-firebase/messaging`, sau `FirebaseMessaging`
-   în `AppDelegate` cu `Messaging.messaging().apnsToken`) ca să ajungă la server un token FCM.
-2. `GoogleService-Info.plist` trebuie referit în proiectul Xcode (Copy Bundle Resources), altfel fișierul scris de
-   workflow nu ajunge în aplicație.
-3. `PrivacyInfo.xcprivacy` pentru aplicație (tipurile de date din `store/privacy-answers.md` și motivele pentru API-urile
-   „required reason”).
-4. `TARGETED_DEVICE_FAMILY` e acum `1,2` (iPhone + iPad) ⇒ Apple cere capturi de iPad și testează pe iPad. Pentru v1
-   recomand `1` (doar iPhone).
-5. Textul de pe meditațiile blocate pe iOS (vezi `store/review-notes.md`, „Riscuri”).
-6. Contul de recenzie pe server: `docs/review-account.md`.
+### Ce mai trebuie (în afara pipeline-ului)
+1. **Push pe iOS:** pachetul SPM `firebase-ios-sdk` (`FirebaseCore`, `FirebaseMessaging`) adăugat la ținta App și
+   `GoogleService-Info.plist` referit în proiect (Copy Bundle Resources); `AppDelegate` e deja pregătit
+   (`#if canImport(FirebaseMessaging)`). Plus `aps-environment` = `production` în `App.entitlements`. Workflow-ul iOS
+   **oprește** încărcarea în TestFlight până atunci, cât timp e bifat `push_ios` (implicit). O versiune fără push pe
+   iPhone se încarcă doar cu `push_ios` debifat **și** cu funcția 5 scoasă din notele Apple și rândul despre
+   notificări scos din fișa App Store.
+2. **`TARGETED_DEVICE_FAMILY`** e `1,2` (iPhone + iPad) ⇒ Apple cere capturi de iPad și testează pe iPad. Recomand `1`
+   pentru prima versiune.
+3. **Contul de recenzie** în fragment: `docs/review-account.md`. **Neimplementat (18 nov.); blochează trimiterea.**
+4. **Fără analiză și pixel în aplicație** (GA, `facebook-for-woocommerce`, atribuirea WooCommerce, Complianz):
+   cerință fermă în `arhitectura.md`, condiția etichetelor de confidențialitate (`store/privacy-answers.md`).
+   **Neimplementat (18 nov.); fără el nu se completează etichetele și nu se trimite.**
+5. **Ciclul refăcut din `Preferences`** când iOS golește `localStorage` (`arhitectura.md`, Puntea, punctul 3). Azi
+   `ciclu()` din fragment șterge copia și mementourile exact în acel caz; de reparat, cu test, înainte de TestFlight.
+6. **Vimeo cu `dnt=1`** pe orice iframe din aplicație (`arhitectura.md`); embed-urile site-ului îl au deja.
 
 ### Rulat local (verificare)
 ```
-bundle exec fastlane lanes                     # cu BUNDLE_GEMFILE=fastlane/Gemfile
+cd app && npm ci && npm test && npm run build && node ../.github/scripts/verifica-shell.mjs
+php -l server/ah-sp-aplicatie.php && php .github/scripts/prefix-fragment.php server/ah-sp-aplicatie.php && php server/tests/run.php
 actionlint .github/workflows/*.yml
+BUNDLE_GEMFILE=fastlane/Gemfile bundle exec fastlane lanes
 ```

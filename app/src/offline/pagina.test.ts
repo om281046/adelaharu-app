@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { zi0 } from './ciclu';
-import { htmlCiclu, htmlMeditatii } from './main';
+import { htmlCiclu, htmlMeditatii, peste } from './main';
 
 const azi = zi0('2026-11-18');
 
@@ -13,6 +13,14 @@ describe('blocul Ciclul meu din pagina offline', () => {
     expect(h).toContain('Ziua 12');
     expect(h).toContain('Vara interioară');
     expect(h).toContain('în jur de 5 decembrie (peste 17 zile)');
+  });
+  it('„peste N zile” cu „de” de la 20 în sus', () => {
+    expect(peste(2)).toBe('peste 2 zile');
+    expect(peste(19)).toBe('peste 19 zile');
+    expect(peste(20)).toBe('peste 20 de zile');
+    expect(peste(25)).toBe('peste 25 de zile');
+    const h = htmlCiclu({ starturi: ['2026-11-17'], lung: 35, men: 5 }, azi);
+    expect(h).toContain('(peste 34 de zile)');
   });
   it('întârziere', () => {
     expect(htmlCiclu({ starturi: ['2026-10-01'], lung: 28, men: 5 }, azi)).toContain('Menstruația ar fi trebuit să înceapă');

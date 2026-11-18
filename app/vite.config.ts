@@ -6,7 +6,8 @@ import { defineConfig, type Plugin } from 'vite';
 /**
  * Pagina offline e UN SINGUR fișier HTML, cu JS, CSS și fonturi incluse:
  * pe Android, Capacitor servește local doar adresa exactă din server.errorPath
- * (https://www.adelaharu.ro/offline.html); orice ./assets/… ar fi cerut de la site și ar lipsi offline.
+ * (https://www.adelaharu.ro/offline.html, pentru că server.hostname = www.adelaharu.ro);
+ * orice ./assets/… ar fi cerut de la site și ar lipsi offline.
  */
 const unSingurFisier = (): Plugin => ({
   name: 'ah-un-singur-fisier',

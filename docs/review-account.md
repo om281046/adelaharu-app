@@ -3,6 +3,12 @@
 Pentru: colegul de la `server/ah-sp-aplicatie.php`. De la: magazine și build. Context: `docs/store/review-notes.md`.
 Versiunea: v2 (18 nov. 2026). Înlocuiește cerința v1 (`/auth/cod`, `/auth/verifica` din `ah-app-api.php`, scos).
 
+> **Stare: NEIMPLEMENTAT** (verificat în `server/ah-sp-aplicatie.php`, 18 nov. 2026, 12:07: nicio setare „Contul de
+> recenzie”, niciun filtru pe `/ah-sp/v1/cod` sau `/ah-sp/v1/intra`, fără mențiunea din subiectul emailului de la
+> `sterge-cont`). **Blochează trimiterea la recenzie** (Apple 2.1). Gata înseamnă: tot ce e mai jos (punctele 1–9,
+> inclusiv subiectul „(contul de recenzie)” în `ah_spa_r_sterge_cont`), testele din punctul 9 în `server/tests/`
+> trecute, și o intrare reușită cu codul fix în build-ul din TestFlight / testarea internă.
+
 ## Problema
 
 În v2 aplicația deschide Spațiul meu, iar intrarea e cea din fragmentul 235: emailul → `POST /wp-json/ah-sp/v1/cod`
@@ -75,6 +81,8 @@ Orice altă adresă trece neatinsă (filtrul întoarce `$rez` primit). Corpul vi
    - metodă GET sau altă rută (`/ah-sp/v1/iesi`, `/ah-sp/v1/ciclu-date`) ⇒ `null`;
    - validarea codului la salvare (refuzate `123456`, `000000`, `5 cifre`, litere); hash-ul, nu codul, în opțiune;
    - golirea dispozitivelor atinge doar adresa de recenzie.
+   - `sterge-cont` pe adresa de recenzie ⇒ emailul echipei are „(contul de recenzie)” în subiect; pe altă adresă, nu;
+   - jurnalul nu conține niciodată codul (nici cel bun, nici cel greșit).
 
 ### Schiță (orientativă; numele exacte le alege colegul)
 
@@ -113,6 +121,20 @@ Prioritatea 4 (înaintea filtrului de portaluri, 5) nu contează pentru corectit
    ghicit; nu `123456`). Acolo se poate și opri (golind adresa).
 4. Același cod se trece în App Store Connect (App Review Information › Password) și în Play Console (Acces la
    aplicație). **Codul nu se pune în repo, în chat sau în emailuri.**
+
+## Partenerul de recenzie (contul „Pentru el”, când există `ah-sp-partener.php`)
+
+Contul lui nu are cod: intră cu un link personal permanent (`/pentru-el/?t=<token>`, `arhitectura.md`), care pe
+telefon deschide aplicația. Recenzorul nu are emailul, deci îi dăm linkul direct în note. **Nimic special în cod.**
+1. Cu contul de recenzie (ea), în Ciclul meu: ciclul salvat în cont (cu acordul), apoi invitația pentru
+   „Andrei”, `recenzie-el@adelaharu.ro` (a doua căsuță reală, la care are acces echipa), cu bifa de acord.
+2. Din emailul primit de `recenzie-el@`, linkul personal se copiază în App Review Information › Notes
+   (`<REVIEW_PARTNER_LINK>` din `store/review-notes.md`) și în Play Console › Acces la aplicație (a doua
+   instrucțiune, „Cont partener”).
+3. Dacă recenzorul își șterge accesul de partener sau „Oprește accesul” din contul ei, linkul nu mai merge:
+   se trimite o invitație nouă înainte de următoarea versiune. Același memento ca la reînnoirea Inner Temple.
+Cerință pentru colegul de la `ah-sp-partener.php`: limita de 2 parteneri activi și „Trimite din nou linkul” merg
+normal pentru aceste adrese; tokenul nu expiră singur (ca pentru oricine).
 
 ## De ce așa (riscuri)
 

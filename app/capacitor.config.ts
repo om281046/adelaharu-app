@@ -6,6 +6,11 @@ import type { CapacitorConfig } from '@capacitor/cli';
  *
  * - server.url: WebView-ul deschide direct pagina contului; ce adaugă echipa pe site apare singur.
  * - server.errorPath: pagina locală offline.html (un singur fișier, din `npm run build`), când site-ul nu răspunde.
+ * - server.hostname: gazda paginilor locale. Pe Android pagina offline devine https://www.adelaharu.ro/offline.html
+ *   (servită tot local, Bridge.getErrorUrl + WebViewLocalServer.isErrorUrl), deci pe aceeași origine cu server.url:
+ *   doar așa primește puntea Capacitor (addDocumentStartJavaScript se injectează numai pe originea lui server.url)
+ *   și poate citi Preferences / Filesystem / AhMedia. Cu „localhost” (implicit) pagina offline n-ar avea window.Capacitor.
+ *   Pe iOS schimbă doar gazda schemei locale: capacitor://www.adelaharu.ro.
  * - allowNavigation: doar aceste gazde rămân în aplicație. Orice altă adresă (Spotify, Apple Podcasts,
  *   Zoom, WhatsApp, mailto:, tel:) o deschide Capacitor singur în browserul / aplicația sistemului
  *   (iOS: WebViewDelegationHandler → UIApplication.open; Android: Bridge.launchIntent → ACTION_VIEW).
@@ -27,6 +32,7 @@ const config: CapacitorConfig = {
   server: {
     url: 'https://www.adelaharu.ro/spatiul-meu/',
     errorPath: 'offline.html',
+    hostname: 'www.adelaharu.ro',
     allowNavigation: ['www.adelaharu.ro', 'adelaharu.ro', 'player.vimeo.com', '*.vimeocdn.com', 'embed.podcasts.apple.com'],
     cleartext: false,
   },

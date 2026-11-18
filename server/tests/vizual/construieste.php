@@ -3,7 +3,9 @@
  * Harnașul vizual: construiește pagini statice cu Spațiul meu exact cum îl tipăresc fragmentele 235 (CSS, JS, ascunderea
  * temei) și 266 (extensiile), citite din reference/v2, hrănite cu datele de probă din tests/date/spatiul-meu.json.
  * Varianta „aplicatie” trece prin cârligele reale ale fragmentului ah-sp-aplicatie.php (do_shortcode_tag, wp_head),
- * cu User-Agent-ul aplicației. Plus o sală de curs de probă (butoanele 233, sugestiile 279, rândul HER BREATH, cadrul 235).
+ * cu User-Agent-ul aplicației. Plus o sală de curs de probă (butoanele 233, sugestiile 279, rândul HER BREATH, cadrul 235,
+ * „Mai departe” de la final (44), „Vreau să continui” (214), calendarul .ics) și o pagină de politici (Termeni și condiții)
+ * cu antetul și subsolul temei luate din reference/v2/spatiul-meu-public.html, plus banda Black Friday (178).
  * Rulare: php construieste.php <dosar>   (o face poze.cjs)
  */
 
@@ -108,6 +110,9 @@ $sala = '<div class="ahs" id="ahs"><header class="ahs-cap"><p class="ahs-mic" st
 	. '<section id="rsg" aria-label="Mai departe"><p class="rsg-h">Dacă vrei să mergi mai departe</p><p class="rsg-s">Câteva drumuri pe care le poți continua cu Adela, oricând simți.</p><div class="rsg-l"><a class="rsg-c" href="https://www.adelaharu.ro/practici-de-respiratie-constienta-pentru-femei-ocupate/?utm_source=x" target="_blank"><img src="/img/curs-4.svg" alt="" width="64" height="64"><span class="rsg-t"><span class="rsg-k">Program online</span><span class="rsg-n">HER BREATH, HER RESET</span><span class="rsg-d">9 zile de respirație ghidată.</span><span class="rsg-v">Vezi detalii →</span></span></a><a class="rsg-c" href="https://www.adelaharu.ro/product/meditatie-pentru-manifestarea-intentiilor/?utm_source=x" target="_blank"><img src="/img/med-5.svg" alt="" width="64" height="64"><span class="rsg-t"><span class="rsg-k">Meditație</span><span class="rsg-n">Meditație pentru manifestarea intențiilor</span><span class="rsg-d">O meditație scurtă despre intenție.</span><span class="rsg-v">Vezi detalii →</span></span></a><a class="rsg-c" href="https://www.adelaharu.ro/spatiul-meu/#ciclu"><img src="/img/dar.svg" alt="" width="64" height="64"><span class="rsg-t"><span class="rsg-k">Gratuit, în Spațiul meu</span><span class="rsg-n">Ciclul meu</span><span class="rsg-d">Calendarul ciclului tău.</span><span class="rsg-v">Deschide calendarul →</span></span></a></div></section>'
 	. '<div class="ahs-cutie ahhb-lacat"><p class="ahs-mic">HER BREATH, HER RESET</p><h2 style="font:400 22px Georgia,serif;margin:0">Ana, practicile te așteaptă</h2><p>Accesul tău s-a încheiat pe 2 noiembrie 2026. Progresul și jurnalul tău sunt păstrate aici.</p><p><a class="ahs-buton" href="https://www.adelaharu.ro/practici-de-respiratie-constienta-pentru-femei-ocupate/?revin=14900&amp;k=wc_order_x#abonare">Revino · 49 lei / lună</a></p><p class="ahs-mic">Ai parcurs 4 din 9 practici. Abonamentul îl oprești oricând.</p></div>'
 	. '<div class="ahs-cutie"><h2 style="font:400 22px Georgia,serif;margin:0">Accesul s-a încheiat</h2><p>Abonamentul tău la HER BREATH s-a încheiat. Dacă simți să revii, te poți abona din nou de pe <a href="https://www.adelaharu.ro/practici-de-respiratie-constienta-pentru-femei-ocupate/#abonare">pagina programului</a>.</p></div>'
+ 	. '<div class="ahs-cutie" id="ritm"><h2 style="font:400 22px Georgia,serif;margin:0">Ritmul tău</h2><p>În fiecare marți, la 08:00. Îți trimitem un memento pe email.</p><div class="ahs-unelte"><a class="ahs-buton usor" href="https://www.adelaharu.ro/?ah_sc_ics=14770&amp;s=0123456789abcdef">Adaugă în calendarul meu</a></div></div>'
+	. '<section class="ahs-pas-final" id="ahs-urmator"><h3>Mai departe</h3><a class="ahs-urm" href="https://www.adelaharu.ro/practici-de-respiratie-constienta-pentru-femei-ocupate/"><span class="ahs-urm-t"><b>HER BREATH, HER RESET</b><span>Nouă practici de respirație, în fiecare lună.</span><em>49 lei / lună</em><span class="ahs-urm-b">Vezi programul →</span></span></a></section>'
+	. '<section id="ah-dar7-curs" aria-label="Mai departe"><div class="k"><p class="q">Ce anume este diferit acum?</p><p>Dacă ți-a făcut bine, te invit să aduci respirația într-un ritual zilnic. Am adunat nouă practici care aduc contribuție în viața ta.</p><a class="cont" href="https://www.adelaharu.ro/practici-de-respiratie-constienta-pentru-femei-ocupate/?abonare=1">Vreau să continui practica lunară →</a><details><summary>Vezi cele nouă practici</summary><ol><li>Respirația inimii</li></ol><p class="pret">HER BREATH · 49 lei / lună · îl oprești oricând · <a href="https://www.adelaharu.ro/practici-de-respiratie-constienta-pentru-femei-ocupate/" style="color:inherit">despre program</a></p></details></div></section>'
 	. '<p class="ahs-mic ahs-alte">Tot în comanda ta: <a href="https://www.adelaharu.ro/sala-de-curs/?comanda=15002&amp;cheie=wc_order_z&amp;curs=wild-love">Wild Love</a></p></div>';
 $_SERVER['REQUEST_URI']      = '/sala-de-curs/?comanda=14770&cheie=wc_order_r';
 $GLOBALS['ah_test_e_pagina'] = false;
@@ -117,4 +122,28 @@ file_put_contents( $dir . '/sala-browser.html', pagina( 'Sala de curs', $cadru .
 $_SERVER['HTTP_USER_AGENT'] = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 AdelaHaruApp/1.0.0 (ios)';
 $cap_sa = ah_test_actiune( 'wp_head' );
 file_put_contents( $dir . '/sala-aplicatie.html', pagina( 'Sala de curs', $cadru . $css233 . $css279 . $sala_css . $cap_sa, 'ahspc-on ahspa-app', $sala . $nav ) );
+
+/* Termeni și condiții: antetul și subsolul temei exact ca pe site (din pagina publică salvată), fără scripturi, plus banda Black Friday */
+$pub    = file_get_contents( $ref . 'spatiul-meu-public.html' );
+$fara_s = function ( $h ) { return preg_replace( '~<script\b.*?</script>~is', '', $h ); };
+$antet  = $fara_s( '<div id="ahbq-banda"' . intre( $pub, '<div id="ahbq-banda"', '<div id="content" class="site-content">' ) );
+$subsol = $fara_s( '<div data-elementor-type="footer"' . intre( $pub, '<div data-elementor-type="footer"', '<!-- Consent Management' ) );
+$bf     = '<div class="ah-bf-banda" id="ah-bf-banda" role="region" aria-label="Black Friday"><b>Black Friday</b><span class="ah-bf-lung">−40% la cursuri, cărți și meditații · </span><span class="ah-bf-timp">până vineri, 23:59</span> · <a href="https://www.adelaharu.ro/black-friday/">Vezi ofertele</a><button type="button" class="ah-bf-x" aria-label="Închide">×</button></div>';
+$termeni = '<div id="content" class="site-content"><div class="ast-container"><div id="primary" class="content-area primary"><main id="main" class="site-main"><article class="page type-page status-publish"><header class="entry-header"><h1 class="entry-title">Termeni și condiții</h1></header><div class="entry-content clear">'
+	. '<h2>1. Cine suntem</h2><p>Site-ul www.adelaharu.ro este administrat de Adela Haru. Ne poți scrie oricând la <a href="mailto:contact@adelaharu.ro">contact@adelaharu.ro</a>.</p>'
+	. '<h2>2. Conturile și datele tale</h2><p>Datele personale le prelucrăm după <a href="https://www.adelaharu.ro/politica-de-confidentialitate/">Politica de confidențialitate</a>. Cookie-urile sunt descrise în <a href="https://www.adelaharu.ro/politica-de-cookie-uri/">Politica de cookie-uri</a>.</p>'
+	. '<h2>3. Programele online</h2><p>Programele sunt descrise pe pagina fiecăruia (de exemplu, <a href="https://www.adelaharu.ro/product/magia-ciclului-feminin/">Magia Ciclului Feminin</a>). Accesul începe după confirmarea comenzii, iar abonamentele lunare se pot opri oricând.</p>'
+	. '<h2>4. Dreptul de retragere</h2><p>Pentru conținutul digital, dreptul de retragere se pierde odată cu începerea accesului, cu acordul tău expres.</p>'
+	. '</div></article></main></div></div></div>';
+foreach ( array( 'browser' => 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Mobile/15E148 Safari/604.1', 'aplicatie' => 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 AdelaHaruApp/1.0.0 (ios)' ) as $var => $ua ) {
+	$_SERVER['HTTP_USER_AGENT'] = $ua;
+	unset( $_COOKIE['ah_app'] );
+	$_SERVER['REQUEST_URI']      = '/termeni-si-conditii/';
+	$GLOBALS['ah_test_e_pagina'] = false;
+	$GLOBALS['ah_test_email']    = '';
+	$cap_t   = ah_test_actiune( 'wp_head' );
+	$clase_t = implode( ' ', ah_test_filtru( 'body_class', array( 'page-template-default', 'page', 'theme-astra', 'ast-plain-container', 'elementor-default' ) ) );
+	if ( 'browser' === $var && '' !== $cap_t ) { fwrite( STDERR, "Fragmentul a schimbat politicile în browser!\n" ); exit( 1 ); }
+	file_put_contents( $dir . '/termeni-' . $var . '.html', pagina( 'Termeni și condiții', $cap_t, $clase_t, $bf . $antet . $termeni . $subsol ) );
+}
 echo "gata\n";

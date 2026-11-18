@@ -37,20 +37,33 @@ când îți ștergi contul.
 fiecărei faze sunt programate tot de telefon; ele nu trec prin serverul nostru. Datele ciclului (zilele
 menstruației, lungimea ciclului, situația ta) și notițele tale zilnice ajung în contul tău de pe server doar dacă
 alegi tu asta și îți dai acordul explicit (temeiul: consimțământul tău explicit, art. 9 alin. (2) lit. a GDPR).
-Acolo stau criptate, separat de restul contului, și le folosim doar ca să le vezi pe toate dispozitivele tale și,
-dacă vrei, ca să îți trimitem emailurile fazelor. Nu le folosim pentru reclame, nu le vindem și nu le dăm altcuiva.
-Îți poți retrage oricând acordul din Ciclul meu, iar datele se șterg de pe server.
+Acolo stau criptate, separat de restul contului, și le folosim doar ca să le vezi pe toate dispozitivele tale.
+Separat, dacă alegi să primești de la Adela un email la începutul fiecărei faze (tot cu acordul tău), păstrăm pentru
+asta adresa ta de email, prenumele, data primei zile a ultimei menstruații, lungimea ciclului și a menstruației.
+Aceste date stau într-o listă separată, legată de adresa ta, fără criptare, și le folosim doar ca să știm când să-ți
+scriem. Te poți dezabona din orice email, iar datele se șterg. Nu folosim datele ciclului pentru reclame, nu le vindem
+și nu le dăm altcuiva. Îți poți retrage oricând acordul din Ciclul meu, iar datele se șterg de pe server.
+<!-- CIORNĂ, pentru Adela și pentru juristă: paragraful despre emailurile fazelor e nou (18 nov.). -->
 
-**Linkul pentru partener.** Dacă alegi să trimiți cuiva linkul cu fazele tale, datele ciclului necesare calendarului
-sunt puse chiar în link, după semnul „#”, partea pe care browserul nu o trimite niciodată la server. Noi păstrăm
-doar o cheie a linkului, ca să-l poți opri oricând. Cine are linkul vede fazele tale până când îl oprești, așa că
-trimite-l doar cuiva în care ai încredere.
+**Partenerul tău („Pentru el”).** Din Ciclul meu îți poți invita partenerul, cu prenumele și emailul lui, doar
+după ce bifezi separat acordul ca el să vadă faza ta de azi și datele estimate ale fazelor următoare (temeiul:
+consimțământul tău explicit, art. 9 alin. (2) lit. a GDPR). El primește un link personal și vede doar atât: faza
+ta de azi, ce urmează și texte despre cum să fie alături de tine. Nu vede notițele tale, simptomele, situația ta
+sau zilele pe care le-ai notat. Poți opri accesul lui oricând, pe loc; când îți ștergi contul sau datele ciclului,
+accesul lui se șterge și el. Pentru el păstrăm prenumele, adresa de email (criptată), un cod al linkului (doar
+într-o formă care nu poate fi citită înapoi), data ultimei vizite și, dacă folosește aplicația și acceptă
+notificările, tokenul de notificări; îi trimitem un memento la începutul fiecărei faze. El își poate șterge
+oricând accesul din pagina lui.
+
+**Linkul vechi pentru partener.** Linkul cu fazele tale creat înainte de invitații are datele calendarului chiar în
+link, după semnul „#”, partea pe care browserul nu o trimite niciodată la server. Noi păstrăm doar o cheie a
+linkului, ca să-l poți opri oricând.
 
 Fazele sunt o estimare. Nu sunt o metodă de contracepție și nu înlocuiesc sfatul medicului.
 
 **Cât timp le păstrăm.** Cât timp ai cont. Din aplicație, la Mai mult › Aplicația › „Șterge contul”, ștergi oricând
 datele ciclului și notițele păstrate în cont (și abonarea la emailurile fazelor), înscrierea în Spațiul meu,
-dispozitivele conectate și tokenurile de notificări; pe telefon se șterg meditațiile descărcate, datele ciclului
+dispozitivele conectate, tokenurile de notificări și accesurile date partenerului; pe telefon se șterg meditațiile descărcate, datele ciclului
 și mementourile. Comenzile și facturile de pe site se păstrează cât cere legea. Dacă nu mai ai aplicația, ne poți
 scrie la contact@adelaharu.ro de pe adresa contului.
 
@@ -62,8 +75,14 @@ de a te adresa Autorității Naționale de Supraveghere a Prelucrării Datelor c
 ---
 
 *Note pentru proprietară (nu se publică):*
+- paragraful „Partenerul tău” se publică odată cu fragmentul `ah-sp-partener.php`; până atunci rămâne doar cel
+  despre linkul vechi (fără cuvântul „vechi”);
 - fraza „nu există instrumente de analiză sau urmărire” e adevărată doar dacă fragmentul oprește în aplicație Google
   Analytics și pixelul Meta (`privacy-answers.md`, „Condiția”); altfel se rescrie;
+- emailurile fazelor: datele lor (tabelul `ah_ciclu` din 41) **nu** sunt criptate; nu scrieți nicăieri „toate datele
+  ciclului sunt criptate”. Dacă se criptează vreodată tabelul, fraza „fără criptare” se scoate;
+- videourile din lecții vin de la Vimeo, în modul „fără urmărire” (`dnt=1`); dacă juristul vrea, se numește Vimeo
+  printre furnizori, alături de Firebase;
 - dacă emailurile fazelor conțin și promovări, trebuie spus aici (și temeiul pentru marketing);
 - perioada de păstrare a datelor ciclului pe server (ex. ștergere după 12 luni fără folosire) e de hotărât și de
   scris aici; azi 235 le păstrează până le șterge ea.

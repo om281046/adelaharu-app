@@ -75,12 +75,15 @@ jobs:
           [ ${#fisiere[@]} -gt 0 ] || { echo "::error::Niciun fișier PHP în server/"; exit 1; }
           for f in "${fisiere[@]}"; do php -l "$f"; done
 
-      - name: Fragmentul (antetul și paza)
+      - name: Fragmentele (paza și prefixul funcțiilor)
         run: |
           F=server/ah-sp-aplicatie.php
           test -f "$F" || { echo "::error::Lipsește $F"; exit 1; }
           grep -q "defined( 'AH_SPA' )" "$F" || { echo "::error::$F nu are paza AH_SPA"; exit 1; }
-          php .github/scripts/prefix-fragment.php "$F"
+          php .github/scripts/prefix-fragment.php "$F" ah_spa_
+          # „Pentru el” (docs/arhitectura.md), când există: prefixul lui e ah_spp_
+          P=server/ah-sp-partener.php
+          if [ -f "$P" ]; then php .github/scripts/prefix-fragment.php "$P" ah_spp_; fi
 
       - name: Testele serverului
         run: |
@@ -96,3 +99,7 @@ jobs:
         run: |
           bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/914e7df21a07ef503a81201c76d2b11c789d3fca/scripts/download-actionlint.bash) 1.7.12
           ./actionlint -color
+      - name: Scripturile shell din .github/scripts (sintaxă + verificarea push iOS fără încărcare)
+        run: |
+          for f in .github/scripts/*.sh; do bash -n "$f"; done
+          AH_PUSH_IOS=1 AH_UPLOAD=0 bash .github/scripts/verifica-push-ios.sh app

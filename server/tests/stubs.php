@@ -131,6 +131,32 @@ class WP_REST_Request {
 	public function get_route() { return $this->route; }
 }
 
+/* ---------- WooCommerce: comenzile (doar ce folosește ștergerea contului) ---------- */
+class Ah_Test_Comanda {
+	public $id; public $email; public $meta; public $note = array(); public $salvari = 0;
+	public function __construct( $id, $email, $meta = array() ) { $this->id = $id; $this->email = $email; $this->meta = $meta; }
+	public function get_id() { return $this->id; }
+	public function get_meta( $k ) { return $this->meta[ $k ] ?? ''; }
+	public function update_meta_data( $k, $v ) { $this->meta[ $k ] = $v; }
+	public function add_order_note( $n ) { $this->note[] = $n; }
+	public function save() { $this->salvari++; }
+}
+$GLOBALS['ah_test_wc'] = array();
+function wc_get_orders( $a ) {
+	$e = strtolower( (string) ( $a['billing_email'] ?? '' ) );
+	return array_values( array_filter( $GLOBALS['ah_test_wc'], function ( $c ) use ( $e ) { return '' !== $e && strtolower( $c->email ) === $e; } ) );
+}
+
+/* ---------- HTTP (FCM): răspunsurile le alege testul ---------- */
+$GLOBALS['ah_test_http'] = array();
+function wp_remote_post( $url, $a = array() ) {
+	$GLOBALS['ah_test_http'][] = array( $url, $a );
+	$f = $GLOBALS['ah_test_http_raspuns'] ?? null;
+	return $f ? $f( $url, $a ) : array( 'response' => array( 'code' => 200 ), 'body' => '{}' );
+}
+function wp_remote_retrieve_response_code( $r ) { return $r['response']['code'] ?? 0; }
+function wp_remote_retrieve_body( $r ) { return $r['body'] ?? ''; }
+
 /* ---------- $wpdb: SQLite în memorie ---------- */
 class Ah_Test_Wpdb {
 	public $prefix = 'wp_';

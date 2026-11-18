@@ -28,8 +28,12 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="https" />
                 <data android:host="www.adelaharu.ro" />
-                <data android:pathPrefix="/spatiul-meu" />
-                <data android:pathPrefix="/app/intra" />
+                <!-- aceleași căi ca ah_spa_aasa() pe iOS: /spatiul-meu, /spatiul-meu/*, /app/intra, /app/intra/*
+                     (path exact + pathPrefix cu „/”, ca să nu prindă și /spatiul-meu-altceva) -->
+                <data android:path="/spatiul-meu" />
+                <data android:pathPrefix="/spatiul-meu/" />
+                <data android:path="/app/intra" />
+                <data android:pathPrefix="/app/intra/" />
             </intent-filter>
         </activity>
 

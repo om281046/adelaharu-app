@@ -28,7 +28,8 @@ function verifica(nume, c) {
   if (s.url !== URL_CONT) erori.push(`server.url = ${JSON.stringify(s.url)}, trebuie ${URL_CONT}`);
   if (s.errorPath !== 'offline.html') erori.push(`server.errorPath = ${JSON.stringify(s.errorPath)}, trebuie "offline.html"`);
   if (s.cleartext === true) erori.push('server.cleartext e pornit (doar HTTPS în aplicație)');
-  if (s.hostname && s.hostname !== 'localhost') erori.push(`server.hostname = ${JSON.stringify(s.hostname)} (de scos)`);
+  // pagina offline trebuie să fie pe originea site-ului, altfel pe Android nu primește puntea Capacitor (app/capacitor.config.ts)
+  if (s.hostname !== 'www.adelaharu.ro') erori.push(`server.hostname = ${JSON.stringify(s.hostname)}, trebuie "www.adelaharu.ro"`);
   for (const g of s.allowNavigation || []) {
     if (!GAZDE_PERMISE.has(g)) erori.push(`allowNavigation are "${g}", care nu e în docs/arhitectura.md`);
   }

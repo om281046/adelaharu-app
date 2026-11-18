@@ -49,7 +49,7 @@ Infrequent/Mild” și, după caz, „Sexual content: Infrequent/Mild”; rating
 | Substanțe controlate (droguri, alcool, tutun) | Nu |
 | Umor vulgar | Nu |
 | Jocuri de noroc (reale sau simulate) | Nu |
-| Utilizatorii pot interacționa sau schimba conținut între ei | Nu (linkul pentru partener e un link trimis de ea, în afara aplicației; întâlnirile sunt pe Zoom) |
+| Utilizatorii pot interacționa sau schimba conținut între ei | Nu: fără mesaje, poze sau texte între utilizatori. Contul „Pentru el” arată partenerului doar faza ei (informație, nu schimb de conținut); întâlnirile sunt pe Zoom. *Nesigur:* dacă formularul întreabă de „partajarea informațiilor personale cu alți utilizatori”, răspundeți Da (faza ciclului, cu acordul ei) |
 | Aplicația partajează locația utilizatorului cu alții | Nu |
 | **Aplicația permite cumpărarea de bunuri digitale** | **Nu** (nimic nu se vinde în aplicație) |
 | Acces nerestricționat la internet | Nu |

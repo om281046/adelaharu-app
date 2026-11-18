@@ -3,8 +3,14 @@
 În v2 ecranele sunt chiar Spațiul meu de pe site, deci capturile se fac **din aplicația reală**, intrată cu
 **contul de recenzie** (`docs/review-account.md`), nu cu date de probă: așa nu apar date ale clientelor și capturile
 arată exact ce vede recenzorul (Apple 2.3.3). Capturile vechi din `docs/screenshots/` sunt ale ecranelor React din
-v1 și **nu se mai folosesc**. `docs/screenshots-v2/` are pagina offline (făcute de colega de la aplicație cu
-`npm run screenshots`, 390×844, bune pentru verificare).
+v1 și **nu se mai folosesc**. `docs/screenshots-v2/` are pagina offline (`offline-*.png`, din `npm run screenshots`) și Spațiul meu în modul
+aplicație (`aplicatie-*.png`, făcute de colegi pentru verificare): bune ca ghid de ce arătăm, **nu** pentru
+magazine (dimensiuni de verificare, date de probă).
+
+**Depinde de contul de recenzie, care încă nu e în fragment** (18 nov.: `review-account.md`, „Stare”). Până atunci,
+capturile pentru magazine nu se pot face cu el. Variantă de rezervă, fără să aștepte: aceeași adresă de recenzie, cu
+comenzile pregătite, intrată cu un cod adevărat citit din căsuța ei (căsuța e a echipei). Capturile nu arată codul,
+deci sunt la fel; nu se trimite însă nimic la recenzie până nu există codul fix.
 
 ## Cum le facem
 

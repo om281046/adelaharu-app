@@ -14,7 +14,7 @@ describe('ah_descarcate', () => {
       'text',
     ]);
     expect(l.map((x) => x.id)).toEqual(['2', '1']);
-    expect(l[0]).toMatchObject({ durata: 750, poza: '', dir: 'LIBRARY' });
+    expect(l[0]).toMatchObject({ durata: 750, poza: '', dir: 'DATA' });
     expect(l[1]).toMatchObject({ id: '1', durata: 600, poza: 'meditatii/1.jpg' });
   });
   it('nu aruncă pe date stricate', () => {

@@ -76,6 +76,14 @@ $caz = array(
 	'/wp-content/uploads/2026/11/x.jpg'              => '',
 	'/?ah_med_api=audio&id=5'                        => '',
 	'/?ciclul-ei'                                    => '',
+	'/?ah_sc_ics=14770&s=abc123'                     => '',  // sala (44): calendarul „Ritmul meu”
+	'/?ah_sc_ics_r=14770&s=abc123'                   => '',  // sala (44): calendarul „Repetă o practică”
+	'/?ahp=14770-0123456789-3'                       => '',  // linkul scurt din SMS
+	'/?ah_sc_ritm_stop=14770&s=abc123'               => '',  // oprirea mementourilor din email
+	'/?ah_sc_repeta_stop=14770&s=abc123'             => '',
+	'/?ahpx=1'                                       => $sp,
+	'/?s=abc123'                                     => $sp,
+	'/product/x/?ah_sc_ics=14770&s=abc'              => $sp, // cheia sălii doar pe prima pagină
 	'/'                                              => $sp,
 	'/cursuri-online/'                               => $sp,
 	'/product/magia-ciclului-feminin/'               => $sp,
@@ -131,9 +139,13 @@ egal( wp_json_encode( $C['ciclu']['produse'] ), '{}', 'produsele fazelor: obiect
 verifica( 4 === count( $C['ciclu']['faze'] ), 'textele fazelor rămân' );
 egal( array_column( $C['podcast']['episoade'], 'mai' ), array( null, null, null ), 'podcast fără „Mai departe: <curs>”' );
 egal( $C['podcast']['spotify'], $D['podcast']['spotify'], 'podcastul (gratuit) rămâne' );
-foreach ( array( 'recomanda', 'cadou', 'site', 'cursuri', 'yin' ) as $k ) {
+foreach ( array( 'recomanda', 'cadou', 'cursuri', 'yin' ) as $k ) {
 	egal( $C['linkuri'][ $k ], '', 'linkul ' . $k . ' golit' );
 }
+egal( $C['linkuri']['site'], $D['linkuri']['site'], 'linkul site rămâne (din el se face linkul pentru partener)' );
+$palink = $C['linkuri']['site'] . '?ciclul-ei#d=eyJ2IjoxfQ'; // CI.paLink din 235: D.linkuri.site + '?ciclul-ei#d=' + …
+verifica( 0 === strpos( $palink, 'https://' ), 'linkul pentru partener e o adresă întreagă (https://…)' );
+egal( ah_spa_destinatie( $palink ), '', 'linkul pentru partener se deschide și în aplicație' );
 egal( $C['linkuri']['whatsapp'], $D['linkuri']['whatsapp'], 'Ajutor pe WhatsApp rămâne' );
 egal( $C['carti'], $D['carti'], 'cărțile rămân' );
 egal( $C['dar'], $D['dar'], 'darul Adelei rămâne' );
@@ -179,8 +191,21 @@ verifica( in_array( 'ahspa-app', ah_test_filtru( 'body_class', array() ), true )
 $GLOBALS['ah_test_e_pagina'] = false;
 $_SERVER['REQUEST_URI']      = '/sala-de-curs/?comanda=1&cheie=x';
 verifica( false !== strpos( ah_test_actiune( 'wp_head' ), '"zona":"sala"' ), 'aplicație: puntea și în sala de curs' );
-$_SERVER['REQUEST_URI'] = '/politica-de-confidentialitate/';
-egal( ah_test_actiune( 'wp_head' ), '', 'aplicație: nimic pe paginile de politici' );
+verifica( false !== strpos( ah_test_actiune( 'wp_head' ), '#ahsp a[href="https://www.adelaharu.ro/"]' ), 'aplicație: „Înapoi pe site” ascuns din stil' );
+foreach ( array( '/politica-de-confidentialitate/', '/termeni-si-conditii/', '/politica-de-cookie-uri/?x=1' ) as $pol ) {
+	$_SERVER['REQUEST_URI'] = $pol;
+	egal( ah_spa_zona(), 'politici', 'zona politici: ' . $pol );
+	$cap = ah_test_actiune( 'wp_head' );
+	verifica( false !== strpos( $cap, '"zona":"politici"' ) && false !== strpos( $cap, 'html.ahspa-z-politici .elementor-location-header' ) && false !== strpos( $cap, '#ah-bf-banda' ), 'aplicație: pe ' . $pol . ' stilul ascunde antetul, subsolul și Black Friday' );
+	verifica( in_array( 'ahspa-politici', ah_test_filtru( 'body_class', array() ), true ), 'aplicație: clasa ahspa-politici pe ' . $pol );
+}
+ca_browser();
+$_SERVER['REQUEST_URI'] = '/termeni-si-conditii/';
+egal( ah_test_actiune( 'wp_head' ), '', 'browser: politicile neatinse' );
+ca_aplicatie();
+$_SERVER['REQUEST_URI'] = '/despre-adela/';
+egal( ah_spa_zona(), '', 'altă pagină: fără zonă' );
+verifica( false !== strpos( ah_spa_css(), '#ahs-urmator,#ah-dar7-curs{display:none!important}' ), 'sala: „Mai departe” (44) și „Vreau să continui” (214) ascunse' );
 
 /* ---------- 5. semnăturile linkurilor de descărcare ---------- */
 $acum = 1795000000;
@@ -305,6 +330,18 @@ foreach ( array( 'ana@exemplu.ro', 'ioana@exemplu.ro' ) as $e ) {
 update_option( 'ah_sp_conturi', array( 'ana@exemplu.ro' => array( 'cand' => 'x' ), 'ioana@exemplu.ro' => array( 'cand' => 'y' ) ) );
 update_option( 'ah_sp_vizite', array( md5( 'ana@exemplu.ro' ) => array( 'n' => 3 ), md5( 'ioana@exemplu.ro' ) => array( 'n' => 1 ) ) );
 update_option( 'ah_test_comenzi', array( 15003 => 'ana@exemplu.ro' ) ); // comenzile (WooCommerce) nu se ating
+// mementourile din sala de curs (44) pe comenzile ei: „Ritmul meu” cu SMS, „Repetă o practică”, una oprită deja; și ale Ioanei
+function ah_sc_ritm_index( $c, $r ) { $l = (array) get_option( 'ah_sc_ritm_comenzi', array() ); if ( ! empty( $r['activ'] ) ) { $l[ $c->get_id() ] = 1; } else { unset( $l[ $c->get_id() ] ); } update_option( 'ah_sc_ritm_comenzi', $l ); }
+function ah_sc_repeta_index( $c, $r ) { $l = (array) get_option( 'ah_sc_repeta_comenzi', array() ); if ( ! empty( $r['activ'] ) && ( ! empty( $r['email'] ) || ! empty( $r['sms'] ) ) ) { $l[ $c->get_id() ] = 1; } else { unset( $l[ $c->get_id() ] ); } update_option( 'ah_sc_repeta_comenzi', $l ); }
+$ritm_ana = array( 'start' => '2026-11-02', 'ora' => '08:00', 'email' => true, 'sms' => true, 'telefon' => '0742 000 111', 'activ' => true, 'curs' => 'respira', 'pas' => 7, 'trimise' => array( 1 ) );
+$GLOBALS['ah_test_wc'] = array(
+	new Ah_Test_Comanda( 15001, 'Ana@Exemplu.ro', array( '_ah_sc_ritm' => $ritm_ana, '_ah_sc_repeta' => array( 'lectie' => 2, 'start' => '2026-11-10', 'ora' => '20:00', 'email' => true, 'sms' => false, 'telefon' => '', 'activ' => true ) ) ),
+	new Ah_Test_Comanda( 15003, 'ana@exemplu.ro', array( '_ah_sc_ritm' => array( 'email' => true, 'sms' => false, 'telefon' => '', 'activ' => false ) ) ),
+	new Ah_Test_Comanda( 15004, 'ioana@exemplu.ro', array( '_ah_sc_ritm' => $ritm_ana ) ),
+);
+update_option( 'ah_sc_ritm_comenzi', array( 15001 => 1, 15004 => 1 ) );
+update_option( 'ah_sc_repeta_comenzi', array( 15001 => 1 ) );
+update_option( 'ah_respira_inscrieri', array( 'ana@exemplu.ro' => array( 'prenume' => 'Ana', 'tara' => 'RO', 'whatsapp' => '0742000111', 'zile' => array( 1, 2, 3 ) ), 'ioana@exemplu.ro' => array( 'prenume' => 'Ioana', 'zile' => array( 2 ) ) ) );
 $_COOKIE['ah_sp'] = 'x'; $_COOKIE['ah_med'] = 'y'; $_COOKIE['ah_ct_15003'] = 'z'; $_COOKIE['ah_sc15002'] = 'w'; $_COOKIE['alt_cookie'] = 'rămâne';
 $GLOBALS['ah_test_mail'] = array();
 egal( ah_spa_r_sterge_cont( new WP_REST_Request( $H, array() ) )->get_status(), 400, 'fără confirmare: 400' );
@@ -331,6 +368,18 @@ egal( (int) $wpdb->get_var( "SELECT COUNT(*) FROM wp_ah_ciclu WHERE email = 'ioa
 egal( (int) $wpdb->get_var( "SELECT COUNT(*) FROM wp_ah_spa_push WHERE email = 'ioana@exemplu.ro'" ), 1, 'tokenul altei cliente rămâne' );
 verifica( isset( get_option( 'ah_sp_conturi' )['ioana@exemplu.ro'] ) && false !== get_option( 'ah_med_d_' . md5( 'ioana@exemplu.ro' ) ), 'datele altei cliente rămân' );
 egal( get_option( 'ah_test_comenzi' ), array( 15003 => 'ana@exemplu.ro' ), 'comenzile rămân' );
+list( $c1, $c3, $c4 ) = $GLOBALS['ah_test_wc'];
+egal( array( $c1->meta['_ah_sc_ritm']['activ'], $c1->meta['_ah_sc_ritm']['sms'], $c1->meta['_ah_sc_ritm']['telefon'] ), array( false, false, '' ), 'sala: „Ritmul meu” oprit, fără SMS și fără telefon' );
+egal( $c1->meta['_ah_sc_ritm']['start'], '2026-11-02', 'sala: restul setării rămâne (comanda nu se schimbă altfel)' );
+egal( $c1->meta['_ah_sc_repeta']['activ'], false, 'sala: „Repetă o practică” oprit' );
+verifica( ! isset( get_option( 'ah_sc_ritm_comenzi' )[15001] ) && ! isset( get_option( 'ah_sc_repeta_comenzi' )[15001] ), 'sala: comanda scoasă din listele cronului (ah_sc_ritm_index / ah_sc_repeta_index)' );
+verifica( 2 === count( $c1->note ) && 1 === $c1->salvari, 'sala: notă pe comandă și o singură salvare' );
+verifica( 0 === count( $c3->note ) && 0 === $c3->salvari, 'sala: comanda cu mementourile oprite deja: neatinsă' );
+verifica( true === $c4->meta['_ah_sc_ritm']['activ'] && isset( get_option( 'ah_sc_ritm_comenzi' )[15004] ) && 0 === $c4->salvari, 'sala: mementourile altei cliente rămân' );
+verifica( ! isset( get_option( 'ah_respira_inscrieri' )['ana@exemplu.ro'] ), 'Respiră-te acasă: înscrierea ei ștearsă' );
+verifica( isset( get_option( 'ah_respira_inscrieri' )['ioana@exemplu.ro'] ), 'Respiră-te acasă: înscrierea altei cliente rămâne' );
+$corp = $GLOBALS['ah_test_mail'][0][2] ?? '';
+verifica( false !== strpos( $corp, '- sala_ritm: 1' ) && false !== strpos( $corp, '- sala_repeta: 1' ) && false !== strpos( $corp, '- respira_inscriere: 1' ) && false !== strpos( $corp, 'mementourile din sala de curs' ), 'emailul către echipă spune de sală și de Respiră-te acasă' );
 egal( count( $GLOBALS['ah_test_mail'] ), 1, 'un email către echipă' );
 egal( $GLOBALS['ah_test_mail'][0][0] ?? '', 'contact@adelaharu.ro', 'emailul merge la echipă' );
 verifica( false !== strpos( $GLOBALS['ah_test_mail'][0][2] ?? '', 'comenzile și facturile' ), 'emailul spune ce rămâne' );
@@ -355,9 +404,9 @@ $a = ah_spa_aasa();
 $det = $a['applinks']['details'][0];
 egal( $det['appID'], 'ABCDE12345.ro.adelaharu.app', 'AASA appID' );
 egal( $det['appIDs'], array( 'ABCDE12345.ro.adelaharu.app' ), 'AASA appIDs' );
-egal( $det['paths'], array( '/spatiul-meu', '/spatiul-meu/*', '/app/*' ), 'AASA căile: Spațiul meu (cu ?cont=) și /app/' );
-egal( $det['components'], array( array( '/' => '/spatiul-meu' ), array( '/' => '/spatiul-meu/*' ), array( '/' => '/app/*' ) ), 'AASA components' );
-egal( wp_json_encode( $a, JSON_UNESCAPED_SLASHES ), '{"applinks":{"apps":[],"details":[{"appID":"ABCDE12345.ro.adelaharu.app","appIDs":["ABCDE12345.ro.adelaharu.app"],"paths":["/spatiul-meu","/spatiul-meu/*","/app/*"],"components":[{"/":"/spatiul-meu"},{"/":"/spatiul-meu/*"},{"/":"/app/*"}]}]}}', 'AASA: JSON-ul exact' );
+egal( $det['paths'], array( '/spatiul-meu', '/spatiul-meu/*', '/app/intra', '/app/intra/*' ), 'AASA căile: Spațiul meu (cu ?cont=) și /app/intra, ca App Links pe Android' );
+egal( $det['components'], array( array( '/' => '/spatiul-meu' ), array( '/' => '/spatiul-meu/*' ), array( '/' => '/app/intra' ), array( '/' => '/app/intra/*' ) ), 'AASA components' );
+egal( wp_json_encode( $a, JSON_UNESCAPED_SLASHES ), '{"applinks":{"apps":[],"details":[{"appID":"ABCDE12345.ro.adelaharu.app","appIDs":["ABCDE12345.ro.adelaharu.app"],"paths":["/spatiul-meu","/spatiul-meu/*","/app/intra","/app/intra/*"],"components":[{"/":"/spatiul-meu"},{"/":"/spatiul-meu/*"},{"/":"/app/intra"},{"/":"/app/intra/*"}]}]}}', 'AASA: JSON-ul exact' );
 $al = ah_spa_assetlinks();
 egal( $al[0]['target']['package_name'], 'ro.adelaharu.app', 'assetlinks: pachetul' );
 egal( $al[0]['target']['sha256_cert_fingerprints'], array( $fp1, strtoupper( $fp2 ) ), 'assetlinks: amprentele valide, fără dubluri' );
@@ -413,6 +462,45 @@ $p   = explode( '.', $jwt );
 $pub = openssl_pkey_get_details( $k )['key'];
 egal( openssl_verify( $p[0] . '.' . $p[1], base64_decode( strtr( $p[2], '-_', '+/' ) ), $pub, OPENSSL_ALGO_SHA256 ), 1, 'JWT-ul FCM e semnat corect (RS256)' );
 egal( json_decode( base64_decode( strtr( $p[1], '-_', '+/' ) ), true )['scope'], 'https://www.googleapis.com/auth/firebase.messaging', 'JWT: scope-ul FCM' );
+
+// loturile cu cheie: cursorul după fiecare telefon, bugetul de timp verificat la fiecare telefon, fără dubluri
+update_option( 'ah_spa_fcm', wp_json_encode( array( 'project_id' => 'adela', 'client_email' => 'push@adela.iam.gserviceaccount.com', 'private_key' => $pem ) ) );
+set_transient( 'ah_spa_fcm_at_' . md5( 'push@adela.iam.gserviceaccount.com' ), 'at-proba', 3000 );
+$wpdb->query( 'DELETE FROM wp_ah_spa_push' );
+for ( $i = 1; $i <= 30; $i++ ) {
+	$wpdb->insert( 'wp_ah_spa_push', array( 'email' => 'c' . $i . '@exemplu.ro', 'token' => 'tok' . $i, 'token_h' => hash( 'sha256', 'tok' . $i ), 'platforma' => 'android', 'creat' => 'x', 'vazut' => 'x' ) );
+}
+$ids = array_map( 'intval', array_column( $wpdb->get_results( 'SELECT id FROM wp_ah_spa_push ORDER BY id' ), 'id' ) );
+delete_option( 'ah_spa_lucrari' );
+delete_transient( 'ah_spa_lot_lacat' );
+$lid = ah_spa_lucrare_noua( 'meditatie', array( 'id' => 501 ), 'O meditație nouă în Inner Temple', 'Respirația inimii', $sp . '#meditatii' );
+$tok = function () { return array_map( function ( $x ) { return json_decode( $x[1]['body'], true )['message']['token']; }, array_values( array_filter( $GLOBALS['ah_test_http'], function ( $x ) { return false !== strpos( $x[0], 'fcm.googleapis.com' ); } ) ) ); };
+// 1. cererea se oprește la al 8-lea telefon (timpul PHP): cursorul a rămas la al 7-lea
+$GLOBALS['ah_test_http'] = array();
+$GLOBALS['ah_test_http_raspuns'] = function () { if ( count( $GLOBALS['ah_test_http'] ) >= 8 ) { throw new RuntimeException( 'oprit' ); } return array( 'response' => array( 'code' => 200 ), 'body' => '{}' ); };
+try { ah_spa_lot(); } catch ( RuntimeException $x ) {}
+$j = ah_spa_lucrari()[ $lid ] ?? array();
+egal( array( (int) ( $j['cursor'] ?? -1 ), (int) ( $j['trimise'] ?? -1 ) ), array( $ids[6], 7 ), 'lot oprit la mijloc: cursorul e la ultimul telefon anunțat' );
+egal( $GLOBALS['ah_test_http'][0][1]['timeout'] ?? 0, 3, 'FCM: 3 secunde pe telefon' );
+delete_transient( 'ah_spa_lot_lacat' ); // lacătul expiră
+// 2. bugetul de timp: FCM încet (60 ms), buget 0,15 s → câteva telefoane, cursorul scris, lotul reprogramat
+$GLOBALS['ah_test_http_raspuns'] = function () { usleep( 60000 ); return array( 'response' => array( 'code' => 200 ), 'body' => '{}' ); };
+$GLOBALS['ah_test_cron'] = array();
+ah_spa_lot( 0.15 );
+$j = ah_spa_lucrari()[ $lid ] ?? array();
+verifica( isset( $j['cursor'] ) && $j['cursor'] > $ids[6] && $j['cursor'] < $ids[29] && (int) $j['trimise'] === 7 + count( $tok() ) - 8, 'bugetul de timp: oprit între telefoane, cursorul la ultimul anunțat' );
+verifica( (bool) wp_next_scheduled( 'ah_spa_lot' ) && false === get_transient( 'ah_spa_lot_lacat' ), 'lotul neterminat: reprogramat, lacătul ridicat' );
+// 3. restul
+$GLOBALS['ah_test_http_raspuns'] = null;
+ah_spa_lot();
+$t = $tok();
+egal( ah_spa_lucrari(), array(), 'lucrarea cu cheie s-a încheiat' );
+egal( count( array_unique( $t ) ), 30, 'fiecare telefon a primit notificarea' );
+egal( count( $t ) - count( array_unique( $t ) ), 1, 'cel mult o dublură: doar telefonul la care s-a oprit cererea' );
+egal( array_keys( array_filter( array_count_values( $t ), function ( $n ) { return $n > 1; } ) ), array( 'tok8' ), 'dublura e chiar telefonul din clipa opririi' );
+verifica( false !== strpos( implode( "\n", array_column( get_option( 'ah_spa_jurnal' ), 1 ) ), 'lucrare gata: meditatie · O meditație nouă în Inner Temple — 30 telefoane' ), 'jurnalul: 30 de telefoane' );
+delete_option( 'ah_spa_fcm' );
+$GLOBALS['ah_test_http_raspuns'] = null;
 
 /* ---------- 11. JS: puntea are tot ce cere arhitectura ---------- */
 $js = ah_spa_js();

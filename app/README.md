@@ -14,7 +14,7 @@ Ecranele React, API-ul și datele de probă din v1 au fost scoase (rămân în i
 |---|---|---|
 | Pagina principală | `capacitor.config.ts` → `server.url` | WebView-ul încarcă Spațiul meu; ce adaugă echipa pe site apare fără versiune nouă. |
 | Recunoașterea aplicației | `ios.appendUserAgent` / `android.appendUserAgent` | UA se termină cu `AdelaHaruApp/2.0.0 (ios)` sau `(android)`; versiunea vine din `package.json`. |
-| Fără internet | `server.errorPath: 'offline.html'` | Capacitor încarcă pagina locală când pagina principală nu se încarcă (iOS: `didFail`/`didFailProvisionalNavigation`; Android: `onReceivedError` **și** `onReceivedHttpError` pe cadrul principal, deci și la un 404/500 de pe site). |
+| Fără internet | `server.errorPath: 'offline.html'` | Capacitor încarcă pagina locală când pagina principală nu se încarcă (iOS: `didFail`/`didFailProvisionalNavigation`, mai puțin navigările anulate -999 / WebKit 102, pe care le filtrează `AhNavigare` din `AhAppPlugin.swift`; Android: `onReceivedError` **și** `onReceivedHttpError` pe cadrul principal, deci și la un 404/500 de pe site). |
 | Linkuri externe | `server.allowNavigation` | Rămân în aplicație doar `www.adelaharu.ro`, `adelaharu.ro`, `player.vimeo.com`, `*.vimeocdn.com`, `embed.podcasts.apple.com`. Orice altă adresă de nivel superior (Spotify, Apple Podcasts, Zoom, WhatsApp, `mailto:`, `tel:`) o deschide **Capacitor singur** în aplicația/browserul sistemului — nu e nevoie de script: iOS `WebViewDelegationHandler.decidePolicyFor` → `UIApplication.shared.open`; Android `Bridge.launchIntent` → `Intent.ACTION_VIEW`. iframe-urile (Vimeo, YouTube) nu sunt afectate. |
 | Pluginuri | `package.json` | App, PushNotifications, LocalNotifications, Preferences, Filesystem, FileTransfer (`@capacitor/file-transfer`), Browser, Device, SplashScreen, StatusBar + `AhApp` și `AhMedia` (ale noastre). Pagina site-ului le folosește prin `window.Capacitor.Plugins.*` (Capacitor injectează puntea pe originea `https://www.adelaharu.ro`). |
 | Splash, bara de sus | `plugins.SplashScreen`, `plugins.StatusBar`, `SystemBars` | Fond `#FBF6F3` (Spațiul meu), splash ascuns singur după 1,5 s (puntea îl poate ascunde mai devreme cu `SplashScreen.hide()`); seara: `StatusBar.setStyle({style:'DARK'})` din punte. |
@@ -27,11 +27,15 @@ Ecranele React, API-ul și datele de probă din v1 au fost scoase (rămân în i
   Linkurile cu `target="_blank"` (și `window.open`) se deschid **mereu** în Safari, chiar spre adelaharu.ro
   (`createWebViewWith`): fragmentul trebuie să scoată `target=_blank` de pe linkurile interne, în aplicație.
 - **Android**: puntea JS (`window.Capacitor`) se injectează doar pe originea din `server.url` (`addDocumentStartJavaScript`),
-  nu și pe Vimeo/Apple. Pagina offline e servită local la `https://www.adelaharu.ro/offline.html`
-  (`WebViewLocalServer.isErrorUrl`), dar **orice alt fișier** de la acea adresă ar fi cerut de la site — de aceea
-  pagina offline e un singur HTML cu JS, CSS și fonturi incluse (vezi `vite.config.ts`).
-- iOS: pagina offline e `capacitor://localhost/offline.html`; fișierele descărcate se citesc prin
-  `capacitor://localhost/_capacitor_file_/…` (`Capacitor.convertFileSrc`).
+  nu și pe Vimeo/Apple, și atunci serverul local nu mai injectează nimic nici în fișierele locale. Adresa paginii offline
+  e `scheme://server.hostname/offline.html` (`Bridge.getErrorUrl`); de aceea `server.hostname` e **`www.adelaharu.ro`**:
+  pagina offline e `https://www.adelaharu.ro/offline.html`, servită local (`WebViewLocalServer.isErrorUrl`) și pe
+  originea punții, deci are `window.Capacitor` (Preferences, Filesystem, AhMedia). Cu `localhost` (implicit) ar fi
+  `https://localhost/offline.html`, fără punte: fără ciclu, fără descărcări. **Orice alt fișier** de la acea adresă
+  ar fi cerut de la site — de aceea pagina offline e un singur HTML cu JS, CSS și fonturi incluse (vezi `vite.config.ts`).
+  De verificat pe telefon: în pagina offline, `window.Capacitor.Plugins.Preferences` există (Chrome › `chrome://inspect`).
+- iOS: pagina offline e `capacitor://www.adelaharu.ro/offline.html`; fișierele descărcate se citesc prin
+  `capacitor://www.adelaharu.ro/_capacitor_file_/…` (`Capacitor.convertFileSrc`).
 - `contentInset: 'automatic'` pe iOS, pentru că Spațiul meu nu are `viewport-fit=cover`. Dacă fragmentul îl adaugă
   în aplicație (sn235 folosește deja `env(safe-area-inset-*)`), se trece pe `'never'`.
 
@@ -57,7 +61,7 @@ Textele noi sunt marcate `CIORNĂ` în cod, pentru Adela. Textele fazelor și si
 | Cheie Preferences | Scrisă de punte | Formă |
 |---|---|---|
 | `ah_ciclu` | la fiecare schimbare în Ciclul meu | JSON `{starturi:["YYYY-MM-DD",…], lung, men, sit, actualizat}` (aceleași câmpuri ca `localStorage.ahsp_ciclu`; ideal rezultatul lui `CI.d()`, care unește și `ah_ciclu_v1`) |
-| `ah_descarcate` | la descărcare / ștergere | JSON `[{id, titlu, durata, fisier, poza, descarcat, dir?}]`; `fisier`/`poza` = căi relative (`meditatii/12.mp3`) în `dir` (implicit `LIBRARY`; acceptă `LIBRARY_NO_CLOUD`, `DATA`, `CACHE`) sau `file://…`; `durata` în secunde (sau „12:30”) |
+| `ah_descarcate` | la descărcare / ștergere | JSON `[{id, titlu, durata, fisier, poza, descarcat, dir?}]`; `fisier`/`poza` = căi relative (`meditatii/12.mp3`) în `dir` (puntea scrie `LIBRARY_NO_CLOUD` pe iOS, fără copie în iCloud, și `DATA` pe Android; dacă lipsește, același folder; acceptă și `LIBRARY`, `CACHE`) sau `file://…`; `durata` în secunde (sau „12:30”) |
 
 Pluginurile noastre (le folosește și puntea):
 
@@ -82,6 +86,12 @@ AhMedia.addListener('actiune', ({tip, pozitie}) => …); // play | pause | inain
   ca acțiuni personalizate), căștile/ceasul/mașina trimit și ele comenzile. Sunetul rămâne în WebView; pluginul doar
   arată starea și trimite apăsările înapoi. Pornește doar la o apăsare pe Play (regula Android 12+), iese din prim-plan
   la pauză, dispare la „stop” sau la închiderea aplicației din lista de aplicații.
+  Îl folosesc **amândouă**: pagina offline (`player.ts`) și puntea de pe site pentru Inner Temple / sala de curs
+  (`AM` în `ah-sp-aplicatie.php`, secțiunea 6: oglindește `<audio>` la play/pauză/seek/metadate + la 15 s, ascultă
+  `actiune`, `opreste()` la `pagehide` și la final).
+- **Pagina offline și revenirea internetului**: dacă ascultă o meditație descărcată, revenirea conexiunii **nu** o scoate din
+  pagină; apare discret „Conexiunea a revenit. Deschide Spațiul meu” (CIORNĂ). La plecare (`deschideSite`, `pagehide`)
+  se opresc sunetul și notificarea AhMedia.
 
 ## Push
 
@@ -92,7 +102,9 @@ Ghidat la rulare, fără variabile de build: `AhApp.info().push` e `true` doar d
   `#if canImport(FirebaseMessaging)`: fără SDK se compilează ca acum; cu SDK trimite la Capacitor tokenul **FCM**
   (serverul trimite prin FCM HTTP v1). Tot atunci: capabilitatea Push Notifications + `aps-environment` în `App.entitlements`.
 
-Fără Firebase, aplicația merge normal; puntea doar nu cere permisiunea de notificări.
+Fără Firebase, aplicația merge normal; puntea doar nu cere permisiunea de notificări. Puntea (`PUSH.disponibil()` în
+`ah-sp-aplicatie.php`) întreabă `AhApp.info().push` înainte de întrebare, de comutatorul „Notificări” și de orice
+`register()`/`unregister()` (pe Android, fără Firebase, oricare din ele oprește aplicația); fără `AhApp` = fără push.
 
 ## Comenzi
 

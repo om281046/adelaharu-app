@@ -1,14 +1,19 @@
 /**
  * Meditațiile descărcate, din Preferences `ah_descarcate` (scris de puntea din ah-sp-aplicatie.php):
- *   [{id, titlu, durata, fisier, poza, descarcat}]
- * `fisier` și `poza` sunt căi relative la Directory.Library (ex. „meditatii/12.mp3”, „meditatii/12.jpg”);
+ *   [{id, titlu, durata, fisier, poza, dir, descarcat}]
+ * `fisier` și `poza` sunt căi relative la folderul `dir` (ex. „meditatii/12.mp3”, „meditatii/12.jpg”);
  * acceptăm și o adresă completă file://… sau o cale absolută, dacă puntea o scrie așa.
- * Câmp opțional `dir`: folderul Capacitor (LIBRARY implicit; LIBRARY_NO_CLOUD dacă puntea vrea
- * fișierele scoase din copia iCloud — vezi README, „De hotărât”).
+ * `dir`: folderul Capacitor. Puntea scrie LIBRARY_NO_CLOUD pe iOS (fără copie în iCloud) și DATA pe Android
+ * (docs/arhitectura.md §4); dacă lipsește, folosim același folder ca puntea (dosarImplicit).
  */
 
 export type Dosar = 'LIBRARY' | 'LIBRARY_NO_CLOUD' | 'DATA' | 'CACHE';
 const DOSARE: Dosar[] = ['LIBRARY', 'LIBRARY_NO_CLOUD', 'DATA', 'CACHE'];
+
+/** Folderul în care scrie puntea (var DIR din ah-sp-aplicatie.php): iOS LIBRARY_NO_CLOUD, Android DATA. */
+export function dosarImplicit(platforma: string): Dosar {
+  return platforma === 'ios' ? 'LIBRARY_NO_CLOUD' : 'DATA';
+}
 
 export interface Descarcata {
   id: string;
@@ -44,7 +49,7 @@ export function caleSigura(c: string): boolean {
   return !c.split('/').includes('..');
 }
 
-export function citesteDescarcate(brut: unknown): Descarcata[] {
+export function citesteDescarcate(brut: unknown, implicit: Dosar = 'DATA'): Descarcata[] {
   if (!Array.isArray(brut)) return [];
   const vazute = new Set<string>();
   const out: Descarcata[] = [];
@@ -63,7 +68,7 @@ export function citesteDescarcate(brut: unknown): Descarcata[] {
       durata: secunde(o.durata),
       fisier,
       poza: caleSigura(poza) ? poza : '',
-      dir: DOSARE.includes(o.dir as Dosar) ? (o.dir as Dosar) : 'LIBRARY',
+      dir: DOSARE.includes(o.dir as Dosar) ? (o.dir as Dosar) : implicit,
       descarcat: typeof d === 'number' ? d : Date.parse(sir(d)) || 0,
     });
   }

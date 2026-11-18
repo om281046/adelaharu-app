@@ -9,9 +9,9 @@
 import './fonturi.css';
 import './stil.css';
 
-import { adresaFisier, ascunde_splash, bara_stare, existaFisier, platforma, preferinta, uriNativ } from './cap';
+import { adresaFisier, ascunde_splash, bara_stare, existaFisier, mediaOpreste, platforma, preferinta, uriNativ } from './cap';
 import { F, SIT, azi0, citesteJson, data, situatie, ziua, type ZiCiclu } from './ciclu';
-import { ceas, citesteDescarcate, durataScurta, type Descarcata } from './descarcate';
+import { ceas, citesteDescarcate, dosarImplicit, durataScurta, type Descarcata } from './descarcate';
 import { Player, SALT, type Piesa } from './player';
 
 export const SITE = 'https://www.adelaharu.ro/spatiul-meu/';
@@ -57,6 +57,9 @@ function inel(z: ZiCiclu): string {
   return `<svg viewBox="0 0 220 220" class="ci-inel" role="img" aria-label="Ziua ${z.zi} din ${z.L}, ${esc(Fz.nume)}">${arcuri}<circle cx="${m[0].toFixed(1)}" cy="${m[1].toFixed(1)}" r="11" fill="var(--card)" stroke="${Fz.c}" stroke-width="4"/><text x="110" y="100" text-anchor="middle" class="ci-zi">Ziua ${z.zi}</text><text x="110" y="126" text-anchor="middle" class="ci-din">din ${z.L}</text></svg>`;
 }
 
+/** „peste 5 zile”, „peste 25 de zile”: de la 20 în sus româna cere „de” (urm ≤ 39 aici, deci fără cazul 101–119). */
+export const peste = (n: number) => `peste ${n} ${n >= 20 ? 'de ' : ''}zile`;
+
 /** Blocul „Ciclul meu”, din datele salvate de punte în Preferences. */
 export function htmlCiclu(brut: unknown, azi: number): string {
   const sit = situatie(brut);
@@ -79,7 +82,7 @@ export function htmlCiclu(brut: unknown, azi: number): string {
   const urm = z.urm - azi;
   const urmTxt = z.peste
     ? 'Menstruația ar fi trebuit să înceapă. Când începe, o poți nota în Ciclul meu.' // CIORNĂ (adaptat: aici nu e butonul de pe site)
-    : `Următoarea menstruație: în jur de ${data(z.urm)} (${urm === 1 ? 'mâine' : 'peste ' + urm + ' zile'}).`;
+    : `Următoarea menstruație: în jur de ${data(z.urm)} (${urm === 1 ? 'mâine' : peste(urm)}).`;
   const nota = S.nota ? `<p class="ci-sit">${esc(S.nota)}</p>` : '';
   return cap(
     `<div class="dar ci-azi" style="--ci:${Fz.c}">${inel(z)}<div class="ci-txt"><p class="ci-faz">${esc(Fz.faza)}</p><h2>${esc(Fz.nume)}</h2><p class="ci-tema">${esc(Fz.tema)}</p><p class="ci-urm">${esc(urmTxt)}</p></div></div>${nota}`,
@@ -125,6 +128,7 @@ function htmlPlayer(): string {
   <button type="button" class="pl-x" id="pl-x" aria-label="Închide playerul">${ic('inchide')}</button></div>
   <input type="range" id="pl-poz" min="0" max="100" step="1" value="0" aria-label="Poziția în meditație">
   <div class="pl-timp"><span id="pl-t0">0:00</span><span id="pl-t1">0:00</span></div>
+  <p class="pl-revenit" id="pl-revenit" hidden><span>Conexiunea a revenit.</span><button type="button" id="pl-deschide">Deschide Spațiul meu</button></p>
   <div class="pl-but">
    <button type="button" id="pl-inapoi" aria-label="Înapoi ${SALT} secunde">${ic('inapoi')}</button>
    <button type="button" id="pl-pp" class="pl-pp" aria-label="Ascultă">${ic('play')}</button>
@@ -148,6 +152,26 @@ async function legaturaMerge(ms = 8000): Promise<boolean> {
   }
 }
 
+/** Playerul paginii (unul singur); îl ținem aici ca revenirea conexiunii să nu întrerupă o meditație. */
+let player: Player | null = null;
+
+/** Plecăm spre Spațiul meu: întâi oprim sunetul și notificarea AhMedia (site-ul nu le mai ascultă). */
+function deschideSite() {
+  player?.opreste();
+  mediaOpreste();
+  location.replace(SITE);
+}
+
+/** Conexiunea a revenit în timp ce ascultă: nu o scoatem din meditație, doar îi spunem, discret. CIORNĂ */
+function arataRevenit() {
+  const r = g('pl-revenit');
+  if (r) r.hidden = false;
+  const b = g('reincearca');
+  if (b) b.textContent = 'Deschide Spațiul meu';
+  const m = g('re-msg');
+  if (m) m.textContent = 'Conexiunea a revenit.';
+}
+
 let incerca: Promise<void> | null = null;
 function incearcaDinNou(automat = false): Promise<void> {
   if (incerca) return incerca;
@@ -157,8 +181,13 @@ function incearcaDinNou(automat = false): Promise<void> {
   if (m) m.textContent = 'Verificăm conexiunea…'; // CIORNĂ
   incerca = legaturaMerge().then((ok) => {
     incerca = null;
+    if (ok && automat && player?.stare.piesa) {
+      if (b) b.disabled = false;
+      arataRevenit();
+      return;
+    }
     if (ok) {
-      location.replace(SITE);
+      deschideSite();
       return;
     }
     if (b) b.disabled = false;
@@ -178,7 +207,7 @@ export async function porneste(): Promise<void> {
   document.documentElement.dataset.platforma = platforma();
 
   const [cicluBrut, descBrut] = await Promise.all([preferinta('ah_ciclu'), preferinta('ah_descarcate')]);
-  const lista = citesteDescarcate(citesteJson(descBrut));
+  const lista = citesteDescarcate(citesteJson(descBrut), dosarImplicit(platforma()));
   const randuri: Rand[] = await Promise.all(
     lista.map(async (d) => {
       const [src, poza, pozaNativ, exista] = await Promise.all([
@@ -212,6 +241,8 @@ export async function porneste(): Promise<void> {
 
   g('reincearca')?.addEventListener('click', () => void incearcaDinNou());
   window.addEventListener('online', () => void incearcaDinNou(true));
+  // la plecarea din pagină (orice navigare), notificarea Android a playerului nu trebuie să rămână „în redare”
+  window.addEventListener('pagehide', () => mediaOpreste());
 
   legaPlayer(randuri);
   ascunde_splash();
@@ -221,6 +252,7 @@ function legaPlayer(randuri: Rand[]) {
   const el = g('player');
   if (!el) return;
   const P = new Player();
+  player = P;
   (window as unknown as { ahOfflinePlayer?: Player }).ahOfflinePlayer = P;
   const poz = g('pl-poz') as HTMLInputElement;
   let tragere = false;
@@ -241,6 +273,7 @@ function legaPlayer(randuri: Rand[]) {
   g('pl-inapoi')?.addEventListener('click', () => P.sari(-SALT));
   g('pl-inainte')?.addEventListener('click', () => P.sari(SALT));
   g('pl-x')?.addEventListener('click', () => P.opreste());
+  g('pl-deschide')?.addEventListener('click', () => deschideSite());
   poz.addEventListener('input', () => {
     tragere = true;
     const t0 = g('pl-t0');

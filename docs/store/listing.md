@@ -82,7 +82,7 @@ CICLUL MEU
 • Vezi în ce fază ești azi, ce se întâmplă în corpul tău și ce îți face bine acum.
 • Notițe pentru fiecare zi, ca să-ți cunoști ritmul de la o lună la alta.
 • Mementouri blânde la începutul fiecărei faze, programate chiar pe telefonul tău.
-• Un link pentru partenerul tău, ca să știe și el în ce anotimp ești. Îl poți opri oricând.
+• Dacă vrei, îl inviți pe partenerul tău: el vede doar anotimpul tău de azi și ce urmează, cu sfaturi despre cum să fie alături de tine. Tu hotărăști și poți opri accesul oricând.
 
 ÎNTÂLNIRI ȘI PODCAST
 • Întâlnirile live la care te-ai înscris, cu un memento înainte să înceapă, și înregistrările lor.
@@ -107,10 +107,21 @@ Verificat față de reguli: fără prețuri, „cumpără”, „abonează-te”
 Fiecare afirmație corespunde unei funcții din `docs/arhitectura.md` (v2). **Dacă la lansare vreuna nu merge în
 build-ul trimis (ex. notificările push fără Firebase, descărcarea offline), rândul se scoate din text și din
 capturi** (Apple 2.3.1: metadate exacte). De verificat în special:
-- „notițe pentru fiecare zi” și „linkul pentru partener”: există în Ciclul meu (235, 10 nov.);
+- „notițe pentru fiecare zi”: există în Ciclul meu (235, 10 nov.);
+- „îl inviți pe partenerul tău”: cere fragmentul `ah-sp-partener.php` („Pentru el”, `arhitectura.md`) activ; până
+  atunci rândul se scoate (linkul vechi „Pentru el” nu e o invitație);
 - „linkurile din emailuri se deschid în aplicație”: cer `apple-app-site-association` / `assetlinks.json` cu
   Team ID și amprentele puse în setări;
 - „cărțile electronice, de citit oriunde”: Cărțile mele se deschid din aplicație (231), cu internet.
+- „Afli când apare o meditație nouă”: pe **iPhone** e adevărat doar dacă build-ul iOS are Firebase Messaging,
+  `GoogleService-Info.plist` și `aps-environment` (`release.md`, „Ce mai trebuie”). Fără ele, puntea nu oferă deloc
+  notificări pe iPhone, deci rândul se scoate din descrierea **App Store** (în Google Play rămâne);
+- „le asculți și cu ecranul blocat”: pe Android, de verificat pe telefon real și pentru meditațiile ascultate online
+  (pluginul `AhMedia`, prin punte); pe iPhone îl face sistemul;
+- „Fără reclame și fără urmărire”: adevărat **doar după** ce fragmentul nu mai încarcă în aplicație Google
+  Analytics, pixelul Meta și bara Complianz (`privacy-answers.md`, condiția de la început; 18 nov.: neimplementat);
+- „acolo stau criptate”: e despre păstrarea ciclului în cont (AES-256-GCM). Abonarea la emailurile fazelor ține data
+  menstruației necriptat (`privacy-answers.md`); fraza nu vorbește despre ea, deci rămâne exactă așa cum e.
 
 ## De confirmat de oameni
 

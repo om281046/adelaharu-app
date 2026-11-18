@@ -106,7 +106,7 @@ h2.sub { font-size: clamp(22px, 6vw, 26px); }
 .player {
   position: fixed; left: 10px; right: 10px; bottom: calc(10px + var(--jos)); z-index: 30; max-width: 540px; margin: 0 auto;
   display: grid; gap: 4px; padding: 12px 14px 10px; border-radius: 22px;
-  background: rgba(78,61,52,.97); color: #FBF6F3; box-shadow: 0 20px 40px -20px rgba(40,20,20,.7);
+  background: #4E3D34; color: #FBF6F3; box-shadow: 0 20px 40px -20px rgba(40,20,20,.7);
   animation: intra .3s ease;
 }
 .player[hidden] { display: none; }
@@ -119,6 +119,9 @@ h2.sub { font-size: clamp(22px, 6vw, 26px); }
 .pl-t span { display: block; font-size: 12.5px; color: #E9DCD5; }
 .pl-t span:empty { display: none; }
 .player.eroare .pl-t span { color: #FFC9BC; white-space: normal; }
+.pl-revenit { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 2px 0 0; padding: 8px 0 0; border-top: 1px solid rgba(255,255,255,.16); font-size: 13px; color: #E9DCD5; }
+.pl-revenit[hidden] { display: none; }
+.pl-revenit button { border: 0; border-radius: 999px; min-height: 36px; padding: 0 14px; background: #FBF6F3; color: #4E3D34; font: 500 13.5px var(--text); flex: none; }
 .pl-x { background: none; border: 0; color: #E9DCD5; width: 40px; height: 40px; display: grid; place-items: center; padding: 0; margin-right: -8px; }
 #pl-poz { -webkit-appearance: none; appearance: none; width: 100%; height: 24px; margin: 4px 0 0; padding: 0; background: transparent; --p: 0%; }
 #pl-poz::-webkit-slider-runnable-track { height: 4px; border-radius: 4px; background: linear-gradient(90deg, #E8B4A0 var(--p), rgba(255,255,255,.28) var(--p)); }

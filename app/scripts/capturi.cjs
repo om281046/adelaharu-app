@@ -118,6 +118,8 @@ const SCENARII = [
   { nume: 'offline-sarcina-intunecat', date: { ah_ciclu: JSON.stringify({ starturi: ['2026-08-01'], sit: 'sarcina' }), ah_descarcate: DESC }, lipsa: [], intunecat: true },
   { nume: 'offline-ciclu-intunecat', date: { ah_ciclu: JSON.stringify({ starturi: ['2026-10-31'], lung: 28, men: 5 }), ah_descarcate: DESC }, lipsa: [], intunecat: true, reda: true },
   { nume: 'offline-reincearca', date: {}, lipsa: [], reincearca: true },
+  // conexiunea revine în timpul unei meditații: rămâne în pagină, cu „Deschide Spațiul meu”
+  { nume: 'offline-revenit', date: { ah_ciclu: JSON.stringify({ starturi: ['2026-11-15'], lung: 30, men: 6 }), ah_descarcate: DESC }, lipsa: [], reda: true, revenit: true },
 ];
 
 (async () => {
@@ -134,6 +136,8 @@ const SCENARII = [
       isMobile: true,
       hasTouch: true,
       colorScheme: s.intunecat ? 'dark' : 'light',
+      // ceasul fix al Playwright îngheață și animația de intrare a playerului (ar părea transparent în poze)
+      reducedMotion: 'reduce',
       locale: 'ro-RO',
       timezoneId: 'Europe/Bucharest',
     });
@@ -161,6 +165,13 @@ const SCENARII = [
       });
       await p.waitForFunction(() => window.ahOfflinePlayer.stare.timp > 70);
       await p.waitForTimeout(200);
+    }
+    if (s.revenit) {
+      await p.unroute('https://www.adelaharu.ro/**');
+      await p.route('https://www.adelaharu.ro/**', (r) => r.fulfill({ status: 200, contentType: 'text/html', body: '<p>site</p>' }));
+      await p.evaluate(() => window.dispatchEvent(new Event('online')));
+      await p.waitForFunction(() => !document.getElementById('pl-revenit').hidden);
+      if (!/offline\.html$/.test(p.url())) erori.push('a plecat din pagina offline în timpul meditației');
     }
     if (s.reincearca) {
       await p.click('#reincearca');

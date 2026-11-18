@@ -11,6 +11,10 @@ on:
         description: "Încarcă în TestFlight"
         type: boolean
         default: true
+      push_ios:
+        description: "Versiunea promite notificări push pe iPhone (notele Apple, fișa). Debifat = fără push; scoateți-l din note și fișă"
+        type: boolean
+        default: true
       creeaza_certificate:
         description: "Prima rulare / capabilități noi: creează sau reînnoiește certificatul și profilul (match)"
         type: boolean
@@ -97,6 +101,12 @@ jobs:
 
       - name: Capacitor sync
         run: npx cap sync ios
+
+      - name: Push pe iPhone (aps-environment, Firebase Messaging, GoogleService-Info.plist)
+        env:
+          AH_PUSH_IOS: ${{ inputs.push_ios && '1' || '0' }}
+          AH_UPLOAD: ${{ inputs.incarca && '1' || '0' }}
+        run: bash ../.github/scripts/verifica-push-ios.sh .
 
       - name: Configurația shell-ului (server.url de producție, offline.html, User-Agent)
         run: node ../.github/scripts/verifica-shell.mjs ios/App/App/capacitor.config.json

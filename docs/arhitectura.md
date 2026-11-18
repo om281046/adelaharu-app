@@ -39,7 +39,8 @@ Nu se urcă nimic pe site fără OK-ul lui Mircea (se urcă inactiv, cu copie de
   nevoie pentru comenzile de pe ecranul blocat (altfel Media Session din WebView + `UIBackgroundModes audio`).
 - Info.plist: `UIBackgroundModes` = `audio` (+ `remote-notification` doar dacă trimitem notificări silențioase:
   NU în v1), Associated Domains `applinks:www.adelaharu.ro`, `PrivacyInfo.xcprivacy`.
-  AndroidManifest: App Links `autoVerify` pentru `/spatiul-meu` (cu `?cont=` din emailuri) și `/app/intra`,
+  AndroidManifest: App Links `autoVerify` pentru `/spatiul-meu` (cu `?cont=` din emailuri) și `/app/intra`
+  (exact + subcăile cu „/”; aceleași căi în AASA: `/spatiul-meu`, `/spatiul-meu/*`, `/app/intra`, `/app/intra/*`),
   `POST_NOTIFICATIONS`, `FOREGROUND_SERVICE_MEDIA_PLAYBACK` dacă e cazul.
 
 ## Puntea (în fragment, JavaScript tipărit doar în aplicație pe /spatiul-meu/, /sala-de-curs/, /cartile-mele/, /meditatiile-mele/)
@@ -51,30 +52,53 @@ Nu se urcă nimic pe site fără OK-ul lui Mircea (se urcă inactiv, cu copie de
 2. **Notificări push:** după intrarea în cont, cere permisiunea O SINGURĂ dată, la un moment potrivit (nu la prima
    deschidere), cu un ecran de explicație; tokenul FCM → `POST /wp-json/ah-spa/v1/push` (legat de emailul din
    cookie-ul `ah_sp`). La ieșire din cont → `DELETE`. Atingerea unei notificări deschide `data.url`.
+   Doar dacă `AhApp.info().push` e `true` (build cu Firebase; pe iOS și cu `aps-environment`); altfel puntea nu
+   întreabă și nu arată comutatorul „Notificări”, iar notele de recenzie și fișa magazinului nu promit push.
 3. **Ciclul:** citește `localStorage.ahsp_ciclu` (`{starturi:[YYYY-MM-DD…], lung, men, sit}`), calculează fazele cu
    EXACT aceeași regulă ca Spațiul meu (`CI.faze` / `CI.lung` din 235: `oS=max(L-16,m+2)`, `oE=min(oS+4,L-2)`), și:
    - programează notificări LOCALE la începutul fiecărei faze, pentru următoarele 3 cicluri (anulează și reprogramează
      la fiecare schimbare; nimic dacă `sit` e `hormonal` sau `sarcina`; respectă comutatorul din „Mai mult”);
-   - scrie în `Preferences` cheia `ah_ciclu` = `{starturi, lung, men, sit, actualizat}` pentru pagina offline.
+   - scrie în `Preferences` cheia `ah_ciclu` = `{starturi, lung, men, sit, actualizat}` pentru pagina offline;
+   - **refacere:** dacă `localStorage.ahsp_ciclu` și `ah_ciclu_v1` lipsesc (iOS poate goli stocarea paginii), dar
+     `Preferences.ah_ciclu` există și contul e același (`S.cont`), îl scrie înapoi în `localStorage.ahsp_ciclu` și
+     păstrează mementourile. `ah_ciclu` și mementourile se șterg DOAR la acțiuni explicite: „Șterge datele de pe
+     acest telefon” din Ciclul meu (`removeItem('ahsp_ciclu')` când cheia exista), ieșirea din cont, „Șterge contul”.
+     Cu test.
 4. **Meditații offline:** buton „Descarcă” lângă fiecare meditație Inner Temple pe care o poate asculta →
    `GET /wp-json/ah-spa/v1/descarca?id=<id>` → `{url, expira, titlu, durata, imagine}` (URL semnat, 15 min) →
-   `FileTransfer.downloadFile` în `Directory.Library` (iOS: exclus din backup; Android: Data), calea
+   `FileTransfer.downloadFile` în `Directory.LibraryNoCloud` pe iOS (`LIBRARY_NO_CLOUD`: fără copie în iCloud;
+   `Directory.Library` simplu AR intra în backup) și `Directory.Data` pe Android (`DATA`), calea
    `meditatii/<id>.<ext>` + poza în `meditatii/<id>.jpg`; indexul în `Preferences` `ah_descarcate` =
-   `[{id,titlu,durata,fisier,poza,descarcat}]`. „Șterge descărcarea” scoate fișierul și rândul. La ieșirea din cont
+   `[{id,titlu,durata,fisier,poza,dir,descarcat}]`, cu folderul în `dir` pe fiecare rând (pagina offline și
+   ștergerea îl citesc de acolo). De confirmat pe un iPhone: fișierele din `LIBRARY_NO_CLOUD` au
+   `NSURLIsExcludedFromBackupKey` (IONFilesystemLib `.notSyncedLibrary`). „Șterge descărcarea” scoate fișierul și rândul. La ieșirea din cont
    se șterg toate.
 5. **Ecran blocat:** pe redarea audio din Inner Temple setează `navigator.mediaSession` (titlu, „Adela Haru”, poza,
-   play/pause/înainte 15 s/înapoi 15 s).
+   play/pause/înainte 15 s/înapoi 15 s). Pe Android (WebView-ul nu leagă Media Session de sistem și nu are serviciu de
+   prim-plan) oglindește în plus starea în pluginul `AhMedia` și ascultă comenzile lui (`actiune`); `opreste()` la ieșire.
 6. **Ștergerea contului** (cerință Apple 5.1.1(v) și Google): în „Mai mult” › Aplicația, „Șterge contul” cu confirmare
    → `POST /wp-json/ah-spa/v1/sterge-cont` → șterge datele ciclului (tabelul `ah_sp_ciclu`, ca `ciclu-sterge`),
-   intrarea din `ah_sp_conturi`, tokenurile push, dispozitivele, cookie-urile; comenzile și facturile rămân (obligație
-   legală, spus clar în text); trimite echipei un email. Apoi aplicația șterge descărcările și `Preferences`.
+   abonarea la emailurile fazelor (tabelul `ah_ciclu` din 41), intrarea din `ah_sp_conturi`, tokenurile push,
+   dispozitivele, cookie-urile; comenzile și facturile rămân (obligație legală, spus clar în text); trimite echipei un
+   email. Apoi aplicația șterge descărcările și `Preferences`. Pentru că accesul vine din comenzi, o nouă intrare cu
+   același email arată din nou conținutul cumpărat, fără datele șterse (spus în notele de recenzie).
 
 ## Ce ascunde fragmentul în aplicație
 
 - Server: în aplicație, orice pagină în afara listei permise (`/spatiul-meu/`, `/sala-de-curs/`, `/cartile-mele/`,
   `/meditatiile-mele/`, `/app/*`, politica de confidențialitate, termenii, politica de cookie-uri, `/wp-json/`,
-  fișierele media) → redirect 302 la `/spatiul-meu/`. Fără bara de cookie-uri în aplicație dacă se poate legal
-  (doar cookie-uri funcționale; altfel păstrată).
+  fișierele media) → redirect 302 la `/spatiul-meu/`.
+- **Fără analiză și urmărire în aplicație (cerință fermă; de ea depind etichetele de confidențialitate și notele de
+  recenzie):** în aplicație nu se încarcă Google Analytics (`gtag` / Site Kit / GTM), pixelul Meta
+  (`facebook-for-woocommerce`), atribuirea comenzilor WooCommerce (`sourcebuster`, `wc-order-attribution`) și bara de
+  cookie-uri Complianz (în aplicație se folosesc doar cookie-uri funcționale: `ah_sp`, `ah_app`, `ah_med`, ale sălii,
+  deci bara nu e necesară). Se scot la sursă (dequeue pe `wp_enqueue_scripts` / `wp_print_scripts`, filtrele
+  Complianz, ieșirea pixelului), doar când `ah_spa_e_aplicatie()`, cu test; fără `gtag`, evenimentele `ev()` (235) și
+  `masoara()` (266) nu pleacă nicăieri. Verificare în aplicație: nicio cerere spre `google-analytics.com`,
+  `googletagmanager.com`, `connect.facebook.net`.
+- **Vimeo fără urmărire:** orice iframe `player.vimeo.com` din aplicație are `dnt=1` (embed-urile din 235, 44, 51, 265
+  îl au deja; puntea îl adaugă celor care nu-l au). Embed-ul Apple Podcasts: de verificat; dacă pune cookie-uri de
+  analiză, în aplicație se înlocuiește cu linkul spre aplicația Podcasts.
 - Pagini: CSS + JS care urmăresc desenările (ca 266): fila Comenzi și rândurile ei, butoanele/linkurile de plată și
   „Abonamentul meu” (portal Stripe), „Reînnoiește”, prețuri, linkurile `mai` din podcast, produsele din Ciclul meu
   (`D.ciclu.produse`), cursurile închise/expirate care trimit la cumpărare, card cadou, Recomandă, Black Friday,
@@ -91,6 +115,9 @@ Nu se urcă nimic pe site fără OK-ul lui Mircea (se urcă inactiv, cu copie de
   aceea), întâlnire care începe în 15 minute (celor înscrise). În loturi, prin cron, fără să blocheze cererea.
 - `/.well-known/apple-app-site-association` și `/.well-known/assetlinks.json` din opțiuni (Team ID, SHA-256).
 - `/app/intra`: pagina pentru cine nu are aplicația (linkurile spre magazine).
+- **Contul de recenzie** (Apple / Google): cod fix pentru o singură adresă, setat în Setări › Aplicația mobilă, prin
+  `rest_pre_dispatch` pe `POST /ah-sp/v1/cod` și `/ah-sp/v1/intra` (235 neschimbat). Cerința completă și testele:
+  `docs/review-account.md`. Fără el nu se trimite la recenzie.
 
 ## Pagina offline (app/, locală)
 
