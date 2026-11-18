@@ -486,8 +486,8 @@ schimbare. Peste limită, GitHub cere card și taxează pe minut.
    tokenul **FCM**; `AhApp.info()` spune `push`/`token` (`fcm`|`apns`), iar puntea nu trimite niciodată un token APNs.
    **Rămâne:** capabilitatea Push Notifications pe App ID (pasul 7.3), secretul `GOOGLE_SERVICE_INFO_PLIST`, cheia
    APNs în Firebase (7.4) și proba pe un iPhone real. Prima compilare pe macOS descarcă pachetul Firebase (Xcode 16+).
-2. **`TARGETED_DEVICE_FAMILY`** e `1,2` (iPhone + iPad) ⇒ Apple cere capturi de iPad și testează pe iPad. Recomand `1`
-   pentru prima versiune.
+2. **Doar iPhone (18 nov.):** `TARGETED_DEVICE_FAMILY` = `1`, deci fără capturi și teste pe iPad pentru prima
+   versiune. Pe iPad rulează în modul de compatibilitate iPhone.
 3. **Contul de recenzie:** în fragment (2.1.0, secțiunea 9), cu teste. Rămân: adresa, comenzile manuale și codul în
    Setări › Aplicația mobilă (`docs/review-account.md`, „Ce pregătește proprietara”) și o intrare reușită în TestFlight.
 4. **Fără analiză și pixel în aplicație:** în fragment (2.1.0, secțiunea 10), cu teste și harnașul vizual (nicio

@@ -2,9 +2,8 @@
 
 De adăugat de proprietară pe https://www.adelaharu.ro/politica-de-confidentialitate/, ca secțiune nouă, **înainte
 de prima trimitere la recenzie** (Apple și Google verifică faptul că politica publică descrie aplicația; linkul
-trebuie să meargă fără login). Textul e o CIORNĂ, scrisă după `docs/store/privacy-answers.md` (v2). **Recomand o
-citire de către cine v-a redactat politica (avocat / consultant GDPR)**, mai ales partea despre datele de sănătate
-(art. 9 GDPR). Dacă politica are deja o secțiune despre „Ciclul meu” din Spațiul meu (10 nov.), paragraful despre
+trebuie să meargă fără login). Textul e scris după `docs/store/privacy-answers.md` (v2) și `docs/juridic.md` (temeiuri, dovada acordului,
+registru, evaluare de impact). Dacă politica are deja o secțiune despre „Ciclul meu” din Spațiul meu (10 nov.), paragraful despre
 ciclu se poate scurta cu o trimitere la ea.
 
 ---
@@ -43,7 +42,6 @@ asta adresa ta de email, prenumele, data primei zile a ultimei menstruații, lun
 Aceste date stau într-o listă separată, legată de adresa ta, fără criptare, și le folosim doar ca să știm când să-ți
 scriem. Te poți dezabona din orice email, iar datele se șterg. Nu folosim datele ciclului pentru reclame, nu le vindem
 și nu le dăm altcuiva. Îți poți retrage oricând acordul din Ciclul meu, iar datele se șterg de pe server.
-<!-- CIORNĂ, pentru Adela și pentru juristă: paragraful despre emailurile fazelor e nou (18 nov.). -->
 
 **Partenerul tău („Pentru el”).** Din Ciclul meu îți poți invita partenerul, cu prenumele și emailul lui, doar
 după ce bifezi separat acordul ca el să vadă faza ta de azi și datele estimate ale fazelor următoare (temeiul:
@@ -58,9 +56,12 @@ emailuri la începutul fazelor și, dacă folosește aplicația și acceptă not
 telefonului lui (trimis prin Firebase Cloud Messaging, ca mai sus). Îi trimitem, dacă alege, o notificare sau un
 email la începutul fiecărei faze. Datele lui se șterg la 30 de zile după ce oprești accesul, pe loc când îți ștergi
 contul sau datele ciclului din cont și pe loc când își șterge el accesul din pagina lui. Folosim datele lui doar ca
-să-i arătăm ce ai ales tu să vadă (temeiul pentru datele lui: interesul legitim de a-i oferi pagina la care l-ai
-invitat, art. 6 alin. (1) lit. f GDPR).
-<!-- CIORNĂ: temeiul pentru datele lui (lit. f sau consimțământul lui, prin deschiderea linkului) de confirmat cu juristul. -->
+să-i arătăm ce ai ales tu să vadă. Temeiurile pentru datele lui: pentru emailul de invitație, interesul legitim de
+a-i transmite invitația pe care ai cerut-o (art. 6 alin. (1) lit. f GDPR; e un singur email, iar dacă îl ignoră nu
+primește altele); pentru pagina lui, după ce deschide linkul, furnizarea serviciului pe care îl folosește (art. 6
+alin. (1) lit. b); pentru notificările și emailurile de la începutul fazelor, consimțământul lui, pe care îl poate
+retrage oricând (art. 6 alin. (1) lit. a). Invită doar persoane de cel puțin 16 ani care se așteaptă să primească un
+email de la tine.
 
 **Linkul vechi pentru partener.** Linkul cu fazele tale creat înainte de invitații are datele calendarului chiar în
 link, după semnul „#”, partea pe care browserul nu o trimite niciodată la server. Noi păstrăm doar o cheie a
