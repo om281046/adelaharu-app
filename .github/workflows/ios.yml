@@ -91,9 +91,10 @@ jobs:
           if [ -n "$GOOGLE_SERVICE_INFO_PLIST" ]; then
             printf '%s' "$GOOGLE_SERVICE_INFO_PLIST" > ios/App/App/GoogleService-Info.plist
             plutil -lint ios/App/App/GoogleService-Info.plist
-            # Push pe iOS cere și SDK-ul Firebase Messaging (SPM) + fișierul în „Copy Bundle Resources” (app/README.md, „Push").
-            if ! grep -q "GoogleService-Info.plist" ios/App/App.xcodeproj/project.pbxproj; then
-              echo "::warning::GoogleService-Info.plist nu e în proiectul Xcode: versiunea NU va avea notificări push (vezi app/README.md, Push)."
+            # Push pe iOS cere și SDK-ul Firebase Messaging (SPM) + faza care copiază fișierul (app/README.md, „Push").
+            # Verificarea completă (fișier nevid și valid, faza după id) e în pasul „Push pe iPhone” de mai jos.
+            if [ ! -s ios/App/App/GoogleService-Info.plist ]; then
+              echo "::warning::GoogleService-Info.plist a ieșit gol: versiunea NU va avea notificări push (vezi app/README.md, Push)."
             fi
           else
             echo "::warning::Fără GOOGLE_SERVICE_INFO_PLIST: versiunea NU va avea notificări push."

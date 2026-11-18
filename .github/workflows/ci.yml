@@ -1,6 +1,8 @@
 # Verificări la fiecare pull request (v2, docs/arhitectura.md):
 # - aplicația = shell Capacitor + pagina offline locală (lint, tipuri, teste, build, configurația shell-ului);
-# - fragmentul server/ah-sp-aplicatie.php (php -l pe toate fișierele PHP din server/ + testele din server/tests/).
+# - fragmentele server/ah-sp-aplicatie.php și server/ah-sp-partener.php (php -l pe toate fișierele PHP din server/ +
+#   testele din server/tests/: modul aplicație, contul pentru el, fazele față de 235, integrarea; fără harnașele vizuale
+#   poze.cjs, care rescriu pozele din docs/screenshots-v2 și cer Chromium).
 name: CI
 
 on:
@@ -66,8 +68,13 @@ jobs:
       - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
         with:
           php-version: ${{ matrix.php }}
+          extensions: pdo_sqlite, openssl
           tools: none
           coverage: none
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
 
       - name: php -l (toate fișierele PHP din server/)
         run: |
@@ -85,9 +92,30 @@ jobs:
           P=server/ah-sp-partener.php
           if [ -f "$P" ]; then php .github/scripts/prefix-fragment.php "$P" ah_spp_; fi
 
-      - name: Testele serverului
+      # Aceleași teste ca bash server/tests/ruleaza.sh, fără harnașele vizuale (poze.cjs). Notele de recenzie și
+      # răspunsurile de confidențialitate citează aceste teste: o regresie aici trebuie să oprească PR-ul.
+      # reference/ e în .gitignore: testele citesc atunci bucățile din 235/41 și pagina publică din server/tests/date/v2
+      # (generate de server/tests/extrage-referinte.php; ruleaza.sh verifică local că sunt la zi).
+      - name: Copiile de referință (server/tests/date/v2)
         run: |
-          if [ -f server/tests/run.php ]; then php server/tests/run.php; else echo "::warning::Fără server/tests/run.php"; fi
+          for f in sn235.php sn41.php spatiul-meu-public.html; do
+            test -s "server/tests/date/v2/$f" || { echo "::error::Lipsește server/tests/date/v2/$f (php server/tests/extrage-referinte.php)"; exit 1; }
+          done
+
+      - name: Modul aplicație (server/tests/run.php)
+        run: php server/tests/run.php
+
+      - name: Ciclul în aplicație = CI din 235 (server/tests/ciclu.test.cjs)
+        run: node server/tests/ciclu.test.cjs
+
+      - name: Contul pentru el (server/tests/partener/run.php)
+        run: php server/tests/partener/run.php
+
+      - name: Fazele lui pe server = CI din 235 (server/tests/partener/faze.test.cjs)
+        run: node server/tests/partener/faze.test.cjs
+
+      - name: Integrarea (lista permisă, AASA = App Links, un telefon = un cont, ștergerea în cascadă)
+        run: php server/tests/integrare/run.php
 
   workflows:
     name: actionlint

@@ -15,12 +15,14 @@ aplicație s-ar accepta „Marketing”, pixelul Meta ar însemna **urmărire** 
 partajate cu Meta). Evenimentele din pagină (`ev()` din 235: `sp_intrare`, `sp_ciclu_emailuri`…; `masoara()` din
 266) pleacă spre GA ori de câte ori există `gtag`, deci condiția le acoperă și pe ele.
 
-**Stare 18 nov. 2026 (12:07): condiția NU e încă îndeplinită.** `arhitectura.md` o face acum cerință fermă, dar
-fragmentul nu are încă nicio oprire a acestor scripturi. **Nu completați formularele Apple și Google până nu e în
-fragment, cu test, și verificată în aplicație** (în Safari Web Inspector / `chrome://inspect`: nicio cerere spre
-`google-analytics.com`, `googletagmanager.com`, `connect.facebook.net`, `facebook.com/tr`). Dacă nu se
-poate, la Apple: „Used for tracking: Yes” pentru Device ID + Product Interaction + Advertising Data, iar aplicația
-trebuie să ceară ATT; la Google: partajare cu Meta în scop publicitar. Recomand varianta fără.
+**Stare 18 nov. 2026 (seara): condiția e în fragment, cu teste** (`server/ah-sp-aplicatie.php`, secțiunea 10;
+`server/README.md`, „Fără analiză și urmărire”): în aplicație nu se încarcă și nu se cer GA, Clarity, pixelul Meta,
+atribuirea WooCommerce, bara Complianz, iar Conversions API e oprit în timpul cererilor din aplicație. Pagina lui
+`/pentru-el/` (contul pentru el) e HTML propriu, fără niciunul dintre acestea. **Rămâne de verificat pe un telefon
+real**, cu fragmentul activ (Safari Web Inspector / `chrome://inspect`: nicio cerere spre `google-analytics.com`,
+`googletagmanager.com`, `connect.facebook.net`, `facebook.com/tr`, `clarity.ms`), înainte de completarea formularelor.
+Dacă verificarea nu iese: la Apple „Used for tracking: Yes” pentru Device ID + Product Interaction + Advertising
+Data și ATT; la Google, partajare cu Meta în scop publicitar.
 
 ## Ce date pleacă de pe telefon (inventarul)
 
@@ -33,8 +35,8 @@ trebuie să ceară ATT; la Google: partajare cu Meta în scop publicitar. Recoma
 | **Abonarea la emailurile fazelor** (Ciclul meu › emailurile Adelei la începutul fiecărei faze, cu bifa de acord; tabelul `ah_ciclu` din Harta ciclului, 41) | **doar dacă se abonează**, cu acord | serverul adelaharu.ro, **necriptate**: emailul, prenumele, data primei zile a ultimei menstruații, lungimea ciclului și a menstruației (și starturile notate), legate direct de adresa de email | emailul de la începutul fiecărei faze; dezabonare din orice email; „Șterge contul” șterge rândul |
 | Datele ciclului fără acord | mereu | **doar pe telefon** (`localStorage` al paginii + `Preferences` `ah_ciclu` pentru pagina offline și mementouri) | fazele, mementourile locale |
 | Linkul pentru partener | când ea îl trimite cuiva | **datele stau doar în fragmentul URL-ului** (`?ciclul-ei#d=…`), pe care browserul nu îl trimite la server; serverul vede doar dacă cheia a fost oprită (`partener-stare`) | partenerul vede fazele |
-| **Contul „Pentru el”** (invitația ei, când există `ah-sp-partener.php`): prenumele și emailul lui (emailul criptat + hash), tokenul linkului (doar hash), tokenurile push ale lui, ultima vizită | când ea îl invită, cu bifa separată de acord; când el folosește pagina | serverul adelaharu.ro | să-i arate faza ei de azi și ce urmează, notificări la fiecare fază. **El nu primește** notițele, simptomele, situația sau zilele notate de ea; serverul calculează doar faza |
-| Tokenul de notificări (FCM) + platforma + versiunea aplicației | doar dacă permite notificările | serverul adelaharu.ro (tabelul `ah_spa_push`); Google Firebase (livrează notificarea) | notificări: meditație nouă, înregistrare, întâlnire în 15 minute |
+| **Contul „Pentru el”** (`ah-sp-partener.php`): prenumele și emailul lui (emailul criptat AES-256-GCM + HMAC pentru căutare), numele ei cum îl vede el, momentul acordului ei, tokenul linkului (doar sha256), datele invitației, prima și ultima vizită, alegerea emailurilor fazelor, tokenurile push ale lui (cel mult 5, tabel separat de al ei) | când ea îl invită, cu bifa separată de acord; când el folosește pagina sau pornește notificările (doar în aplicație, doar pe un telefon pe care nu e intrată și ea) | serverul adelaharu.ro; tokenul push și la Firebase (livrarea) | să-i arate faza ei de azi și ce urmează, notificare / email la fiecare fază. **El nu primește** notițele, simptomele, situația sau zilele notate de ea; serverul calculează doar faza. Rândul lui o leagă de ea printr-o amprentă (cheia ciclului), nu prin emailul ei. Se șterge: de el, pe loc („Șterge accesul meu”); la 30 de zile după ce ea oprește accesul; pe loc când ea își șterge ciclul din cont sau contul |
+| Tokenul de notificări (FCM) + platforma + versiunea aplicației | doar dacă permite notificările | serverul adelaharu.ro (tabelul `ah_spa_push`; al partenerului: `ah_spp_push`); Google Firebase (livrează notificarea) | notificări: meditație nouă, înregistrare, întâlnire în 15 minute; la el, începutul fiecărei faze. Un telefon are un singur token și el aparține unui singur cont (al ei sau al lui), niciodată amândurora |
 | Identificatorul telefonului pentru limita de dispozitive (meditații 51, sala 44: un cod aleator în cookie + User-Agent-ul scurtat) | la prima deschidere a meditațiilor / sălii | serverul adelaharu.ro | limita de 5 dispozitive, „Golește dispozitivele” |
 | Fișierele meditațiilor descărcate | la „Descarcă” | **de la** server spre telefon (stocare privată, exclusă din backup) | ascultat fără internet |
 
@@ -52,10 +54,10 @@ Servicii terțe care primesc ceva din aplicație:
   adauge `dnt=1` și oricărui iframe Vimeo care nu-l are. Cu `dnt=1` nu declarăm colectare de către Vimeo (date
   folosite doar ca să livreze videoul). **Fără `dnt=1`**, Vimeo colectează date de utilizare ⇒ Apple: „Product
   Interaction” / „Other Usage Data” colectate de un partener terț, scop Analytics; Google: idem.
-- **Apple Podcasts** (`embed.podcasts.apple.com`, playerul episoadelor din Podcast): serviciu Apple, aceeași regulă
-  ca la Vimeo. *De verificat* în Web Inspector ce cookie-uri și cereri face embed-ul; dacă pune cookie-uri de
-  analiză, fragmentul îl înlocuiește în aplicație cu linkul spre aplicația Podcasts (care se deschide oricum în
-  afara aplicației noastre).
+- **Apple Podcasts**: în aplicație playerul episoadelor **nu se mai încarcă** (fragmentul pune `embed = about:blank` la
+  sursă și, în locul lui, butonul „Ascultă în Apple Podcasts”, care deschide aplicația Podcasts, în afara aplicației
+  noastre). Deci nu declarăm nimic pentru Apple Podcasts. Pe pagina lui, linkurile „Ascultă episodul” se deschid tot
+  în afara aplicației.
 
 ---
 
@@ -82,7 +84,8 @@ Același set de 6 tipuri este în `PrivacyInfo.xcprivacy` (verificat 18 nov. 202
 
 Explicații și puncte nesigure:
 - **Partenerul (el):** datele lui (prenume, email, token push) intră la Name, Email Address și Device ID, deja
-  bifate. Faza ei arătată lui nu e „partajare cu terți” în sensul Apple (nu e un partener comercial; o face ea,
+  bifate (contul lui e tot în aplicația aceasta, fără parolă și fără cumpărături; ce vede el despre ea e Health,
+  deja bifat). Faza ei arătată lui nu e „partajare cu terți” în sensul Apple (nu e un partener comercial; o face ea,
   cu acord explicit), deci nu schimbă etichetele. Politica de confidențialitate o descrie.
 - **Health:** notițele zilnice sunt despre ciclu, deci intră la Health, nu la „Other User Content”. Două căi duc
   date de ciclu pe server, ambele opționale și cu acord: păstrarea în cont (`ah_sp_ciclu`, **criptată AES-256-GCM**)
@@ -135,7 +138,8 @@ scopul „Comunicări ale dezvoltatorului” la adresa de email.
 > Dacă intri din nou cu aceeași adresă, vezi din nou ce ai cumpărat (accesul vine din comenzi), fără datele șterse.
 
 Propozițiile despre partener („accesurile date partenerului”, „Un partener își șterge accesul…”) se publică doar
-odată cu `ah-sp-partener.php`, și doar dacă acesta ascultă de `ah_spa_cont_sters` (18 nov.: fragmentul nu există).
+odată cu `ah-sp-partener.php` activ pe site. Condiția despre ștergere e îndeplinită (18 nov., seara): „Șterge contul”
+șterge pe loc partenerii ei și tokenurile lor push (`ah_spa_sterge_cont`, cu test în `server/tests/integrare/run.php`).
 
 ---
 

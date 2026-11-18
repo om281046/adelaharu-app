@@ -39,6 +39,27 @@ $cadru    = eval( 'return ' . intre( $s235, "function ah_sp_cadru_css() {\n\tret
 $css233   = eval( 'return ' . intre( $s233, "\t\$h  = ", ";\n\t\$h .= '<nav id=\"ahsb\"" ) . ';' );
 $css279   = '<style>' . intre( $s279, "<style>\n", "</style>" ) . '</style>';
 
+/* Urmărirea de pe site, luată din pagina publică salvată (reference/v2/spatiul-meu-public.html), exact cum o tipăresc
+   pluginurile: Google Analytics (prin Complianz), Microsoft Clarity, Complianz (scriptul, stilurile, bara), atribuirea
+   comenzilor WooCommerce, facebook-for-woocommerce („signals”), plus pixelul Meta clasic (codul de bază + <noscript>),
+   pe care pagina salvată nu îl avea. În browser rămâne tot; în aplicație pagina trece prin filtrul fragmentului. */
+$pub_ref = file_get_contents( $ref . 'spatiul-meu-public.html' );
+$urm_cap = '';
+preg_match_all( '~<script\b([^>]*)>(.*?)</script>~is', $pub_ref, $sc_toate, PREG_SET_ORDER );
+foreach ( $sc_toate as $x ) {
+	if ( preg_match( '~data-service=|id="(cmplz-|wc-order-attribution|sourcebuster|wc-facebook)~', $x[1] ) || false !== strpos( $x[2], 'window.dataLayer=' ) || false !== strpos( $x[2], 'function cmplzCallClarity' ) ) {
+		$urm_cap .= $x[0] . "\n";
+	}
+}
+preg_match_all( "~<link\\b[^>]*id='cmplz-[^']*'[^>]*>~", $pub_ref, $ln_toate );
+$urm_cap .= implode( "\n", $ln_toate[0] ) . "\n";
+$urm_cap .= "<!-- Meta Pixel Code -->\n<script type='text/javascript'>!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');</script>\n<script type='text/javascript'>fbq('init', '000000000000000', {}, {\"agent\": \"woocommerce-9.0-3.7.6\"});fbq('track', 'PageView', []);</script>\n<!-- End Meta Pixel Code -->\n";
+$urm_corp = '<noscript><img height="1" width="1" style="display:none" alt="fbpx" src="https://www.facebook.com/tr?id=000000000000000&amp;ev=PageView&amp;noscript=1"></noscript>'
+	. '<!-- Consent Management' . intre( $pub_ref, '<!-- Consent Management', '<div data-elementor-type="popup"' );
+if ( substr_count( $urm_cap, '<script' ) < 12 || false === strpos( $urm_corp, 'cmplz-cookiebanner-container' ) ) { fwrite( STDERR, "Nu găsesc urmărirea în pagina publică salvată.\n" ); exit( 1 ); }
+/* În aplicație, paginile trec prin ob_start-ul fragmentului (ah_spa_porneste_filtru_html → ah_spa_iesire_aplicatie). */
+function prin_filtru( $html ) { return ah_spa_iesire_aplicatie( $html ); }
+
 /* datele de probă: imaginile și sunetele sunt servite de harnaș */
 $D = json_decode( file_get_contents( __DIR__ . '/../date/spatiul-meu.json' ), true );
 
@@ -87,7 +108,7 @@ $cap_b = ah_test_actiune( 'wp_head' );
 $sc_b  = ah_test_filtru( 'do_shortcode_tag', $sc, 'ah_spatiul_meu' );
 if ( '' !== $cap_b || $sc_b !== $sc ) { fwrite( STDERR, "Fragmentul a schimbat pagina în browser!\n" ); exit( 1 ); }
 $clase_b = implode( ' ', ah_test_filtru( 'body_class', array( 'page', 'ahsp-pagina' ) ) );
-file_put_contents( $dir . '/sp-browser.html', pagina( 'Spațiul meu', $cap266, $clase_b, '<div class="site-content"><article><div class="entry-content">' . $sc_b . '</div></article></div>' ) );
+file_put_contents( $dir . '/sp-browser.html', pagina( 'Spațiul meu', $urm_cap . $cap266, $clase_b, '<div class="site-content"><article><div class="entry-content">' . $sc_b . '</div></article></div>' . $urm_corp ) );
 
 /* aplicația */
 $_SERVER['HTTP_USER_AGENT'] = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 AdelaHaruApp/1.0.0 (ios)';
@@ -95,7 +116,7 @@ update_option( 'ah_spa_setari', array( 'min_ios' => '', 'link_ios' => 'https://a
 $cap_a   = ah_test_actiune( 'wp_head' );
 $sc_a    = ah_test_filtru( 'do_shortcode_tag', $sc, 'ah_spatiul_meu' );
 $clase_a = implode( ' ', ah_test_filtru( 'body_class', array( 'page', 'ahsp-pagina' ) ) );
-file_put_contents( $dir . '/sp-aplicatie.html', pagina( 'Spațiul meu', $cap266 . $cap_a, $clase_a, '<div class="site-content"><article><div class="entry-content">' . $sc_a . '</div></article></div>' ) );
+file_put_contents( $dir . '/sp-aplicatie.html', prin_filtru( pagina( 'Spațiul meu', $urm_cap . $cap266 . $cap_a, $clase_a, '<div class="site-content"><article><div class="entry-content">' . $sc_a . '</div></article></div>' . $urm_corp ) ) );
 
 /* sala de curs de probă (lecție din „Respiră-te acasă”, cu ce adaugă 233, 279, 224 și cadrul 235) */
 $ic = function ( $d ) { return '<svg class="ahspc-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="' . $d . '"/></svg>'; };
@@ -106,7 +127,7 @@ $nav = '<nav id="ahspc-lat" aria-label="Spațiul meu"><a class="marca" href="' .
 $sala_css = '<style>body{margin:0;font:16px/1.6 Figtree,system-ui,sans-serif;color:#47372F}.ahs{max-width:760px;margin:0 auto;padding:16px}.ahs-cap{padding:8px 0}.ahs-cap h1{font:400 28px/1.2 "Gilda Display",Georgia,serif;margin:4px 0}.ahs-mic{font-size:14px;color:#7A6254}.ahs-cutie{background:rgba(255,255,255,.8);border:1px solid #EADCE3;border-radius:18px;padding:18px;margin:14px 0}.ahs-buton{display:inline-flex;align-items:center;min-height:48px;padding:0 20px;border-radius:999px;background:#8A4430;color:#fff!important;text-decoration:none}.ahs-video{aspect-ratio:16/9;border-radius:14px;background:linear-gradient(150deg,#7A5A75,#3E3040);display:grid;place-items:center;color:#fff}audio{width:100%;margin-top:10px}</style>';
 $sala = '<div class="ahs" id="ahs"><header class="ahs-cap"><p class="ahs-mic" style="letter-spacing:.14em;text-transform:uppercase">Respiră-te acasă</p><h1>Ziua 1 · Eliberarea</h1><p class="ahs-mic">Abonament plătit până pe 18 decembrie 2026 · <a href="https://www.adelaharu.ro/wp-json/ah-hb/v1/portal?o=14900&amp;k=wc_order_x" style="color:inherit;text-decoration:underline">Abonamentul meu</a></p></header>'
 	. '<nav id="ahsb" aria-label="Mai mult de la Adela"><a class="bf" href="https://www.adelaharu.ro/black-friday/">Black Friday <b>−40%</b></a><a href="https://www.adelaharu.ro/cartile-mele/?comanda=15003&amp;cheie=wc_order_y">Cărțile mele</a><a href="https://www.adelaharu.ro/card-cadou/">Card cadou</a><a href="https://www.adelaharu.ro/recomanda/">Women Empower Women</a></nav>'
-	. '<div class="ahs-cutie"><div class="ahs-video">Înregistrarea (Vimeo)</div><audio controls src="https://www.adelaharu.ro/audio/lectie.wav"></audio><p class="ahs-mic" id="ahs-nota">Înregistrarea rămâne aici 24 de ore.</p></div>'
+	. '<div class="ahs-cutie"><div class="ahs-video"><iframe id="ahs-vimeo" src="https://player.vimeo.com/video/1197728140?h=cff7aa9195&amp;title=0" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen title="Înregistrarea (Vimeo)" style="width:100%;aspect-ratio:16/9;border:0"></iframe></div><audio controls src="https://www.adelaharu.ro/audio/lectie.wav"></audio><p class="ahs-mic" id="ahs-nota">Înregistrarea rămâne aici 24 de ore.</p></div>'
 	. '<section id="rsg" aria-label="Mai departe"><p class="rsg-h">Dacă vrei să mergi mai departe</p><p class="rsg-s">Câteva drumuri pe care le poți continua cu Adela, oricând simți.</p><div class="rsg-l"><a class="rsg-c" href="https://www.adelaharu.ro/practici-de-respiratie-constienta-pentru-femei-ocupate/?utm_source=x" target="_blank"><img src="/img/curs-4.svg" alt="" width="64" height="64"><span class="rsg-t"><span class="rsg-k">Program online</span><span class="rsg-n">HER BREATH, HER RESET</span><span class="rsg-d">9 zile de respirație ghidată.</span><span class="rsg-v">Vezi detalii →</span></span></a><a class="rsg-c" href="https://www.adelaharu.ro/product/meditatie-pentru-manifestarea-intentiilor/?utm_source=x" target="_blank"><img src="/img/med-5.svg" alt="" width="64" height="64"><span class="rsg-t"><span class="rsg-k">Meditație</span><span class="rsg-n">Meditație pentru manifestarea intențiilor</span><span class="rsg-d">O meditație scurtă despre intenție.</span><span class="rsg-v">Vezi detalii →</span></span></a><a class="rsg-c" href="https://www.adelaharu.ro/spatiul-meu/#ciclu"><img src="/img/dar.svg" alt="" width="64" height="64"><span class="rsg-t"><span class="rsg-k">Gratuit, în Spațiul meu</span><span class="rsg-n">Ciclul meu</span><span class="rsg-d">Calendarul ciclului tău.</span><span class="rsg-v">Deschide calendarul →</span></span></a></div></section>'
 	. '<div class="ahs-cutie ahhb-lacat"><p class="ahs-mic">HER BREATH, HER RESET</p><h2 style="font:400 22px Georgia,serif;margin:0">Ana, practicile te așteaptă</h2><p>Accesul tău s-a încheiat pe 2 noiembrie 2026. Progresul și jurnalul tău sunt păstrate aici.</p><p><a class="ahs-buton" href="https://www.adelaharu.ro/practici-de-respiratie-constienta-pentru-femei-ocupate/?revin=14900&amp;k=wc_order_x#abonare">Revino · 49 lei / lună</a></p><p class="ahs-mic">Ai parcurs 4 din 9 practici. Abonamentul îl oprești oricând.</p></div>'
 	. '<div class="ahs-cutie"><h2 style="font:400 22px Georgia,serif;margin:0">Accesul s-a încheiat</h2><p>Abonamentul tău la HER BREATH s-a încheiat. Dacă simți să revii, te poți abona din nou de pe <a href="https://www.adelaharu.ro/practici-de-respiratie-constienta-pentru-femei-ocupate/#abonare">pagina programului</a>.</p></div>'
@@ -118,10 +139,10 @@ $_SERVER['REQUEST_URI']      = '/sala-de-curs/?comanda=14770&cheie=wc_order_r';
 $GLOBALS['ah_test_e_pagina'] = false;
 $_SERVER['HTTP_USER_AGENT']  = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Mobile/15E148 Safari/604.1';
 $cap_sb = ah_test_actiune( 'wp_head' );
-file_put_contents( $dir . '/sala-browser.html', pagina( 'Sala de curs', $cadru . $css233 . $css279 . $sala_css . $cap_sb, 'ahspc-on', $sala . $nav ) );
+file_put_contents( $dir . '/sala-browser.html', pagina( 'Sala de curs', $cadru . $css233 . $css279 . $sala_css . $urm_cap . $cap_sb, 'ahspc-on', $sala . $nav . $urm_corp ) );
 $_SERVER['HTTP_USER_AGENT'] = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 AdelaHaruApp/1.0.0 (ios)';
 $cap_sa = ah_test_actiune( 'wp_head' );
-file_put_contents( $dir . '/sala-aplicatie.html', pagina( 'Sala de curs', $cadru . $css233 . $css279 . $sala_css . $cap_sa, 'ahspc-on ahspa-app', $sala . $nav ) );
+file_put_contents( $dir . '/sala-aplicatie.html', prin_filtru( pagina( 'Sala de curs', $cadru . $css233 . $css279 . $sala_css . $urm_cap . $cap_sa, 'ahspc-on ahspa-app', $sala . $nav . $urm_corp ) ) );
 
 /* Termeni și condiții: antetul și subsolul temei exact ca pe site (din pagina publică salvată), fără scripturi, plus banda Black Friday */
 $pub    = file_get_contents( $ref . 'spatiul-meu-public.html' );
@@ -144,6 +165,7 @@ foreach ( array( 'browser' => 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac 
 	$cap_t   = ah_test_actiune( 'wp_head' );
 	$clase_t = implode( ' ', ah_test_filtru( 'body_class', array( 'page-template-default', 'page', 'theme-astra', 'ast-plain-container', 'elementor-default' ) ) );
 	if ( 'browser' === $var && '' !== $cap_t ) { fwrite( STDERR, "Fragmentul a schimbat politicile în browser!\n" ); exit( 1 ); }
-	file_put_contents( $dir . '/termeni-' . $var . '.html', pagina( 'Termeni și condiții', $cap_t, $clase_t, $bf . $antet . $termeni . $subsol ) );
+	$pag_t = pagina( 'Termeni și condiții', $urm_cap . $cap_t, $clase_t, $bf . $antet . $termeni . $subsol . $urm_corp );
+	file_put_contents( $dir . '/termeni-' . $var . '.html', 'aplicatie' === $var ? prin_filtru( $pag_t ) : $pag_t );
 }
 echo "gata\n";

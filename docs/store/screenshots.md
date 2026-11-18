@@ -7,8 +7,9 @@ v1 și **nu se mai folosesc**. `docs/screenshots-v2/` are pagina offline (`offli
 aplicație (`aplicatie-*.png`, făcute de colegi pentru verificare): bune ca ghid de ce arătăm, **nu** pentru
 magazine (dimensiuni de verificare, date de probă).
 
-**Depinde de contul de recenzie, care încă nu e în fragment** (18 nov.: `review-account.md`, „Stare”). Până atunci,
-capturile pentru magazine nu se pot face cu el. Variantă de rezervă, fără să aștepte: aceeași adresă de recenzie, cu
+**Depinde de contul de recenzie**, care e în fragment din 18 nov., seara (`ah-sp-aplicatie.php` 2.1.0, secțiunea 9,
+cu teste; `review-account.md`, „Stare”), dar încă neverificat pe un build din TestFlight / testul intern. Până la
+verificare și la setarea lui în admin, capturile pentru magazine nu se pot face cu el. Variantă de rezervă, fără să aștepte: aceeași adresă de recenzie, cu
 comenzile pregătite, intrată cu un cod adevărat citit din căsuța ei (căsuța e a echipei). Capturile nu arată codul,
 deci sunt la fel; nu se trimite însă nimic la recenzie până nu există codul fix.
 

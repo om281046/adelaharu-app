@@ -45,7 +45,7 @@ din v1 doar ce merge: proiectul nativ, construirea automată, documentele pentru
 3. **Urmărire în WebView.** Pagina are Google Analytics și pixelul Meta (după acord, prin Complianz), iar 235/266
    trimit evenimente spre GA când există `gtag`. În aplicație ar însemna ATT și alte etichete. **Cerință fermă**
    (`arhitectura.md`, „Ce ascunde fragmentul”): în aplicație nu se încarcă GA, pixelul Meta, atribuirea comenzilor
-   WooCommerce și bara Complianz. **18 nov.: încă neimplementată în fragment**; fără ea nu se completează etichetele
+   WooCommerce și bara Complianz. **18 nov., seara: implementată în fragment** (`ah-sp-aplicatie.php` 2.1.0, secțiunea 10, cu teste; de verificat pe build cu Web Inspector / `chrome://inspect`); până la verificare nu se completează etichetele
    de confidențialitate și nu se trimite la recenzie. Vimeo: embed-urile site-ului au deja `dnt=1` (235, 44, 51,
    265); fragmentul îl adaugă în aplicație oricărui iframe Vimeo care nu-l are (cerință în `arhitectura.md`).
 4. **Vimeo în WebView.** Videourile au restricție de domeniu: merg, pentru că pagina e chiar `www.adelaharu.ro`.
@@ -72,7 +72,7 @@ din v1 doar ce merge: proiectul nativ, construirea automată, documentele pentru
 8. **Partenerul și datele de sănătate.** Apple și Google pot întreba de ce o altă persoană vede faza ei. Răspunsul:
    acord explicit separat, minim (doar faza și datele estimate), oprit pe loc, ștergere și pentru el în aplicație
    (`store/review-notes.md`). Recenzorul primește un link de partener de probă (`review-account.md`).
-9. **Contul de recenzie.** **18 nov.: încă nu e în fragment** (cerința completă: `review-account.md`). Fără el
+9. **Contul de recenzie.** **18 nov., seara: în fragment** (`ah-sp-aplicatie.php` 2.1.0, secțiunea 9, cu teste; de verificat pe build; cerința: `review-account.md`). Fără el
    recenzorii nu pot intra (codul pleacă pe email) ⇒ respingere sigură (2.1): **blochează trimiterea**. După ce
    există, depinde de comenzi reale pe adresa lui; dacă expiră Inner Temple, recenzia următoare vede totul închis.
    Memento anual.

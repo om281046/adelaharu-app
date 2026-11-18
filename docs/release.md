@@ -208,6 +208,11 @@ Secretele: `MATCH_GIT_URL` (ex. `https://github.com/utilizator/adelaharu-certifi
 2. **Aplicația Android**: Project Overview › Add app › Android › package `ro.adelaharu.app`, nume `Adela Haru Android`
    › Register › descărcați `google-services.json`. Restul pașilor din asistent („Add SDK”) îi sare programatorul.
 3. **Aplicația iOS**: Add app › iOS › Bundle ID `ro.adelaharu.app` › Register › descărcați `GoogleService-Info.plist`.
+   Pașii „Add Firebase SDK” / „Add initialization code” din asistent **se sar**: proiectul are deja pachetul
+   `firebase-ios-sdk` (doar `FirebaseCore` + `FirebaseMessaging`, fără Analytics) și codul din `AppDelegate`.
+   Pe developer.apple.com › Identifiers › `ro.adelaharu.app`: bifați **Push Notifications** (capabilitatea; fără ea
+   semnarea cu `aps-environment` din `App.entitlements` nu trece). După bifare, profilele se refac (match cu
+   „creează certificate”).
 4. **Cheia APNs** (ca Apple să livreze notificările prin Firebase):
    - https://developer.apple.com/account › Certificates, IDs & Profiles › **Keys** › „+” › Name `Firebase APNs`,
      bifați **Apple Push Notifications service (APNs)** › Configure: „Sandbox & Production” › Continue › Register ›
@@ -220,10 +225,15 @@ Secretele: `MATCH_GIT_URL` (ex. `https://github.com/utilizator/adelaharu-certifi
 
 Secretele GitHub: `GOOGLE_SERVICES_JSON` (conținutul `google-services.json`, ca text) și `GOOGLE_SERVICE_INFO_PLIST`
 (conținutul `GoogleService-Info.plist`, ca text). Fără ele aplicația se construiește **fără notificări** (restul merge,
-iar puntea nici nu cere permisiunea). Pe iPhone e nevoie în plus de o schimbare făcută o dată de programator în
-proiectul Xcode (vezi „Pentru programator”); până atunci build-ul iOS **nu se încarcă în TestFlight** cât timp e bifat
-„Versiunea promite notificări push pe iPhone” (`push_ios`). Fără push pe iPhone, debifați-l și scoateți push-ul din
-notele Apple și din fișa App Store (`store/review-notes.md`, `store/listing.md`).
+iar puntea nici nu cere permisiunea). Pe iPhone, workflow-ul scrie fișierul în `app/ios/App/App/GoogleService-Info.plist`
+(ignorat de git); faza de build „GoogleService-Info.plist (dacă există)” îl copiază în aplicație. Local (Xcode), îl
+puneți voi în același loc. Fără el build-ul iOS merge, dar **fără push**: atunci debifați „Versiunea promite notificări
+push pe iPhone” (`push_ios`) și scoateți push-ul din notele Apple și din fișa App Store (`store/review-notes.md`,
+`store/listing.md`). Cu `push_ios` bifat, verificarea din workflow cere `aps-environment` = `production`, pachetul
+`firebase-ios-sdk`, faza care copiază plist-ul și **fișierul** plist (valid): fără secret, încărcarea în TestFlight
+cade (fără încărcare, doar avertisment). La fel pe Android, cu `push_android` și `GOOGLE_SERVICES_JSON`.
+Proba: un telefon real cu build din TestFlight, Mai mult › Aplicația › Notificări, apoi „Probă” din Setări › Aplicația
+mobilă (tokenul trimis e FCM, de forma `…:APA91b…`; un token de 64 de cifre hexa ar însemna că Firebase nu a pornit).
 
 ### Contul de serviciu pentru Google Play (încărcarea automată a versiunilor)
 1. https://console.cloud.google.com › alegeți proiectul Firebase de mai sus (e și proiect Google Cloud).
@@ -279,14 +289,20 @@ Pagina de setări apare doar când fragmentul e activ, deci le completați imedi
 | Ce anunțăm | bifele: meditație nouă, înregistrare „Respiră-te acasă”, întâlnire în 15 minute | ce notificări pleacă |
 | Emailul echipei | implicit `contact@adelaharu.ro` | aici vine anunțul când o clientă își șterge contul din aplicație |
 | Probă | adresa voastră | trimite o notificare de probă telefoanelor acelei adrese (trebuie să fi intrat în aplicație și să fi permis notificările) |
-| Contul de recenzie (**încă nu există în fragment**; după ce colegul îl adaugă) | adresa și codul fix (`docs/review-account.md`) | ca Apple și Google să poată intra fără email |
+| Contul de recenzie (în fragment din 18 nov., seara: `ah-sp-aplicatie.php` 2.1.0, secțiunea 9, cu teste; de verificat pe build-ul din TestFlight / testul intern) | adresa și codul fix (`docs/review-account.md`) | ca Apple și Google să poată intra fără email |
 
 Sub formular sunt linkurile de verificat (`apple-app-site-association`, `assetlinks.json`, `/app/intra`, `config`):
 fiecare trebuie să se deschidă fără eroare. Tot acolo e jurnalul (ultimele rânduri).
 
-**Pe server, o dată** (de verificat cu găzduirea):
-- **LiteSpeed Cache › Excludes › „Do Not Cache URIs”**: `/wp-json/ah-spa/`, `/app/`, `/.well-known/` (fragmentul
-  trimite deja „no-cache”, asta e plasa de siguranță). Pagina `/spatiul-meu/` nu se cachează nici azi.
+**Pe server, o dată** (de verificat cu găzduirea; aceeași listă ca `server/README.md`, pasul 5, și `docs/partener.md`):
+- **LiteSpeed Cache › Excludes**, toate trei câmpurile (fragmentul trimite deja „no-cache”, dar o pagină deja în cache
+  e servită **înainte** de PHP, deci fără ele aplicația ar putea primi copia de browser a unei pagini, cu bara
+  Complianz, Google Analytics și pixelul Meta, adică exact ce etichetele de confidențialitate spun că lipsește, sau o
+  pagină de magazin pe care redirecționarea ar fi trebuit s-o ascundă):
+  - **„Do Not Cache User Agents”** += `AdelaHaruApp`;
+  - **„Do Not Cache Cookies”** += `ah_app` și `ah_spp`;
+  - **„Do Not Cache URIs”** += `/wp-json/ah-spa/`, `/app/`, `/.well-known/`, `/pentru-el/`.
+  Pagina `/spatiul-meu/` nu se cachează nici azi.
 - **`/.well-known/`**: dacă există un folder real (de la certificatul SSL), `apple-app-site-association` și
   `assetlinks.json` trebuie să ajungă la WordPress. Verificare: `https://www.adelaharu.ro/.well-known/assetlinks.json`
   se deschide (cod 200, JSON) **fără redirect** (Apple nu urmează redirecturi).
@@ -328,8 +344,16 @@ scrie pe site altceva decât ar scrie o clientă (intrare, ciclu, notificări).
    cumpărat (cursul, Inner Temple, cartea) apare din nou, pentru că vine din comenzi, dar ciclul, notițele,
    telefoanele și notificările nu mai sunt. Exact asta spun notele pentru Apple (recenzorii fac și ei proba asta).
    Dacă „Pentru el” e activ: invitați o adresă de probă, deschideți linkul ei pe alt telefon (se deschide aplicația,
-   ecranul „Azi” al lui), opriți accesul din contul ei (pagina lui arată că accesul e oprit).
-10. În browserul calculatorului și al telefonului, Spațiul meu arată **exact ca înainte** (fragmentul nu atinge
+   ecranul „Azi” al lui), opriți accesul din contul ei (pagina lui arată că accesul e oprit). „Trimite din nou
+   invitația” deconectează telefonul lui (la redeschidere, ecranul fără cont). Pe ecranul de intrare, „Sunt
+   partenerul ei” › linkul lipit în câmp deschide pagina lui în aplicație (așa intră recenzorul Apple). **După proba de
+   ștergere, refaceți ciclul și partenerul de recenzie** (`review-account.md`, „Partenerul de recenzie”, punctul 3).
+10. Cache-ul: în aplicație, deschideți din „Mai mult” Politica de confidențialitate și Termenii (pagini care pentru
+    browser sunt în cache-ul LiteSpeed): **nu** apare bara de cookie-uri Complianz (`#cmplz-cookiebanner-container`),
+    iar în Web Inspector / `chrome://inspect` nu pleacă nicio cerere spre `googletagmanager.com`,
+    `google-analytics.com`, `connect.facebook.net`, `facebook.com/tr`. Dacă apare bara, lipsesc excluderile de mai sus
+    („Pe server, o dată”): User Agents `AdelaHaruApp`, Cookies `ah_app` / `ah_spp`.
+11. În browserul calculatorului și al telefonului, Spațiul meu arată **exact ca înainte** (fragmentul nu atinge
     browserele). Aceasta e cea mai importantă verificare a site-ului.
 
 ## 10. Lansarea, în ordine
@@ -405,13 +429,23 @@ schimbare. Peste limită, GitHub cere card și taxează pe minut.
   cu verificarea că există `dist/offline.html` și `dist/index.html`, apoi `.github/scripts/verifica-shell.mjs`);
   serverul pe PHP 8.1 și 8.4 (`php -l` pe **toate** fișierele PHP din `server/`, paza `AH_SPA`, prefixul `ah_spa_`
   al tuturor funcțiilor fragmentului (și `ah_spp_` pentru `ah-sp-partener.php`, când există) cu `.github/scripts/prefix-fragment.php` (tokenizer, deci ignoră JavaScript-ul
-  din șiruri), `php server/tests/run.php`); `actionlint` pe workflow-uri.
+  din șiruri), apoi testele: `php server/tests/run.php`, `node server/tests/ciclu.test.cjs`,
+  `php server/tests/partener/run.php`, `node server/tests/partener/faze.test.cjs`, `php server/tests/integrare/run.php`
+  (ca `server/tests/ruleaza.sh`, fără harnașele vizuale `poze.cjs`, care rescriu pozele din `docs/screenshots-v2`).
+  `reference/` e în `.gitignore`, deci în CI testele citesc bucățile din 235/41 și pagina publică din
+  `server/tests/date/v2/` (`php server/tests/extrage-referinte.php`; `ruleaza.sh` verifică local că sunt la zi);
+  `actionlint` pe workflow-uri.
 - `.github/workflows/android.yml`: la push pe `main` care atinge `app/**` ⇒ APK debug (14 zile); la
   `workflow_dispatch` ⇒ AAB semnat (30 de zile) + `fastlane android interna` (Play, track `internal`).
 - `.github/workflows/ios.yml`: doar `workflow_dispatch` ⇒ `fastlane ios testflight_beta`. Intrarea `push_ios`
   (implicit bifată) pornește `.github/scripts/verifica-push-ios.sh`: la încărcare în TestFlight, cade dacă lipsește
-  `aps-environment` = `production` din `App.entitlements`, pachetul `firebase-ios-sdk` din proiect sau
-  `GoogleService-Info.plist` din `App.xcodeproj` (notele promit push). CI-ul verifică sintaxa scriptului.
+  `aps-environment` = `production` din `App.entitlements`, pachetul `firebase-ios-sdk` din proiect, **fișierul**
+  `app/ios/App/App/GoogleService-Info.plist` (nevid, plist valid: `plutil -lint`, pe Linux `plistlib`) sau faza de
+  build care îl copiază (după id-ul ei din `project.pbxproj`; numele plist-ului apare mereu în proiect, deci nu ajunge
+  ca dovadă). Notele promit push. CI-ul verifică sintaxa scriptului și îl rulează fără încărcare (doar avertismente).
+  `.github/workflows/android.yml` are intrarea pereche `push_android` (implicit bifată): la încărcarea în Play, cade
+  dacă lipsește sau e stricat `google-services.json` (secretul `GOOGLE_SERVICES_JSON`), pentru că fișa Google Play
+  promite notificări.
 - `.github/scripts/verifica-shell.mjs`: după `cap sync`, pe `capacitor.config.json` generat (Android:
   `app/src/main/assets/`, iOS: `App/App/`), iar în CI pe configul rezolvat (`npx cap config --json`). Cade dacă
   `server.url` nu e `https://www.adelaharu.ro/spatiul-meu/`, dacă `errorPath` nu e `offline.html`, dacă User-Agent-ul
@@ -444,21 +478,23 @@ schimbare. Peste limită, GitHub cere card și taxează pe minut.
   `applinks:www.adelaharu.ro`, `PrivacyInfo.xcprivacy`, manifestul Android cu App Links și `AhMediaService`).
 
 ### Ce mai trebuie (în afara pipeline-ului)
-1. **Push pe iOS:** pachetul SPM `firebase-ios-sdk` (`FirebaseCore`, `FirebaseMessaging`) adăugat la ținta App și
-   `GoogleService-Info.plist` referit în proiect (Copy Bundle Resources); `AppDelegate` e deja pregătit
-   (`#if canImport(FirebaseMessaging)`). Plus `aps-environment` = `production` în `App.entitlements`. Workflow-ul iOS
-   **oprește** încărcarea în TestFlight până atunci, cât timp e bifat `push_ios` (implicit). O versiune fără push pe
-   iPhone se încarcă doar cu `push_ios` debifat **și** cu funcția 5 scoasă din notele Apple și rândul despre
-   notificări scos din fișa App Store.
+1. **Push pe iOS — făcut în proiect (18 nov.):** pachetul SPM `firebase-ios-sdk` (≥ 12.0, `FirebaseCore` +
+   `FirebaseMessaging`) în ținta App; faza „GoogleService-Info.plist (dacă există)” (fără fișier: build fără push, nu
+   eroare); `aps-environment` = `production` în `App.entitlements` (Release) și `development` în `AppDebug.entitlements`
+   (Debug); `Info.plist`: `FirebaseAppDelegateProxyEnabled` = NO, `FirebaseMessagingAutoInitEnabled` = NO (tokenul
+   FCM apare doar după ce ea permite notificările). `AppDelegate` dă tokenul APNs lui Firebase și trimite la Capacitor
+   tokenul **FCM**; `AhApp.info()` spune `push`/`token` (`fcm`|`apns`), iar puntea nu trimite niciodată un token APNs.
+   **Rămâne:** capabilitatea Push Notifications pe App ID (pasul 7.3), secretul `GOOGLE_SERVICE_INFO_PLIST`, cheia
+   APNs în Firebase (7.4) și proba pe un iPhone real. Prima compilare pe macOS descarcă pachetul Firebase (Xcode 16+).
 2. **`TARGETED_DEVICE_FAMILY`** e `1,2` (iPhone + iPad) ⇒ Apple cere capturi de iPad și testează pe iPad. Recomand `1`
    pentru prima versiune.
-3. **Contul de recenzie** în fragment: `docs/review-account.md`. **Neimplementat (18 nov.); blochează trimiterea.**
-4. **Fără analiză și pixel în aplicație** (GA, `facebook-for-woocommerce`, atribuirea WooCommerce, Complianz):
-   cerință fermă în `arhitectura.md`, condiția etichetelor de confidențialitate (`store/privacy-answers.md`).
-   **Neimplementat (18 nov.); fără el nu se completează etichetele și nu se trimite.**
-5. **Ciclul refăcut din `Preferences`** când iOS golește `localStorage` (`arhitectura.md`, Puntea, punctul 3). Azi
-   `ciclu()` din fragment șterge copia și mementourile exact în acel caz; de reparat, cu test, înainte de TestFlight.
-6. **Vimeo cu `dnt=1`** pe orice iframe din aplicație (`arhitectura.md`); embed-urile site-ului îl au deja.
+3. **Contul de recenzie:** în fragment (2.1.0, secțiunea 9), cu teste. Rămân: adresa, comenzile manuale și codul în
+   Setări › Aplicația mobilă (`docs/review-account.md`, „Ce pregătește proprietara”) și o intrare reușită în TestFlight.
+4. **Fără analiză și pixel în aplicație:** în fragment (2.1.0, secțiunea 10), cu teste și harnașul vizual (nicio
+   cerere de urmărire în aplicație, neschimbat în browser). De verificat o dată pe telefon cu Web Inspector.
+5. **Ciclul refăcut din `Preferences`:** în fragment, cu test (copia nu se mai șterge când iOS golește `localStorage`).
+   De încercat pe iPhone: `localStorage` golit din Web Inspector ⇒ Ciclul meu revine.
+6. **Vimeo cu `dnt=1`:** în fragment (server + punte). Apple Podcasts: în aplicație, linkul episodului în locul playerului.
 
 ### Rulat local (verificare)
 ```

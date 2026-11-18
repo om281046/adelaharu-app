@@ -1,7 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Release (TestFlight, App Store). Debug folosește AppDebug.entitlements (aps-environment = development).
+     aps-environment cere capabilitatea Push Notifications pe App ID-ul ro.adelaharu.app (docs/release.md, pasul 7). -->
 <plist version="1.0">
 <dict>
+	<key>aps-environment</key>
+	<string>production</string>
 	<key>com.apple.developer.associated-domains</key>
 	<array>
 		<string>applinks:www.adelaharu.ro</string>

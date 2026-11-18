@@ -89,7 +89,16 @@ function status_header( $c ) { $GLOBALS['ah_test_status'] = $c; }
 function wp_check_filetype( $f ) { return array( 'ext' => 'mp3', 'type' => 'audio/mpeg' ); }
 function wp_mail( $to, $s, $b, $h = array() ) { $GLOBALS['ah_test_mail'][] = array( $to, $s, $b ); return true; }
 function current_user_can( $c ) { return false; }
-function is_wp_error( $x ) { return false; }
+function is_wp_error( $x ) { return $x instanceof WP_Error; }
+class WP_Error { public $code; public $message; public function __construct( $c = '', $m = '' ) { $this->code = $c; $this->message = $m; } public function get_error_message() { return $this->message; } }
+/* parolele (codul de recenzie): ca în WordPress, doar amprenta; verificarea în timp constant */
+function wp_hash_password( $p ) { return password_hash( (string) $p, PASSWORD_BCRYPT, array( 'cost' => 4 ) ); }
+function wp_check_password( $p, $h, $id = '' ) { $GLOBALS['ah_test_check_pw'] = ( $GLOBALS['ah_test_check_pw'] ?? 0 ) + 1; return '' !== (string) $h && password_verify( (string) $p, (string) $h ); }
+/* coada de scripturi și stiluri (doar ce folosește scoaterea urmăririi) */
+class Ah_Test_Deps { public $queue = array(); public $registered = array(); public $scoase = array();
+	public function adauga( $h, $src ) { $this->queue[] = $h; $this->registered[ $h ] = (object) array( 'src' => $src ); } }
+function wp_dequeue_script( $h ) { $o = $GLOBALS['wp_scripts']; $o->queue = array_values( array_diff( $o->queue, array( $h ) ) ); $o->scoase[] = $h; }
+function wp_dequeue_style( $h ) { $o = $GLOBALS['wp_styles']; $o->queue = array_values( array_diff( $o->queue, array( $h ) ) ); $o->scoase[] = $h; }
 
 /* Redirecționarea: o excepție, ca testul să vadă unde ar fi plecat. */
 class Ah_Test_Redirect extends Exception { public $loc; public function __construct( $l ) { $this->loc = $l; parent::__construct( $l ); } }
@@ -120,11 +129,12 @@ class WP_HTTP_Response {
 }
 class WP_REST_Response extends WP_HTTP_Response {}
 class WP_REST_Request {
-	private $h; private $j; private $p; private $route;
-	public function __construct( $h = array(), $json = null, $param = array(), $route = '/' ) {
+	private $h; private $j; private $p; private $route; private $metoda;
+	public function __construct( $h = array(), $json = null, $param = array(), $route = '/', $metoda = 'GET' ) {
 		$this->h = array(); foreach ( $h as $k => $v ) { $this->h[ strtolower( str_replace( '-', '_', $k ) ) ] = $v; }
-		$this->j = $json; $this->p = $param; $this->route = $route;
+		$this->j = $json; $this->p = $param; $this->route = $route; $this->metoda = $metoda;
 	}
+	public function get_method() { return $this->metoda; }
 	public function get_header( $k ) { return $this->h[ strtolower( str_replace( '-', '_', $k ) ) ] ?? null; }
 	public function get_json_params() { return $this->j; }
 	public function get_param( $k ) { return $this->p[ $k ] ?? ( is_array( $this->j ) ? ( $this->j[ $k ] ?? null ) : null ); }
@@ -137,7 +147,9 @@ class Ah_Test_Comanda {
 	public function __construct( $id, $email, $meta = array() ) { $this->id = $id; $this->email = $email; $this->meta = $meta; }
 	public function get_id() { return $this->id; }
 	public function get_meta( $k ) { return $this->meta[ $k ] ?? ''; }
+	public function get_billing_email() { return $this->email; }
 	public function update_meta_data( $k, $v ) { $this->meta[ $k ] = $v; }
+	public function delete_meta_data( $k ) { unset( $this->meta[ $k ] ); }
 	public function add_order_note( $n ) { $this->note[] = $n; }
 	public function save() { $this->salvari++; }
 }

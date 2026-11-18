@@ -49,11 +49,18 @@ scriem. Te poți dezabona din orice email, iar datele se șterg. Nu folosim date
 după ce bifezi separat acordul ca el să vadă faza ta de azi și datele estimate ale fazelor următoare (temeiul:
 consimțământul tău explicit, art. 9 alin. (2) lit. a GDPR). El primește un link personal și vede doar atât: faza
 ta de azi, ce urmează și texte despre cum să fie alături de tine. Nu vede notițele tale, simptomele, situația ta
-sau zilele pe care le-ai notat. Poți opri accesul lui oricând, pe loc; când îți ștergi contul sau datele ciclului,
-accesul lui se șterge și el. Pentru el păstrăm prenumele, adresa de email (criptată), un cod al linkului (doar
-într-o formă care nu poate fi citită înapoi), data ultimei vizite și, dacă folosește aplicația și acceptă
-notificările, tokenul de notificări; îi trimitem un memento la începutul fiecărei faze. El își poate șterge
-oricând accesul din pagina lui.
+sau zilele pe care le-ai notat. Când menstruația întârzie sau datele nu sunt la zi, vede doar un mesaj neutru, fără
+motiv. Dacă apeși „Trimite din nou invitația”, linkul vechi nu mai merge și orice telefon sau browser pe care l-a
+deschis e deconectat. Poți invita cel mult două persoane și poți opri accesul oricând, pe loc. Pentru
+fiecare păstrăm prenumele, adresa de email (criptată), numele tău așa cum îl vede el, momentul acordului tău, data
+invitației, prima și ultima vizită, un cod al linkului (doar într-o formă care nu poate fi citită înapoi), dacă vrea
+emailuri la începutul fazelor și, dacă folosește aplicația și acceptă notificările, tokenul de notificări al
+telefonului lui (trimis prin Firebase Cloud Messaging, ca mai sus). Îi trimitem, dacă alege, o notificare sau un
+email la începutul fiecărei faze. Datele lui se șterg la 30 de zile după ce oprești accesul, pe loc când îți ștergi
+contul sau datele ciclului din cont și pe loc când își șterge el accesul din pagina lui. Folosim datele lui doar ca
+să-i arătăm ce ai ales tu să vadă (temeiul pentru datele lui: interesul legitim de a-i oferi pagina la care l-ai
+invitat, art. 6 alin. (1) lit. f GDPR).
+<!-- CIORNĂ: temeiul pentru datele lui (lit. f sau consimțământul lui, prin deschiderea linkului) de confirmat cu juristul. -->
 
 **Linkul vechi pentru partener.** Linkul cu fazele tale creat înainte de invitații are datele calendarului chiar în
 link, după semnul „#”, partea pe care browserul nu o trimite niciodată la server. Noi păstrăm doar o cheie a
@@ -75,8 +82,9 @@ de a te adresa Autorității Naționale de Supraveghere a Prelucrării Datelor c
 ---
 
 *Note pentru proprietară (nu se publică):*
-- paragraful „Partenerul tău” se publică odată cu fragmentul `ah-sp-partener.php`; până atunci rămâne doar cel
-  despre linkul vechi (fără cuvântul „vechi”);
+- paragraful „Partenerul tău” se publică odată cu activarea fragmentului `ah-sp-partener.php` pe site; până atunci
+  rămâne doar cel despre linkul vechi (fără cuvântul „vechi”). E aliniat cu paragraful din `docs/partener.md`
+  (cel mult 2 persoane, 30 de zile după oprire); „Șterge contul” șterge pe loc și accesul lui (18 nov., cu test);
 - fraza „nu există instrumente de analiză sau urmărire” e adevărată doar dacă fragmentul oprește în aplicație Google
   Analytics și pixelul Meta (`privacy-answers.md`, „Condiția”); altfel se rescrie;
 - emailurile fazelor: datele lor (tabelul `ah_ciclu` din 41) **nu** sunt criptate; nu scrieți nicăieri „toate datele

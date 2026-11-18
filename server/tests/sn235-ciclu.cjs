@@ -5,7 +5,9 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
-const sn = fs.readFileSync(path.join(__dirname, '..', '..', 'reference', 'v2', 'sn235.php'), 'utf8').split('\n');
+// reference/v2 când există (local), altfel copia din server/tests/date/v2 (CI; server/tests/extrage-referinte.php)
+const REF = path.join(__dirname, '..', '..', 'reference', 'v2', 'sn235.php');
+const sn = fs.readFileSync(fs.existsSync(REF) ? REF : path.join(__dirname, 'date', 'v2', 'sn235.php'), 'utf8').split('\n');
 const linie = (inc) => { const l = sn.find((x) => x.startsWith(inc)); if (!l) throw new Error('lipsește în 235: ' + inc); return l.replace(/,\s*$/, ''); };
 const parti = [' d:function(){', ' zi0:function(s)', ' azi0:function()', ' iso:function(z)', ' lung:function(x)', ' faze:function(L,m)', ' azi:function()'].map(linie);
 /** CI din 235, cu store = { cheie: valoare } în loc de localStorage și acum = ms (ora „locală”). */

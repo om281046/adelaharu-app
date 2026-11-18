@@ -3,11 +3,11 @@
 Pentru: colegul de la `server/ah-sp-aplicatie.php`. De la: magazine și build. Context: `docs/store/review-notes.md`.
 Versiunea: v2 (18 nov. 2026). Înlocuiește cerința v1 (`/auth/cod`, `/auth/verifica` din `ah-app-api.php`, scos).
 
-> **Stare: NEIMPLEMENTAT** (verificat în `server/ah-sp-aplicatie.php`, 18 nov. 2026, 12:07: nicio setare „Contul de
-> recenzie”, niciun filtru pe `/ah-sp/v1/cod` sau `/ah-sp/v1/intra`, fără mențiunea din subiectul emailului de la
-> `sterge-cont`). **Blochează trimiterea la recenzie** (Apple 2.1). Gata înseamnă: tot ce e mai jos (punctele 1–9,
-> inclusiv subiectul „(contul de recenzie)” în `ah_spa_r_sterge_cont`), testele din punctul 9 în `server/tests/`
-> trecute, și o intrare reușită cu codul fix în build-ul din TestFlight / testarea internă.
+> **Stare: IMPLEMENTAT în fragment** (`server/ah-sp-aplicatie.php` 2.1.0, secțiunea 9, 18 nov. 2026): setarea în
+> Setări › Aplicația mobilă › „Contul de recenzie” (opțiunea `ah_spa_recenzie`, doar hash-ul codului), filtrul
+> `ah_spa_recenzie_filtru` pe `rest_pre_dispatch` (prioritatea 4), golirea dispozitivelor, subiectul „(contul de
+> recenzie)” la `sterge-cont`; testele din punctul 9 în `server/tests/run.php` (secțiunea 12) trec. **Rămâne** (blochează
+> trimiterea până atunci): ce pregătește proprietara (mai jos) și o intrare reușită cu codul fix în TestFlight / testarea internă.
 
 ## Problema
 
@@ -125,14 +125,29 @@ Prioritatea 4 (înaintea filtrului de portaluri, 5) nu contează pentru corectit
 ## Partenerul de recenzie (contul „Pentru el”, când există `ah-sp-partener.php`)
 
 Contul lui nu are cod: intră cu un link personal permanent (`/pentru-el/?t=<token>`, `arhitectura.md`), care pe
-telefon deschide aplicația. Recenzorul nu are emailul, deci îi dăm linkul direct în note. **Nimic special în cod.**
+telefon deschide aplicația **când e atins**. Recenzorul nu are emailul, deci îi dăm linkul direct în note. **Nimic special în cod.**
+
+Cum ajunge recenzorul în aplicație cu linkul (ales 18 nov., seara): iOS nu deschide aplicația pentru un link tastat
+sau lipit în bara de adrese din Safari (acolo se deschide site-ul). Notele îi cer deci (a) să lipească linkul în
+Notițe sau Mesaje pe iPhone și să-l atingă de acolo, sau (b) să-l lipească în aplicație: pe ecranul de intrare
+(fără cont), „Sunt partenerul ei” › câmpul „Sau lipește aici linkul copiat” › „Deschide linkul”, care deschide
+`/pentru-el/?t=` în aceeași pagină, deci în aplicație (`ah-sp-partener.php` 1.1.0; același câmp e și pe pagina lui
+fără cont). Pe Android, la fel: linkul atins dintr-o notiță sau din Gmail deschide aplicația.
 1. Cu contul de recenzie (ea), în Ciclul meu: ciclul salvat în cont (cu acordul), apoi invitația pentru
    „Andrei”, `recenzie-el@adelaharu.ro` (a doua căsuță reală, la care are acces echipa), cu bifa de acord.
 2. Din emailul primit de `recenzie-el@`, linkul personal se copiază în App Review Information › Notes
    (`<REVIEW_PARTNER_LINK>` din `store/review-notes.md`) și în Play Console › Acces la aplicație (a doua
    instrucțiune, „Cont partener”).
-3. Dacă recenzorul își șterge accesul de partener sau „Oprește accesul” din contul ei, linkul nu mai merge:
-   se trimite o invitație nouă înainte de următoarea versiune. Același memento ca la reînnoirea Inner Temple.
+3. Linkul nu mai merge dacă recenzorul își șterge accesul de partener, dacă apasă „Oprește accesul” sau „Trimite din
+   nou invitația” în contul ei, **sau dacă șterge contul de recenzie** („Șterge contul” șterge, prin
+   `ah_spa_sterge_cont` › `ah_spp_sterge_ale_ei`, toți partenerii ei și ciclul păstrat în cont). De aceea notele pun
+   blocul PARTNER ACCESS înaintea ștergerii contului și îi cer recenzorului să încerce întâi partenerul. **Înainte de
+   fiecare trimitere** (și după orice rundă de recenzie): intrați cu contul de recenzie, verificați că ciclul e în cont
+   (altfel îl refaceți: prima zi, lungimile, „Păstrează în cont” cu acordul) și că „Andrei” apare în „Pentru el”; dacă
+   lipsește, invitați-l din nou (punctele 1–2) și înlocuiți linkul în App Store Connect și în Play Console. Deschideți
+   linkul nou o dată (atins dintr-o notiță) ca să vedeți că merge. Același memento ca la reînnoirea Inner Temple.
+4. Pe telefonul pe care e intrat și contul de recenzie (ea), pagina lui se deschide, dar notificările telefonului rămân
+   ale ei (un telefon = un cont): pagina lui oferă atunci emailurile fazelor și „Deschide Spațiul meu”. Notele spun asta.
 Cerință pentru colegul de la `ah-sp-partener.php`: limita de 2 parteneri activi și „Trimite din nou linkul” merg
 normal pentru aceste adrese; tokenul nu expiră singur (ca pentru oricine).
 

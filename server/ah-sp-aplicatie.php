@@ -22,6 +22,11 @@
  *      întâlnire care începe în 15 minute. Fără cheia contului de serviciu nu pleacă nimic: doar jurnal.
  *   7. /.well-known/apple-app-site-association, /.well-known/assetlinks.json și pagina /app/intra.
  *   8. Setări › Aplicația mobilă: Team ID, amprente SHA-256, cheia Firebase, magazinele, versiunea minimă, mesajul.
+ *   9. Contul de recenzie (Apple / Google): cod fix pentru O SINGURĂ adresă, setată în Setări › Aplicația mobilă,
+ *      prin rest_pre_dispatch pe POST /ah-sp/v1/cod și /ah-sp/v1/intra (235 neschimbat; docs/review-account.md).
+ *  10. Fără analiză și urmărire în aplicație: Google Analytics, Microsoft Clarity, pixelul Meta (și partea lui din
+ *      browser pentru Conversions API), atribuirea comenzilor WooCommerce și bara Complianz nu se încarcă; iframe-urile
+ *      Vimeo primesc dnt=1, playerul Apple Podcasts devine un link spre aplicația Podcasts (2.1.0, 18 nov. 2026).
  *
  * În browser nu se schimbă nimic: fiecare cârlig de pagină întreabă întâi ah_spa_e_aplicatie().
  * Oprire: dezactivezi fragmentul. Site-ul rămâne exact ca înainte; aplicația arată Spațiul meu ca în browser.
@@ -33,7 +38,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 if ( defined( 'AH_SPA' ) ) {
 	return; // încărcat deja (de exemplu, copie dublă a fragmentului)
 }
-define( 'AH_SPA', '2.0.0' );
+define( 'AH_SPA', '2.1.0' );
 define( 'AH_SPA_NS', 'ah-spa/v1' );
 define( 'AH_SPA_PACHET', 'ro.adelaharu.app' );
 define( 'AH_SPA_LINK_MIN', 15 );        // cât ține linkul semnat al unei descărcări
@@ -306,6 +311,11 @@ function ah_spa_curata_date( $d ) {
 		foreach ( $d['podcast']['episoade'] as $i => $e ) {
 			if ( is_array( $e ) ) {
 				$d['podcast']['episoade'][ $i ]['mai'] = null; // „Mai departe: <curs>” de sub episod
+				// playerul Apple Podcasts (embed.podcasts.apple.com) nu se încarcă în aplicație: puntea pune în locul lui
+				// linkul episodului (câmpul „apple”), care se deschide în aplicația Podcasts (vezi ah_spa_js, iframe-urile)
+				if ( isset( $e['embed'] ) && '' !== (string) $e['embed'] ) {
+					$d['podcast']['episoade'][ $i ]['embed'] = 'about:blank';
+				}
 			}
 		}
 	}
@@ -420,6 +430,10 @@ function ah_spa_cfg( $zona, $email ) {
 		'mesaj'          => (string) $s['mesaj'],
 		'magazin'        => 'ios' === $pl ? (string) $s['link_ios'] : ( 'android' === $pl ? (string) $s['link_android'] : '' ),
 		'notif_id'       => AH_SPA_NOTIF_ID,
+		// contul pentru el (ah-sp-partener.php), dacă fragmentul lui e activ: e intrat el pe acest telefon? (doar da/nu)
+		'el'             => function_exists( 'ah_spp_din_cookie' ) && function_exists( 'ah_spp_gata' ) && ah_spp_gata() && (bool) ah_spp_din_cookie(),
+		'api_el'         => function_exists( 'ah_spp_gata' ) && defined( 'AH_SPP_NS' ) ? esc_url_raw( rest_url( AH_SPP_NS . '/' ) ) : '',
+		'pagina_el'      => function_exists( 'ah_spp_gata' ) && defined( 'AH_SPP_PAGINA' ) ? esc_url_raw( home_url( AH_SPP_PAGINA ) ) : '',
 	);
 }
 
@@ -514,6 +528,14 @@ html.ahsp-seara .ahspa-foaie p,html.ahsp-seara .ahspa-foaie li{color:#E0D2CB}
 html.ahsp-seara .ahspa-foaie button.lite{background:rgba(255,255,255,.08);color:#F6ECE6;border-color:rgba(255,255,255,.16)}
 html.ahsp-seara #ahsp .spa-dl button{background:rgba(255,255,255,.08)!important;border-color:rgba(255,255,255,.16)!important}
 html.ahsp-seara #ahsp .spa-pericol b,html.ahsp-seara #ahsp .spa-pericol .ic-mic{color:#F2A08F!important}
+.spa-pod{margin:14px 0 0!important}
+.spa-pod svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+
+/* ===== refacerea ciclului (puntea, secțiunea 3): Spațiul meu așteaptă o clipă copia de pe telefon ===== */
+html.ahspa-refac #ahsp{visibility:hidden}
+
+/* ===== fără bara de cookie-uri în aplicație: aici rămân doar cookie-uri strict necesare (fragmentul, secțiunea 10) ===== */
+#cmplz-cookiebanner-container,#cmplz-manage-consent,.cmplz-cookiebanner,.cmplz-manage-consent,.cmplz-soft-cookiewall{display:none!important}
 AHSPACSS;
 }
 
@@ -581,7 +603,7 @@ function curataD(v){
   v.med_toate=(v.med_toate||[]).filter(function(x){return x&&x.acces;}).map(function(x){x.pret='';x.cumpara='';return x;});
   v.abonamente=(v.abonamente||[]).map(function(a){a.link='';a.detaliu=String(a.detaliu||'').replace('Acces plătit până pe ','Activ până pe ');return a;});
   if(v.ciclu)v.ciclu.produse={};
-  if(v.podcast&&v.podcast.episoade)v.podcast.episoade.forEach(function(e){if(e)e.mai=null;});
+  if(v.podcast&&v.podcast.episoade)v.podcast.episoade.forEach(function(e){if(e){e.mai=null;if(e.embed)e.embed='about:blank';}});
   if(v.linkuri)['recomanda','cadou','cursuri','yin'].forEach(function(k){if(k in v.linkuri)v.linkuri[k]='';});
   v.aplicatie=true;}catch(e){}
  return v;
@@ -593,6 +615,28 @@ try{
    get:function(){return g0?g0():_v;},
    set:function(v){if(s0)s0(v);else _v=v;curataD(g0?g0():v);}});}
 }catch(e){}
+/* Iframe-urile din aplicație. Vimeo: dnt=1 (fără cookie-uri și statistici Vimeo; embed-urile din 235, 44, 51, 265 îl au
+   deja, serverul îl pune și în HTML-ul paginii, aici îl primesc și cele desenate mai târziu). Apple Podcasts: playerul
+   (embed.podcasts.apple.com) nu se încarcă în aplicație (trimite statistici de utilizare la Apple, iar într-un WKWebView
+   redarea în cadru nu e sigură); în locul lui, linkul episodului, pe care telefonul îl deschide în aplicația Podcasts. */
+function dntVimeo(u){var x=abs(u);if(!x||x.hostname!=='player.vimeo.com'||x.searchParams.get('dnt')==='1')return '';x.searchParams.set('dnt','1');return x.href;}
+function linkPodcast(f){
+ var m=/(\d+)/.exec(f.getAttribute('title')||''),P=(window.AH_SP&&window.AH_SP.podcast)||{},u='';
+ if(m)(P.episoade||[]).forEach(function(e){if(e&&+e.nr===+m[1]&&e.apple)u=e.apple;});
+ if(!u){var x=abs(f.getAttribute('src')||'');if(x&&x.hostname==='embed.podcasts.apple.com'){x.hostname='podcasts.apple.com';x.searchParams.delete('theme');u=x.href;}}
+ u=u||P.apple||'';var y=abs(u);return y&&y.protocol==='https:'&&/(^|\.)apple\.com$/.test(y.hostname)?y.href:'';
+}
+function iframe(f){
+ if(!f||f.tagName!=='IFRAME'||f.getAttribute('data-spa-ok'))return;
+ var src=f.getAttribute('src')||'',ds=f.getAttribute('data-src-cmplz')||'';
+ if(f.classList.contains('pod-ifr')||/^https?:\/\/embed\.podcasts\.apple\.com\//i.test(src)){
+  var u=linkPodcast(f),p=d.createElement('p');p.className='spa-pod';p.setAttribute('data-spa','1');
+  p.innerHTML=u?'<a class="btn lite" href="'+esc(u)+'" rel="noopener">'+ic('nota')+'Ascultă în Apple Podcasts</a>':''; /* CIORNĂ */
+  if(f.parentNode)f.parentNode.replaceChild(p,f);return;}
+ var n=dntVimeo(ds||src);
+ if(n){f.setAttribute('data-spa-ok','1');if(ds)f.removeAttribute('data-src-cmplz');f.setAttribute('src',n);}
+}
+function iframeuri(r){try{(r||d).querySelectorAll('iframe').forEach(iframe);}catch(e){}}
 function gol(el){return !el||!el.children.length;}
 function curata(){
  var R=d.getElementById('ahsp')||d.body;if(!R)return;
@@ -655,26 +699,59 @@ function anuleazaCiclu(){
  return cheama('LocalNotifications','getPending').then(function(r){var p=((r&&r.notifications)||[]).filter(function(n){return +n.id>=NID&&+n.id<NID+100;}).map(function(n){return {id:+n.id};});return p.length?cheama('LocalNotifications','cancel',{notifications:p}):null;})
   .catch(function(){return cheama('LocalNotifications','cancel',{notifications:ids}).catch(function(){});});
 }
-var ciT=null, ciSem=null;
+var ciT=null, ciSem=null, ciSters=false;
+function ciLocal(){return CX.d(ls('ahsp_ciclu'),ls('ah_ciclu_v1'));}
+/* Refacerea: iOS (WKWebView, ITP) poate goli localStorage după câteva zile fără folosire; copia nativă din Preferences
+   (ah_ciclu, scrisă mai jos, cu amprenta contului „cine”) rămâne. Dacă Ciclul meu nu are date în pagină, dar copia e a
+   aceluiași cont, o punem înapoi în localStorage.ahsp_ciclu ÎNAINTE ca Spațiul meu să arate ciclul gol: #ahsp stă ascuns
+   (cel mult 1,5 s) până răspunde Preferences; dacă 235 a desenat deja, îl punem să redeseneze (hashchange → arata()).
+   Copia și mementourile NU se șterg aici. Se șterg doar la acțiuni explicite: „Șterge datele de pe acest telefon”
+   (removeItem('ahsp_ciclu') când cheia exista, mai jos), ieșirea din cont și „Șterge contul” (curataLocal). */
+function refacere(){
+ if(!NATIV||!S.cont||S.zona!=='sp'||ciLocal())return Promise.resolve(false);
+ H.classList.add('ahspa-refac');
+ var gata=function(r){H.classList.remove('ahspa-refac');return r;};
+ var ceas=new Promise(function(r){setTimeout(function(){r('timp');},1500);});
+ return Promise.race([PREF.ia('ah_ciclu'),ceas]).then(function(v){
+  if(v==='timp'||!v||typeof v!=='object'||!Array.isArray(v.starturi))return gata(false);
+  if(v.cine!==S.cine){PREF.scoate('ah_ciclu');anuleazaCiclu();return gata(false);} /* copia altui cont de pe acest telefon: nu e a ei */
+  var x=CX.d({starturi:v.starturi,lung:v.lung,men:v.men,sit:v.sit},null);
+  if(!x||ciLocal())return gata(false); /* între timp pagina a scris singură ceva: nu suprascriem */
+  try{localStorage.setItem('ahsp_ciclu',JSON.stringify({starturi:x.starturi,lung:x.lung,men:x.men,sit:x.sit||'natural'}));}catch(e){return gata(false);}
+  var R=d.getElementById('ahsp');
+  if(R&&R.children.length){try{window.dispatchEvent(new HashChangeEvent('hashchange'));}catch(e){}} /* 235 desenase fără date */
+  return gata(true);
+ }).catch(function(){return gata(false);});
+}
+var REF=refacere();
 function ciclu(forteaza){
- var x=CX.d(ls('ahsp_ciclu'),ls('ah_ciclu_v1'));
+ return REF.then(function(){
+ if(!S.cont)return; /* fără cont nu schimbăm nimic aici: ieșirea și cookie-ul expirat le curăță curataLocal() */
+ var x=ciLocal();
  return Promise.all([PREF.ia('ah_ciclu_notif'),cheama('LocalNotifications','checkPermissions').catch(function(){return {};})]).then(function(r){
   var on=r[0]!==0&&r[0]!=='0',perm=!!(r[1]&&r[1].display==='granted');
-  var sem=JSON.stringify([x,on,perm,S.cont,CX.azi0()]);
+  var sem=JSON.stringify([x,on,perm,S.cont,ciSters,CX.azi0()]);
   if(!forteaza&&sem===ciSem)return;ciSem=sem;
-  if(x&&S.cont)PREF.pune('ah_ciclu',{starturi:x.starturi,lung:x.lung,men:x.men,sit:x.sit||'natural',actualizat:new Date().toISOString()});
-  else PREF.scoate('ah_ciclu');
+  if(x)PREF.pune('ah_ciclu',{starturi:x.starturi,lung:x.lung,men:x.men,sit:x.sit||'natural',cine:S.cine,actualizat:new Date().toISOString()});
+  else if(ciSters)PREF.scoate('ah_ciclu');
+  else return; /* localStorage gol fără o ștergere cerută de ea (iOS a golit stocarea): copia și mementourile rămân */
   return anuleazaCiclu().then(function(){
-   if(!on||!perm||!x||!S.cont)return;
+   if(!on||!perm||!x)return;
    var n=new Date(),v=CX.viitoare(x,CX.azi0(),n.getHours()*60+n.getMinutes(),3,9).slice(0,100);
    if(!v.length)return;
    return cheama('LocalNotifications','schedule',{notifications:v.map(function(q,i){return {id:NID+i,title:FT[q.f].t,body:FT[q.f].b,schedule:{at:laOra(q.zi,9),allowWhileIdle:true},extra:{url:S.pagina+'#ciclu'}};})});
   });
+ });
  }).catch(function(){});
 }
 function ciCurand(){clearTimeout(ciT);ciT=setTimeout(function(){ciclu(false);},900);}
-/* Ciclul meu scrie în localStorage: aflăm imediat (fără să schimbăm codul paginii). */
-try{['setItem','removeItem'].forEach(function(m){var o=Storage.prototype[m];Storage.prototype[m]=function(k){var r=o.apply(this,arguments);try{if(this===window.localStorage&&(k==='ahsp_ciclu'||k==='ah_ciclu_v1'))ciCurand();}catch(e){}return r;};});}catch(e){}
+/* Ciclul meu scrie în localStorage: aflăm imediat (fără să schimbăm codul paginii). O ștergere a lui ahsp_ciclu care
+   exista (butonul „Șterge datele de pe acest telefon” din 235, sau curataLocal) = ștergere cerută: copia nativă și
+   mementourile pleacă pe loc, nu după 900 ms (aplicația se poate închide între timp și refacerea le-ar aduce înapoi). */
+try{['setItem','removeItem'].forEach(function(m){var o=Storage.prototype[m];Storage.prototype[m]=function(k){var era=false;
+ try{era=m==='removeItem'&&k==='ahsp_ciclu'&&this===window.localStorage&&this.getItem(k)!==null;}catch(e){}
+ var r=o.apply(this,arguments);
+ try{if(era){ciSters=true;if(NATIV){PREF.scoate('ah_ciclu');anuleazaCiclu();}}if(this===window.localStorage&&(k==='ahsp_ciclu'||k==='ah_ciclu_v1'))ciCurand();}catch(e){}return r;};});}catch(e){}
 
 /* ==================================================================
    4. NOTIFICĂRILE PUSH: o singură întrebare, la un moment potrivit, cu explicație
@@ -685,19 +762,36 @@ var DISP='';
    Rămâne așa până când Firebase e configurat pe ambele platforme (și după, nu strică). */
 var PUSH={
  dispP:null,
- disponibil:function(){if(!PUSH.dispP)PUSH.dispP=(NATIV?cheama('AhApp','info').then(function(r){return !!(r&&r.push===true);}):Promise.resolve(false)).catch(function(){return false;});return PUSH.dispP;},
+ /* AhApp.info().token: tipul tokenului pe care îl dă build-ul ('fcm' pe Android și pe iPhone cu Firebase Messaging;
+    'apns' pe un iPhone fără Firebase). Serverul trimite doar prin FCM, deci fără 'fcm' nu cerem nimic. */
+ disponibil:function(){if(!PUSH.dispP)PUSH.dispP=(NATIV?cheama('AhApp','info').then(function(r){return !!(r&&r.push===true&&(r.token==null||r.token==='fcm'));}):Promise.resolve(false)).catch(function(){return false;});return PUSH.dispP;},
+ /* tipul unui token primit: tokenul APNs brut (64 de cifre hexa, iPhone fără Firebase) sau FCM (Android, iPhone cu Firebase) */
+ fel:function(tok){return /^[0-9a-fA-F]{64}$/.test(String(tok||''))?'apns':'fcm';},
+ platforma:function(){var p=CAP&&typeof CAP.getPlatform==='function'?CAP.getPlatform():'';return p==='ios'||p==='android'?p:S.platforma;},
+ apns:false,
+ /* „registration” de la @capacitor/push-notifications: doar un token FCM ajunge la server (pe iPhone, AppDelegate îl
+    dă prin Firebase Messaging); un token APNs nu i-ar folosi la nimic (serverul l-ar refuza cu motiv: apns). */
+ primit:function(tok){if(PUSH.fel(tok)!=='fcm'){PUSH.apns=true;return Promise.resolve();}return PUSH.trimite(tok);},
  stare:function(){return cheama('PushNotifications','checkPermissions').then(function(r){return (r&&r.receive)||'prompt';}).catch(function(){return 'indisponibil';});},
  legat:false,
  leaga:function(){if(PUSH.legat)return;PUSH.legat=true;
-  asculta('PushNotifications','registration',function(t){if(t&&t.value)PUSH.trimite(t.value);});
+  asculta('PushNotifications','registration',function(t){if(t&&t.value)PUSH.primit(t.value);});
   asculta('PushNotifications','pushNotificationActionPerformed',function(a){var u=a&&a.notification&&a.notification.data&&a.notification.data.url;if(u&&permis(u))mergi(u);});
   asculta('LocalNotifications','localNotificationActionPerformed',function(a){var u=a&&a.notification&&a.notification.extra&&a.notification.extra.url;if(u&&permis(u))mergi(u);});},
  porneste:function(){return PUSH.disponibil().then(function(ok){if(!ok)return;PUSH.leaga();return cheama('PushNotifications','register');}).catch(function(){});},
  trimite:function(tok){if(!S.cont)return Promise.resolve();
   return PREF.ia('ah_push').then(function(v){var acum=Date.now();
-   if(v&&v.token===tok&&v.cine===S.cine&&acum-(v.la||0)<7*864e5)return;
-   return api('push',{metoda:'POST',corp:{token:tok,platforma:S.platforma,versiune:S.versiune,disp:DISP}}).then(function(j){if(j&&j.ok)return PREF.pune('ah_push',{token:tok,cine:S.cine,la:acum});});});},
- opreste:function(){return PREF.ia('ah_push').then(function(v){if(!v||!v.token)return;return api('push',{metoda:'DELETE',corp:{token:v.token}}).then(function(){return PREF.scoate('ah_push');});}).then(function(){return PUSH.disponibil();}).then(function(ok){if(ok)return cheama('PushNotifications','unregister').catch(function(){});});}
+   if(v&&v.token===tok&&PUSH.al(v)==='ea'&&v.cine===S.cine&&acum-(v.la||0)<7*864e5)return;
+   /* contul activ pe telefon e al ei (aplicația deschide contul ei când e intrată): un token al lui trece la ea (serverul îl scoate din tabelul lui) */
+   return api('push',{metoda:'POST',corp:{token:tok,platforma:PUSH.platforma(),versiune:S.versiune,disp:DISP}}).then(function(j){if(j&&j.ok)return PREF.pune('ah_push',{token:tok,cont:'ea',cine:S.cine,la:acum});});});},
+ /* Al cui e tokenul telefonului (Preferences.ah_push.cont): 'ea' (puntea aceasta) sau 'el' (pagina /pentru-el/ a partenerului,
+    ah-sp-partener.php). Rândurile scrise înainte de contul pentru el nu au „cont”: sunt ale ei. */
+ al:function(v){return v&&v.cont==='el'?'el':'ea';},
+ /* Scoate tokenul ei. Al lui rămâne cât timp e intrat pe acest telefon (S.el); altfel pleacă și el (DELETE /ah-spp/v1/push). */
+ opreste:function(){var scos=false;return PREF.ia('ah_push').then(function(v){if(!v||!v.token)return;
+   if(PUSH.al(v)==='el'){if(S.el||!S.api_el)return;scos=true;return fetch(S.api_el+'push',{method:'DELETE',credentials:'same-origin',cache:'no-store',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:v.token})}).catch(function(){}).then(function(){return PREF.scoate('ah_push');});}
+   scos=true;return api('push',{metoda:'DELETE',corp:{token:v.token}}).then(function(){return PREF.scoate('ah_push');});})
+  .then(function(){return scos?PUSH.disponibil():false;}).then(function(ok){if(ok)return cheama('PushNotifications','unregister').catch(function(){});});}
 };
 function foaie(html,cls){var R=d.getElementById('ahsp')||d.body,f=d.createElement('div');f.className='ahspa-foaie ahspa-ui'+(cls?' '+cls:'');f.setAttribute('data-spa','1');f.innerHTML='<div class="c" role="dialog" aria-modal="true">'+html+'</div>';R.appendChild(f);setTimeout(function(){var b=f.querySelector('button');if(b)b.focus();},60);return f;}
 function intreabaPush(dinMeniu){
@@ -873,7 +967,7 @@ d.addEventListener('click',function(e){
 });
 /* Ștergerea contului (Apple 5.1.1(v), Google Play). CIORNĂ. */
 function stergeCont(){
- var f=foaie('<h2>Ștergi contul tău?</h2><p>Ce ștergem:</p><ul><li>datele ciclului păstrate în contul tău și emailurile fazelor;</li><li>înscrierea ta în Spațiul meu, telefoanele conectate și notificările;</li><li>pe acest telefon: meditațiile descărcate, datele ciclului și mementourile.</li></ul><p>Comenzile și facturile rămân la noi, fiindcă legea ne cere să le păstrăm. Cursurile, cărțile și meditațiile cumpărate rămân ale tale: dacă vrei vreodată să revii, intri din nou cu adresa ta de email.</p><label><input type="checkbox" id="spa-st-ok"> Am înțeles și vreau să-mi șterg contul.</label><p class="m" id="spa-st-m" role="status"></p><div class="b"><button type="button" data-a="da">Șterge contul</button><button type="button" class="lite" data-a="nu">Renunț</button></div>');
+ var f=foaie('<h2>Ștergi contul tău?</h2><p>Ce ștergem:</p><ul><li>datele ciclului păstrate în contul tău, emailurile fazelor și accesul celor pe care i-ai invitat să-ți vadă ciclul;</li><li>înscrierea ta în Spațiul meu, telefoanele conectate și notificările;</li><li>pe acest telefon: meditațiile descărcate, datele ciclului și mementourile.</li></ul><p>Comenzile și facturile rămân la noi, fiindcă legea ne cere să le păstrăm. Cursurile, cărțile și meditațiile cumpărate rămân ale tale: dacă vrei vreodată să revii, intri din nou cu adresa ta de email.</p><label><input type="checkbox" id="spa-st-ok"> Am înțeles și vreau să-mi șterg contul.</label><p class="m" id="spa-st-m" role="status"></p><div class="b"><button type="button" data-a="da">Șterge contul</button><button type="button" class="lite" data-a="nu">Renunț</button></div>');
  f.addEventListener('click',function(e){var b=e.target.closest('[data-a]');if(!b)return;
   if(b.getAttribute('data-a')==='nu'){scoate(f);return;}
   var m=f.querySelector('#spa-st-m');if(!f.querySelector('#spa-st-ok').checked){m.textContent='Bifează, te rog, că ai înțeles ce se șterge.';return;}
@@ -907,7 +1001,8 @@ d.addEventListener('click',function(e){var a=e.target.closest&&e.target.closest(
 function inapoi(){
  if(S.zona!=='politici'||!d.body||d.querySelector('.ahspa-inapoi'))return;
  var b=d.createElement('nav');b.className='ahspa-inapoi ahspa-ui';b.setAttribute('data-spa','1');b.setAttribute('aria-label','Înapoi');
- b.innerHTML='<a href="'+esc(S.pagina)+'">'+ic('inapoi')+'Înapoi în Spațiul meu</a>'; /* CIORNĂ */
+ var el=!S.cont&&S.el&&S.pagina_el; /* partenerul (contul pentru el) a venit din pagina lui */
+ b.innerHTML='<a href="'+esc(el?S.pagina_el:S.pagina)+'">'+ic('inapoi')+(el?'Înapoi la ciclul ei':'Înapoi în Spațiul meu')+'</a>'; /* CIORNĂ */
  b.firstChild.addEventListener('click',function(e){var r=d.referrer?abs(d.referrer):null;if(r&&eSite(r)&&r.pathname!==location.pathname&&history.length>1){e.preventDefault();history.back();}});
  d.body.insertBefore(b,d.body.firstChild);
 }
@@ -926,7 +1021,9 @@ function versiune(){
 /* ==================================================================
    9. PORNIREA
    ================================================================== */
-function dupaDesen(){try{curata();if(S.zona==='sp'){meditatii();mai();}}catch(e){}}
+function dupaDesen(){try{curata();iframeuri();if(S.zona==='sp'){meditatii();mai();}}catch(e){}}
+/* iframe-urile, oriunde în pagină (și în sala de curs, în afara #ahsp), imediat ce apar */
+if(window.MutationObserver){new MutationObserver(function(l){l.forEach(function(r){r.addedNodes.forEach(function(n){if(n.nodeType!==1)return;if(n.tagName==='IFRAME')iframe(n);else if(n.getElementsByTagName&&n.getElementsByTagName('iframe').length)iframeuri(n);});});}).observe(H,{childList:true,subtree:true});}
 var prog=false;function curand(){if(prog)return;prog=true;(window.queueMicrotask||function(f){Promise.resolve().then(f);})(function(){prog=false;dupaDesen();});}
 if(window.MutationObserver){var legat=false,mo=new MutationObserver(function(){var R=d.getElementById('ahsp');if(R&&!legat){legat=true;mo.disconnect();mo.observe(R,{childList:true,subtree:true});}curand();});mo.observe(H,{childList:true,subtree:true});}
 d.addEventListener('DOMContentLoaded',function(){dupaDesen();versiune();inapoi();});
@@ -1162,6 +1259,10 @@ function ah_spa_push_salveaza( $email, $x ) {
 	} else {
 		$wpdb->insert( $t, array( 'email' => $email, 'token' => $x['token'], 'token_h' => $h, 'platforma' => $x['platforma'], 'versiune' => $x['versiune'], 'disp' => $x['disp'], 'creat' => $acum, 'vazut' => $acum ) );
 	}
+	// un token (un telefon) aparține unui singur cont: dacă era al partenerului (ah-sp-partener.php, wp_ah_spp_push), pleacă de acolo
+	if ( function_exists( 'ah_spp_tabel_push' ) ) {
+		$wpdb->delete( ah_spp_tabel_push(), array( 'token_h' => $h ) );
+	}
 	// același telefon cu un token nou: tokenul vechi pleacă
 	if ( '' !== $x['disp'] ) {
 		foreach ( (array) $wpdb->get_results( $wpdb->prepare( "SELECT id, token_h FROM {$t} WHERE disp = %s", $x['disp'] ), ARRAY_A ) as $v ) {
@@ -1321,6 +1422,14 @@ function ah_spa_sterge_cont( $email ) {
 		update_option( 'ah_respira_inscrieri', $ri, false );
 		$s['respira_inscriere'] = 1;
 	}
+	// contul pentru el (ah-sp-partener.php): cei invitați să-i vadă ciclul (rândurile lor și tokenurile lor push), pe loc.
+	// Fragmentul lui face același lucru și pe cârligul de mai jos; aici doar ca numărul să intre în emailul echipei.
+	if ( function_exists( 'ah_spp_gata' ) && function_exists( 'ah_spp_sterge_ale_ei' ) && function_exists( 'ah_spp_ea' ) && ah_spp_gata() ) {
+		$n = (int) ah_spp_sterge_ale_ei( ah_spp_ea( $e ) );
+		if ( $n ) {
+			$s['pentru_el'] = $n;
+		}
+	}
 	delete_transient( 'ah_sp_rz_' . $md );
 	delete_transient( 'ah_med_a_' . $md );
 	do_action( 'ah_spa_cont_sters', $e, $s );
@@ -1404,13 +1513,15 @@ function ah_spa_r_sterge_cont( WP_REST_Request $r ) {
 		foreach ( $s as $k => $n ) {
 			$ce[] = '- ' . $k . ': ' . (int) $n;
 		}
+		$rec = ah_spa_recenzie();
 		wp_mail(
 			$catre,
-			'Aplicația: cerere de ștergere a contului',
+			'Aplicația: cerere de ștergere a contului' . ( '' !== $rec['email'] && $rec['email'] === strtolower( trim( $e ) ) ? ' (contul de recenzie)' : '' ),
 			"O clientă și-a șters contul din aplicația Adela Haru.\n\nAdresa: {$e}\nCând: " . current_time( 'mysql' ) . "\n\nS-a șters automat:\n" . implode( "\n", $ce )
 			. "\n\nCe înseamnă: ciclu_* = datele ciclului; sala_ritm / sala_repeta = comenzi pe care mementourile din sala de curs"
 			. " (email și SMS) au fost oprite și telefonul șters (cu notă pe comandă); respira_inscriere = înscrierea la Respiră-te acasă"
-			. " (prenume, țară, WhatsApp), ștearsă, deci nu mai primește emailurile întâlnirilor."
+			. " (prenume, țară, WhatsApp), ștearsă, deci nu mai primește emailurile întâlnirilor; pentru_el = persoanele invitate"
+			. " să-i vadă ciclul („Pentru el”), șterse cu notificările lor."
 			. "\n\nRămân (obligație legală): comenzile și facturile.\nDe verificat de mână: abonarea la scrisori și etichetele din EmailOctopus (inclusiv Respiră-te acasă), alte liste.\n"
 		);
 	}
@@ -1826,8 +1937,9 @@ function ah_spa_aasa() {
 	$team = strtoupper( preg_replace( '/[^A-Za-z0-9]/', '', (string) ah_spa_setari()['ios_team'] ) );
 	$id   = 10 === strlen( $team ) ? $team . '.' . AH_SPA_PACHET : '';
 	$sp   = rtrim( defined( 'AH_SP_PAGINA' ) ? AH_SP_PAGINA : '/spatiul-meu/', '/' );
-	// aceleași căi ca App Links din AndroidManifest.xml (path + pathPrefix cu „/”), ca linkul să se poarte la fel pe ambele
-	$cai  = array( $sp, $sp . '/*', '/app/intra', '/app/intra/*' );
+	// aceleași căi ca App Links din AndroidManifest.xml (path + pathPrefix cu „/”), ca linkul să se poarte la fel pe ambele;
+	// /pentru-el = pagina partenerului (ah-sp-partener.php): linkul personal /pentru-el/?t= din emailul lui deschide aplicația
+	$cai  = array( $sp, $sp . '/*', '/app/intra', '/app/intra/*', '/pentru-el', '/pentru-el/*' );
 	return array(
 		'applinks' => array(
 			'apps'    => array(),
@@ -1955,7 +2067,9 @@ add_action( 'admin_post_ah_spa_setari', function () {
 	check_admin_referer( 'ah_spa_setari' );
 	$p = wp_unslash( $_POST ); // phpcs:ignore
 	update_option( 'ah_spa_setari', ah_spa_curata_setari( $p, ah_spa_setari() ), false );
-	$msg = 'salvat';
+	list( $rec, $rec_err ) = ah_spa_curata_recenzie( $p, ah_spa_recenzie() );
+	update_option( 'ah_spa_recenzie', $rec, false ); // non-autoload: se citește doar la /cod, /intra și aici
+	$msg = '' !== $rec_err ? 'recenzie_' . $rec_err : 'salvat';
 	if ( ! empty( $p['sterge_fcm'] ) ) {
 		delete_option( 'ah_spa_fcm' );
 	} elseif ( '' !== trim( (string) ( $p['fcm'] ?? '' ) ) ) {
@@ -1999,6 +2113,10 @@ function ah_spa_pagina_setari() {
 		echo '<div class="notice notice-error"><p>Cheia Firebase nu pare un JSON de cont de serviciu (project_id, client_email, private_key). Celelalte setări sunt salvate.</p></div>';
 	} elseif ( 'proba' === $m ) {
 		echo '<div class="notice notice-info"><p>Proba a plecat (vezi jurnalul de mai jos).</p></div>';
+	} elseif ( 'recenzie_email' === $m ) {
+		echo '<div class="notice notice-error"><p>Adresa de recenzie nu pare o adresă de email: contul de recenzie e oprit (câmpul a rămas gol). Celelalte setări sunt salvate.</p></div>';
+	} elseif ( 0 === strpos( $m, 'recenzie_' ) ) {
+		echo '<div class="notice notice-error"><p>Codul de recenzie NU s-a schimbat: trebuie să fie exact 6 cifre, greu de ghicit (nu 123456, 654321 sau aceeași cifră de 6 ori). Celelalte setări sunt salvate.</p></div>';
 	}
 	echo '<p>Fragmentul „Spațiul meu – modul aplicație” lucrează doar în aplicație. ' . (int) $n . ' telefoane primesc notificări.</p>';
 	echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '"><input type="hidden" name="action" value="ah_spa_setari">';
@@ -2018,6 +2136,12 @@ function ah_spa_pagina_setari() {
 		. $rand( 'Emailul echipei', $t( 'email_echipa', $s['email_echipa'] ), 'Aici vine anunțul când o clientă își șterge contul din aplicație.' )
 		. $rand( 'Probă', $t( 'proba', '', 'adresa@exemplu.ro' ), 'O notificare de probă către telefoanele acestei adrese (trebuie să fi intrat în aplicație și să fi permis notificările).' )
 		. '</table>';
+	$rec = ah_spa_recenzie();
+	echo '<h2>Contul de recenzie (Apple / Google)</h2><p>Recenzorii magazinelor nu au acces la nicio căsuță de email. Pentru <strong>o singură adresă</strong>, setată aici, codul de intrare din Spațiul meu e un cod fix, fără email. Accesul vine tot din comenzile reale ale adresei (comenzi manuale „Acces gratuit” / „Finalizată”, vezi docs/review-account.md). Golind adresa, funcția se oprește.</p><table class="form-table">'
+		. $rand( 'Adresa de recenzie', $t( 'recenzie_email', $rec['email'], 'recenzie@adelaharu.ro' ), 'O căsuță reală, fără date personale reale. Gol = fără cont de recenzie.' )
+		. $rand( 'Codul fix', '<input type="text" class="small-text" name="recenzie_cod" value="" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="off" placeholder="______"> <strong>Cod setat: ' . ( '' !== $rec['hash'] ? 'da' : 'nu' ) . '</strong>' . ( '' !== $rec['hash'] ? ' &nbsp; <label><input type="checkbox" name="recenzie_sterge_cod" value="1"> Șterge codul</label>' : '' ), 'Exact 6 cifre, greu de ghicit (nu 123456, 654321, 000000). Se păstrează doar amprenta lui, ca la o parolă: după salvare nu se mai afișează. Gol = rămâne codul de acum. Același cod se trece în App Store Connect (App Review Information › Password) și în Play Console (Acces la aplicație); nu în emailuri sau în chat.' )
+		. $rand( 'Doar în aplicație', $c( 'recenzie_doar_app', $rec['doar_app'], 'Codul fix merge doar din aplicația Adela Haru (după User-Agent; reduce expunerea, nu e o barieră de securitate). Debifați doar dacă un recenzor vrea să verifice și pe web.' ) )
+		. '</table>';
 	submit_button( 'Salvează' );
 	echo '</form><h2>Adrese de verificat</h2><ul>'
 		. '<li><a href="' . esc_url( home_url( '/.well-known/apple-app-site-association' ) ) . '" target="_blank">/.well-known/apple-app-site-association</a></li>'
@@ -2032,5 +2156,420 @@ function ah_spa_pagina_setari() {
 	echo $j ? '' : 'Nimic încă.';
 	echo '</pre></div>';
 }
+
+/* ==================================================================
+   9. CONTUL DE RECENZIE (Apple App Review, Google Play „Acces la aplicație”)
+   Recenzorii nu au acces la nicio căsuță de email, deci pentru O SINGURĂ adresă, setată în Setări › Aplicația mobilă,
+   codul din Spațiul meu e fix. Prindem doar POST /ah-sp/v1/cod și /ah-sp/v1/intra, doar pentru acea adresă, prin
+   rest_pre_dispatch (fragmentul 235 rămâne neschimbat). Orice altă adresă trece neatinsă. Accesul vine tot din comenzi
+   reale, fără excepții în cod. Cerința și testele: docs/review-account.md.
+   ================================================================== */
+
+/** Setarea: array( email, hash (wp_hash_password al codului, niciodată codul), doar_app ). Gol = funcția nu există. */
+function ah_spa_recenzie() {
+	$r = get_option( 'ah_spa_recenzie', array() );
+	$r = is_array( $r ) ? $r : array();
+	return array(
+		'email'    => isset( $r['email'] ) ? strtolower( trim( (string) $r['email'] ) ) : '',
+		'hash'     => isset( $r['hash'] ) ? (string) $r['hash'] : '',
+		'doar_app' => array_key_exists( 'doar_app', $r ) ? ( empty( $r['doar_app'] ) ? 0 : 1 ) : 1,
+	);
+}
+
+/** '' dacă codul se poate folosi; altfel motivul: format | repetat | sir. Pură. */
+function ah_spa_recenzie_cod_slab( $cod ) {
+	$cod = (string) $cod;
+	if ( ! preg_match( '/^[0-9]{6}$/', $cod ) ) {
+		return 'format';
+	}
+	if ( preg_match( '/^([0-9])\1{5}$/', $cod ) ) {
+		return 'repetat'; // 000000, 111111…
+	}
+	if ( false !== strpos( '01234567890', $cod ) || false !== strpos( '09876543210', $cod ) ) {
+		return 'sir'; // 123456, 654321, 012345, 987654…
+	}
+	return '';
+}
+
+/**
+ * Setarea trimisă din formular → array( setarea nouă, eroare ). Eroare: '' | email | format | repetat | sir.
+ * Un cod refuzat nu schimbă codul de acum. Codul gol = rămâne cel de acum. Pură (în afară de wp_hash_password).
+ */
+function ah_spa_curata_recenzie( $p, $vechi ) {
+	$o   = array_merge( array( 'email' => '', 'hash' => '', 'doar_app' => 1 ), is_array( $vechi ) ? $vechi : array() );
+	$err = '';
+	$e   = strtolower( trim( (string) ( $p['recenzie_email'] ?? '' ) ) );
+	if ( '' !== $e && ! is_email( $e ) ) {
+		$err = 'email';
+		$e   = '';
+	}
+	$o['email']    = $e;
+	$o['doar_app'] = empty( $p['recenzie_doar_app'] ) ? 0 : 1;
+	$cod           = trim( (string) ( $p['recenzie_cod'] ?? '' ) );
+	if ( ! empty( $p['recenzie_sterge_cod'] ) ) {
+		$o['hash'] = '';
+	} elseif ( '' !== $cod ) {
+		$m = ah_spa_recenzie_cod_slab( $cod );
+		if ( '' === $m ) {
+			$o['hash'] = wp_hash_password( $cod ); // doar amprenta; codul nu se păstrează nicăieri
+		} elseif ( '' === $err ) {
+			$err = $m;
+		}
+	}
+	return array( $o, $err );
+}
+
+/** Adresa IP a cererii. */
+function ah_spa_ip() {
+	return isset( $_SERVER['REMOTE_ADDR'] ) ? (string) wp_unslash( $_SERVER['REMOTE_ADDR'] ) : ''; // phpcs:ignore
+}
+
+/** IP-ul trunchiat pentru jurnal: /24 la IPv4, /48 la IPv6. Pură. */
+function ah_spa_ip_scurt( $ip ) {
+	$b = @inet_pton( (string) $ip ); // phpcs:ignore
+	if ( false === $b || '' === (string) $ip ) {
+		return '?';
+	}
+	if ( 4 === strlen( $b ) ) {
+		return inet_ntop( substr( $b, 0, 3 ) . "\0" ) . '/24';
+	}
+	return inet_ntop( substr( $b, 0, 6 ) . str_repeat( "\0", 10 ) ) . '/48';
+}
+
+/** Filtrul: null (= ruta din 235 merge normal) pentru orice altă cerere decât POST /cod, /intra cu adresa de recenzie. */
+function ah_spa_recenzie_filtru( $rez, $server, $req ) {
+	if ( null !== $rez || ! is_object( $req ) || ! method_exists( $req, 'get_method' ) || ! method_exists( $req, 'get_route' ) ) {
+		return $rez;
+	}
+	if ( 'POST' !== strtoupper( (string) $req->get_method() ) ) {
+		return $rez;
+	}
+	$ruta = rtrim( (string) $req->get_route(), '/' );
+	if ( '/ah-sp/v1/cod' !== $ruta && '/ah-sp/v1/intra' !== $ruta ) {
+		return $rez;
+	}
+	if ( ! function_exists( 'ah_sp_seteaza_cookie' ) ) {
+		return $rez; // fără 235 nu facem nimic
+	}
+	$r = ah_spa_recenzie();
+	if ( '' === $r['email'] || '' === $r['hash'] ) {
+		return $rez;
+	}
+	$e = $req->get_param( 'email' );
+	$e = is_scalar( $e ) ? strtolower( trim( (string) $e ) ) : ''; // ca ah_sp_email_norm din 235
+	if ( $e !== $r['email'] ) {
+		return $rez;
+	}
+	if ( $r['doar_app'] && ! ah_spa_e_aplicatie() ) {
+		return $rez; // pe web, adresa de recenzie primește codul pe email, ca oricine
+	}
+	return '/ah-sp/v1/cod' === $ruta ? ah_spa_recenzie_cod() : ah_spa_recenzie_intra( $e, $req->get_param( 'cod' ), $r['hash'] );
+}
+add_filter( 'rest_pre_dispatch', 'ah_spa_recenzie_filtru', 4, 3 );
+
+/** /cod cu adresa de recenzie: aceeași formă ca 235, fără email și fără contoarele lui (ah_sp_ip_*, ah_sp_em_*). */
+function ah_spa_recenzie_cod() {
+	$ip = ah_spa_ip();
+	if ( ! ah_spa_limita( 'recenzie_cod|' . $ip, 30 ) ) {
+		ah_spa_jurnal( 'recenzie: prea multe coduri cerute (' . ah_spa_ip_scurt( $ip ) . ')' );
+		return ah_spa_raspuns( array( 'ok' => false, 'mesaj' => 'Ai cerut deja câteva coduri. Încearcă din nou peste 15 minute.' ), 429 );
+	}
+	ah_spa_jurnal( 'recenzie: cod cerut (' . ah_spa_ip_scurt( $ip ) . ')' );
+	return ah_spa_raspuns( array( 'ok' => true ) );
+}
+
+/**
+ * /intra cu adresa de recenzie: codul fix (nu expiră, nu e de unică folosință). După 5 coduri greșite la rând, 429 timp
+ * de 15 minute (contorul se rezervă înainte de comparare), apoi se poate din nou: recenzia nu se blochează singură.
+ */
+function ah_spa_recenzie_intra( $e, $cod, $hash ) {
+	$ip = ah_spa_ip();
+	$k  = 'ah_spa_rec_n';
+	$n  = (int) get_transient( $k );
+	if ( $n >= 5 ) {
+		ah_spa_jurnal( 'recenzie: prea multe încercări (' . ah_spa_ip_scurt( $ip ) . ')' );
+		return ah_spa_raspuns( array( 'ok' => false, 'mesaj' => 'Prea multe încercări. Cere un cod nou.' ), 429 );
+	}
+	set_transient( $k, $n + 1, 15 * MINUTE_IN_SECONDS );
+	$cod = preg_replace( '/\D/', '', is_scalar( $cod ) ? (string) $cod : '' );
+	if ( 6 !== strlen( $cod ) || ! wp_check_password( $cod, (string) $hash ) ) {
+		ah_spa_jurnal( 'recenzie: cod greșit (' . ah_spa_ip_scurt( $ip ) . ')' );
+		return ah_spa_raspuns( array( 'ok' => false, 'mesaj' => 'Codul nu se potrivește. Verifică cifrele.' ), 403 );
+	}
+	delete_transient( $k );
+	ah_sp_seteaza_cookie( $e );
+	ah_spa_fara_cache( 'ah spa recenzie' );
+	$g = ah_spa_recenzie_goleste_disp( $e );
+	ah_spa_jurnal( 'recenzie: intrare (' . ah_spa_ip_scurt( $ip ) . '; dispozitive golite: meditații ' . (int) $g['meditatii'] . ', sala ' . (int) $g['sala'] . ')' );
+	return ah_spa_raspuns( array( 'ok' => true ) );
+}
+
+/**
+ * Apple testează pe mai multe telefoane, uneori în paralel: la fiecare intrare cu codul fix golim DOAR pentru adresa
+ * de recenzie dispozitivele meditațiilor (51) și ale sălii de curs (44), ca butoanele „Golește dispozitivele” din admin.
+ */
+function ah_spa_recenzie_goleste_disp( $e ) {
+	$n = array( 'meditatii' => 0, 'sala' => 0 );
+	$e = strtolower( trim( (string) $e ) );
+	$r = ah_spa_recenzie();
+	if ( '' === $e || $e !== $r['email'] ) {
+		return $n; // pentru orice altă adresă, nimic
+	}
+	if ( function_exists( 'ah_med_cheie_disp' ) ) {
+		$k = ah_med_cheie_disp( $e );
+		if ( false !== get_option( $k, false ) ) {
+			delete_option( $k );
+			$n['meditatii'] = 1;
+		}
+	}
+	if ( function_exists( 'ah_sc_dispozitive' ) && function_exists( 'wc_get_orders' ) ) {
+		foreach ( (array) wc_get_orders( array( 'billing_email' => $e, 'limit' => -1, 'type' => 'shop_order', 'return' => 'objects' ) ) as $c ) {
+			if ( ! is_object( $c ) || ! method_exists( $c, 'delete_meta_data' ) || ! method_exists( $c, 'get_meta' ) ) {
+				continue;
+			}
+			if ( method_exists( $c, 'get_billing_email' ) && strtolower( trim( (string) $c->get_billing_email() ) ) !== $e ) {
+				continue;
+			}
+			if ( empty( $c->get_meta( '_ah_sc_disp' ) ) ) {
+				continue;
+			}
+			$c->delete_meta_data( '_ah_sc_disp' );
+			$c->save();
+			$n['sala']++;
+		}
+	}
+	return $n;
+}
+
+/* ==================================================================
+   10. FĂRĂ ANALIZĂ ȘI URMĂRIRE ÎN APLICAȚIE
+   În aplicație nu se încarcă Google Analytics (gtag, Site Kit, GTM), Microsoft Clarity, pixelul Meta
+   (facebook-for-woocommerce, inclusiv partea din browser a Conversions API: fbq, _fbp/_fbc, „signals”), atribuirea
+   comenzilor WooCommerce (sourcebuster, order-attribution) și bara de cookie-uri Complianz. Fără ele, în aplicație
+   rămân doar cookie-uri strict necesare (ah_sp, ah_app, ah_med, ale sălii), iar Vimeo merge cu dnt=1: nu e nimic
+   pentru care să cerem acord, deci bara nu mai are rost (art. 5 alin. 3 din Directiva 2002/58, Legea 506/2004 art. 4
+   alin. 6). Pe site, în browser, nu se schimbă nimic: bara și scripturile rămân exact ca acum.
+   Trei straturi, toate doar când ah_spa_e_aplicatie():
+     a) la sursă: filtrele pluginurilor și scoaterea din coada de scripturi/stiluri (wp_enqueue_scripts, wp_print_*);
+     b) ce e tipărit direct în pagină (fragmentul GA al Complianz, Clarity, pixelul): ieșirea paginilor din aplicație
+        trece prin ah_spa_fara_urmarire() (un singur ob_start, doar pe Spațiul meu, sala, cărți, politici);
+     c) Conversions API trimis de server în timpul unei cereri din aplicație: oprit la pre_http_request.
+   ================================================================== */
+
+/** Tiparele adreselor de urmărire (în src, href, data-cmplz-src). Filtrul ah_spa_urmarire_tipare le poate completa. */
+function ah_spa_urmarire_tipare() {
+	return array_values( (array) apply_filters( 'ah_spa_urmarire_tipare', array(
+		'googletagmanager\.com',
+		'google-analytics\.com',
+		'analytics\.google\.com',
+		'connect\.facebook\.net',
+		'facebook\.com/tr',
+		'clarity\.ms',
+		'/sourcebuster/',
+		'order-attribution',
+		'/facebook-for-woocommerce/',
+		'/complianz-gdpr/',
+		'/uploads/complianz/',
+		'/google-site-kit/',
+		'/duracelltomi-google-tag-manager/',
+	) ) );
+}
+
+/** Adevărat dacă scriptul / stilul (după „handle” și adresă) e de urmărire sau e bara de cookie-uri. Pură. */
+function ah_spa_e_urmarire( $handle, $src = '' ) {
+	$h = strtolower( (string) $handle );
+	if ( preg_match( '/^(ahsp|ahspa|ahspx)/', $h ) || 'cmplz-document' === $h ) {
+		return false; // ale noastre; stilul documentelor Complianz (politica de cookie-uri, pagina legală) rămâne
+	}
+	if ( preg_match( '/^(cmplz-|complianz|sourcebuster|wc-order-attribution|wc-facebook|facebook-for-woocommerce|google_gtagjs|googlesitekit-consent|gtm4wp|clarity)/', $h ) ) {
+		return true;
+	}
+	$src = (string) $src;
+	return '' !== $src && (bool) preg_match( '~' . implode( '|', ah_spa_urmarire_tipare() ) . '~i', $src );
+}
+
+/** a) Scoate din coadă scripturile și stilurile de urmărire (și ce depinde de ele). */
+function ah_spa_scoate_urmarire_coada() {
+	if ( ! ah_spa_e_aplicatie() || is_admin() ) {
+		return;
+	}
+	foreach ( array( 'wp_scripts' => 'wp_dequeue_script', 'wp_styles' => 'wp_dequeue_style' ) as $g => $f ) {
+		$o = isset( $GLOBALS[ $g ] ) ? $GLOBALS[ $g ] : null;
+		if ( ! is_object( $o ) || empty( $o->queue ) || ! function_exists( $f ) ) {
+			continue;
+		}
+		foreach ( (array) $o->queue as $h ) {
+			$src = isset( $o->registered[ $h ] ) && is_object( $o->registered[ $h ] ) ? (string) $o->registered[ $h ]->src : '';
+			if ( ah_spa_e_urmarire( $h, $src ) ) {
+				$f( $h );
+			}
+		}
+	}
+}
+add_action( 'wp_enqueue_scripts', 'ah_spa_scoate_urmarire_coada', 9999 );
+add_action( 'wp_print_styles', 'ah_spa_scoate_urmarire_coada', 9999 );
+add_action( 'wp_print_scripts', 'ah_spa_scoate_urmarire_coada', 9999 );
+add_action( 'wp_print_footer_scripts', 'ah_spa_scoate_urmarire_coada', 1 );
+
+/* a) Filtrele pluginurilor (dacă un plugin lipsește sau își schimbă filtrul, rămân b și c). */
+$ah_spa_nu = function ( $v ) {
+	return ah_spa_e_aplicatie() ? false : $v;
+};
+$ah_spa_da = function ( $v ) {
+	return ah_spa_e_aplicatie() ? true : $v;
+};
+add_filter( 'facebook_for_woocommerce_integration_pixel_enabled', $ah_spa_nu, 99 ); // pixelul Meta și evenimentele lui
+add_filter( 'wc_order_attribution_allow_tracking', $ah_spa_nu, 99 );                // atribuirea comenzilor WooCommerce
+add_filter( 'cmplz_site_needs_cookiewarning', $ah_spa_nu, 99 );                     // bara Complianz
+add_filter( 'googlesitekit_analytics-4_tag_blocked', $ah_spa_da, 99 );              // Site Kit, dacă e folosit
+add_filter( 'googlesitekit_analytics_tag_blocked', $ah_spa_da, 99 );
+add_filter( 'googlesitekit_tagmanager_tag_blocked', $ah_spa_da, 99 );
+unset( $ah_spa_nu, $ah_spa_da );
+
+/* c) Conversions API (Meta) trimis de server în timpul unei cereri venite din aplicație: nu pleacă. */
+add_filter( 'pre_http_request', function ( $pre, $args, $url ) {
+	if ( false !== $pre || ! ah_spa_e_aplicatie() ) {
+		return $pre;
+	}
+	if ( preg_match( '~^https://graph\.facebook\.com/[^?#]*/events\b~i', (string) $url ) ) {
+		return new WP_Error( 'ah_spa_fara_urmarire', 'Aplicația Adela Haru: fără evenimente de urmărire.' );
+	}
+	return $pre;
+}, 10, 3 );
+
+/** Adevărat dacă un <script> (atributele + conținutul) e de urmărire sau al barei Complianz. Pură. */
+function ah_spa_script_urmarire( $atr, $corp ) {
+	$atr  = (string) $atr;
+	$corp = (string) $corp;
+	// ale noastre și ale Spațiului meu (235, 266) nu se ating niciodată, chiar dacă întreabă de gtag
+	if ( preg_match( '~\bid\s*=\s*["\']?(ahsp|ahspa|ahspx)~i', $atr ) || false !== strpos( $corp, 'window.AH_SP' ) ) {
+		return false;
+	}
+	if ( preg_match( '~\b(?:src|data-cmplz-src|data-src)\s*=\s*["\'][^"\']*(?:' . implode( '|', ah_spa_urmarire_tipare() ) . ')~i', $atr ) ) {
+		return true;
+	}
+	if ( preg_match( '~\bid\s*=\s*["\']?(?:cmplz-|complianz|wc-order-attribution|sourcebuster|wc-facebook|facebook-for-woocommerce|google_gtagjs|googlesitekit-consent|gtm4wp|clarity)~i', $atr ) ) {
+		return true;
+	}
+	if ( preg_match( '~\bdata-category\s*=\s*["\']?(?:statistics|marketing)~i', $atr ) ) {
+		return true; // scripturile ținute de Complianz până la acord (GA, Clarity)
+	}
+	// fragmentele scrise direct în pagină: definiția gtag și configurarea, pixelul Meta, Clarity, Complianz pentru Clarity
+	return (bool) preg_match( '~function\s+gtag\s*\(|gtag\s*\(\s*[\'"](?:js|config|consent|set)[\'"]|fbq\s*\(\s*[\'"](?:init|track|consent|set|dataProcessingOptions)[\'"]|fbevents\.js|connect\.facebook\.net|googletagmanager\.com|google-analytics\.com|clarity\.ms|cmplzCallClarity|window\.clarity|\bsbjs\.init|wc_order_attribution\s*=~', $corp );
+}
+
+/** Scoate un <div id="…">…</div> întreg (cu tot ce e în el). Pură. */
+function ah_spa_scoate_div( $html, $id ) {
+	$html = (string) $html;
+	if ( ! preg_match( '~<div\b[^>]*\bid\s*=\s*["\']' . preg_quote( $id, '~' ) . '["\'][^>]*>~i', $html, $m, PREG_OFFSET_CAPTURE ) ) {
+		return $html;
+	}
+	$start = $m[0][1];
+	$poz   = $start + strlen( $m[0][0] );
+	$adanc = 1;
+	while ( $adanc > 0 && preg_match( '~<(/?)div\b[^>]*>~i', $html, $t, PREG_OFFSET_CAPTURE, $poz ) ) {
+		$adanc += '/' === $t[1][0] ? -1 : 1;
+		$poz    = $t[0][1] + strlen( $t[0][0] );
+	}
+	return $adanc > 0 ? $html : substr( $html, 0, $start ) . substr( $html, $poz );
+}
+
+/** b) Pagina fără analiză, urmărire și bara Complianz. Restul HTML-ului rămâne octet cu octet. Pură. */
+function ah_spa_fara_urmarire( $html ) {
+	$html = (string) $html;
+	$out  = preg_replace_callback( '~<script\b([^>]*)>(.*?)</script\s*>~is', function ( $m ) {
+		return ah_spa_script_urmarire( $m[1], $m[2] ) ? '' : $m[0];
+	}, $html );
+	$html = is_string( $out ) ? $out : $html;
+	// <noscript> cu imaginea pixelului (facebook.com/tr) sau cadrul GTM
+	$out  = preg_replace_callback( '~<noscript\b[^>]*>(.*?)</noscript\s*>~is', function ( $m ) {
+		return preg_match( '~facebook\.com/tr|googletagmanager\.com/ns\.html~i', $m[1] ) ? '' : $m[0];
+	}, $html );
+	$html = is_string( $out ) ? $out : $html;
+	// stilurile barei Complianz și legăturile preconnect / dns-prefetch spre serviciile de urmărire
+	$tip  = implode( '|', ah_spa_urmarire_tipare() );
+	$out  = preg_replace_callback( '~<link\b[^>]*>~i', function ( $m ) use ( $tip ) {
+		if ( preg_match( '~\bid\s*=\s*["\']cmplz-(?!document)~i', $m[0] ) || preg_match( '~\bhref\s*=\s*["\'][^"\']*(?:' . $tip . ')~i', $m[0] ) ) {
+			return '';
+		}
+		return $m[0];
+	}, $html );
+	$html = is_string( $out ) ? $out : $html;
+	foreach ( array( 'cmplz-cookiebanner-container', 'cmplz-manage-consent' ) as $id ) {
+		$html = ah_spa_scoate_div( $html, $id );
+	}
+	$out = preg_replace( '~<!--\s*Consent Management powered by Complianz.*?-->\s*~s', '', $html );
+	return is_string( $out ) ? $out : $html;
+}
+
+/** Adresa unui player Vimeo cu dnt=1 (fără cookie-uri și statistici Vimeo). Altă adresă: neschimbată. Pură. */
+function ah_spa_vimeo_dnt( $url ) {
+	$url = (string) $url;
+	if ( ! preg_match( '~^(?:https?:)?//player\.vimeo\.com/~i', $url ) ) {
+		return $url;
+	}
+	$f = '';
+	if ( false !== ( $i = strpos( $url, '#' ) ) ) {
+		$f   = substr( $url, $i );
+		$url = substr( $url, 0, $i );
+	}
+	$amp = false !== strpos( $url, '&amp;' ) ? '&amp;' : '&'; // în HTML, adresa poate avea &amp;
+	$p   = strpos( $url, '?' );
+	$baza = false === $p ? $url : substr( $url, 0, $p );
+	$q    = false === $p ? array() : explode( '&', str_replace( '&amp;', '&', substr( $url, $p + 1 ) ) );
+	if ( in_array( 'dnt=1', $q, true ) ) {
+		return $url . $f;
+	}
+	$q   = array_values( array_filter( $q, function ( $x ) { return '' !== $x && 0 !== stripos( $x, 'dnt=' ); } ) );
+	$q[] = 'dnt=1';
+	return $baza . '?' . implode( $amp, $q ) . $f;
+}
+
+/** Orice <iframe> Vimeo din pagină primește dnt=1 (și cele ținute de Complianz în data-src-cmplz, care altfel n-ar mai porni). Pură. */
+function ah_spa_vimeo_dnt_html( $html ) {
+	$out = preg_replace_callback( '~<iframe\b[^>]*>~i', function ( $m ) {
+		$tag = $m[0];
+		if ( false === stripos( $tag, 'player.vimeo.com' ) ) {
+			return $tag;
+		}
+		if ( preg_match( '~\bdata-src-cmplz\s*=\s*(["\'])([^"\']*)\1~i', $tag, $c ) && false !== stripos( $c[2], 'player.vimeo.com' ) ) {
+			$nou = ah_spa_vimeo_dnt( $c[2] );
+			$tag = preg_replace( '~\s\bdata-src-cmplz\s*=\s*(["\'])[^"\']*\1~i', '', $tag );
+			if ( preg_match( '~\ssrc\s*=\s*(["\'])[^"\']*\1~i', $tag ) ) {
+				return preg_replace( '~(\ssrc\s*=\s*)(["\'])[^"\']*\2~i', '$1"' . str_replace( '$', '\$', $nou ) . '"', $tag, 1 );
+			}
+			return preg_replace( '~^<iframe\b~i', '<iframe src="' . str_replace( '$', '\$', $nou ) . '"', $tag, 1 );
+		}
+		return preg_replace_callback( '~(\ssrc\s*=\s*)(["\'])([^"\']*)\2~i', function ( $s ) {
+			return $s[1] . $s[2] . ah_spa_vimeo_dnt( $s[3] ) . $s[2];
+		}, $tag, 1 );
+	}, (string) $html );
+	return is_string( $out ) ? $out : (string) $html;
+}
+
+/** Ieșirea unei pagini din aplicație (callback-ul ob_start): fără urmărire, Vimeo cu dnt=1. */
+function ah_spa_iesire_aplicatie( $html ) {
+	if ( ! is_string( $html ) || '' === $html ) {
+		return $html;
+	}
+	foreach ( headers_list() as $h ) {
+		if ( 0 === stripos( $h, 'content-type:' ) && false === stripos( $h, 'html' ) ) {
+			return $html; // un fișier, JSON, calendar: neatins
+		}
+	}
+	return ah_spa_vimeo_dnt_html( ah_spa_fara_urmarire( $html ) );
+}
+
+/** b) Un singur ob_start, doar în aplicație, doar pe paginile ei (Spațiul meu, sala, cărți, politici). */
+function ah_spa_porneste_filtru_html() {
+	if ( ! ah_spa_e_aplicatie() || is_admin() || wp_doing_ajax() || ( defined( 'REST_REQUEST' ) && REST_REQUEST ) ) {
+		return false;
+	}
+	if ( '' === ah_spa_zona() ) {
+		return false; // sunetul meditațiilor, calendarul sălii, alte adrese: neatinse (și nebufferizate)
+	}
+	return ob_start( 'ah_spa_iesire_aplicatie' );
+}
+add_action( 'template_redirect', 'ah_spa_porneste_filtru_html', 9999 );
 
 endif;

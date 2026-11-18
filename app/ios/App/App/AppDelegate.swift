@@ -18,26 +18,33 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         // (împreună cu UIBackgroundModes=audio). Comenzile de pe ecranul blocat vin din navigator.mediaSession (WebKit).
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio, options: [])
 
-        // Push: doar dacă aplicația e construită cu Firebase și are GoogleService-Info.plist (vezi README, „Push”).
+        // Push: Firebase pornește doar dacă există GoogleService-Info.plist (îl copiază faza „GoogleService-Info.plist
+        // (dacă există)” din proiect). Fără el aplicația merge normal, fără push: AhApp.info().push = false și puntea nu cere
+        // notificări. FirebaseAppDelegateProxyEnabled = NO (Info.plist): tokenul APNs îl dăm noi, mai jos.
         #if canImport(FirebaseCore)
-        if Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist") != nil {
+        if AhAppPlugin.areFirebaseConfig {
             FirebaseApp.configure()
         }
         #endif
         return true
     }
 
-    // Notificările push (@capacitor/push-notifications). Cu Firebase, Capacitor primește tokenul FCM
-    // (îl cere serverul, care trimite prin FCM HTTP v1); fără Firebase, tokenul APNs (nefolosit: puntea nu cere push).
+    // Notificările push (@capacitor/push-notifications). Serverul trimite prin FCM HTTP v1, deci Capacitor trebuie să
+    // primească tokenul FCM, nu tokenul APNs: cu Firebase pornit, îi dăm APNs-ul lui Firebase Messaging și trimitem
+    // mai departe tokenul FCM (String). Fără Firebase, tokenul APNs (Data) merge la Capacitor ca înainte, dar puntea
+    // nici nu cere push (AhApp.info().token = "apns") și nu l-ar trimite serverului (îl recunoaște după 64 de cifre hexa).
     func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
         #if canImport(FirebaseMessaging)
         if FirebaseApp.app() != nil {
-            Messaging.messaging().apnsToken = deviceToken
-            Messaging.messaging().token { token, error in
-                if let error = error {
-                    NotificationCenter.default.post(name: .capacitorDidFailToRegisterForRemoteNotifications, object: error)
-                } else if let token = token {
+            let m = Messaging.messaging()
+            m.apnsToken = deviceToken
+            m.isAutoInitEnabled = true // ea a permis notificările (register): de acum Firebase poate ține tokenul la zi
+            m.token { token, error in
+                if let token = token, !token.isEmpty {
                     NotificationCenter.default.post(name: .capacitorDidRegisterForRemoteNotifications, object: token)
+                } else {
+                    NotificationCenter.default.post(name: .capacitorDidFailToRegisterForRemoteNotifications,
+                                                    object: error ?? NSError(domain: "AhPush", code: 1, userInfo: [NSLocalizedDescriptionKey: "Firebase nu a dat tokenul FCM"]))
                 }
             }
             return

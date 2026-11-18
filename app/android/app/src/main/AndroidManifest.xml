@@ -34,6 +34,9 @@
                 <data android:pathPrefix="/spatiul-meu/" />
                 <data android:path="/app/intra" />
                 <data android:pathPrefix="/app/intra/" />
+                <!-- pagina partenerului (ah-sp-partener.php): linkul /pentru-el/?t= din emailul lui; aceleași căi în AASA -->
+                <data android:path="/pentru-el" />
+                <data android:pathPrefix="/pentru-el/" />
             </intent-filter>
         </activity>
 
@@ -51,6 +54,12 @@
             android:grantUriPermissions="true">
             <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths" />
         </provider>
+
+        <!-- Firebase (doar pentru notificările push, cu google-services.json): tokenul FCM se face abia după ce ea
+             permite notificările (PushNotifications.register() pornește singur auto-init), nu la prima deschidere.
+             Fără Google Analytics pentru Firebase. Fără google-services.json aceste chei nu au niciun efect. -->
+        <meta-data android:name="firebase_messaging_auto_init_enabled" android:value="false" />
+        <meta-data android:name="firebase_analytics_collection_deactivated" android:value="true" />
     </application>
 
     <!-- Permissions -->

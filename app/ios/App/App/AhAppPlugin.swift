@@ -1,12 +1,15 @@
 import Foundation
 import WebKit
 import Capacitor
+#if canImport(FirebaseCore)
+import FirebaseCore
+#endif
 #if canImport(FirebaseMessaging)
 import FirebaseMessaging
 #endif
 
 /// Pluginul mic al aplicației: îi spune punții de pe site ce poate telefonul.
-/// `info()` → { push, versiune, build }. `push` e true doar dacă aplicația a fost construită cu
+/// `info()` → { push, token, versiune, build, mediaNativ }. `push` e true doar dacă aplicația a fost construită cu
 /// Firebase Messaging ȘI are GoogleService-Info.plist; altfel puntea nu cere permisiunea de notificări
 /// (serverul trimite prin FCM, deci un token APNs simplu nu i-ar folosi la nimic).
 @objc(AhAppPlugin)
@@ -17,9 +20,15 @@ public class AhAppPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "info", returnType: CAPPluginReturnPromise)
     ]
 
+    /// GoogleService-Info.plist e în aplicație (nu e în repo: îl pune CI-ul din secret sau proprietara, local).
+    static var areFirebaseConfig: Bool {
+        return Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist") != nil
+    }
+
+    /// Push doar cu Firebase Messaging compilat ȘI pornit (altfel tokenul ar fi APNs, pe care serverul nu-l folosește).
     static var arePush: Bool {
         #if canImport(FirebaseMessaging)
-        return Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist") != nil
+        return areFirebaseConfig && FirebaseApp.app() != nil
         #else
         return false
         #endif
@@ -29,6 +38,8 @@ public class AhAppPlugin: CAPPlugin, CAPBridgedPlugin {
         let v = Bundle.main.infoDictionary
         call.resolve([
             "push": AhAppPlugin.arePush,
+            // ce token dă „registration”: "fcm" (Firebase Messaging) sau "apns" (fără Firebase); puntea trimite doar FCM
+            "token": AhAppPlugin.arePush ? "fcm" : "apns",
             "versiune": v?["CFBundleShortVersionString"] as? String ?? "",
             "build": v?["CFBundleVersion"] as? String ?? "",
             // ecranul blocat: pe iOS îl face WebKit (navigator.mediaSession), fără plugin nativ

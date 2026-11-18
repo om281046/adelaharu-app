@@ -3,15 +3,17 @@
 Recenzorii Apple citesc notele în engleză, deci textul de lipit e în engleză (nu apare nicăieri în aplicație).
 Mai jos, explicația în română pentru proprietară. Stare: 18 nov. 2026, după `docs/arhitectura.md` (v2).
 
-> **NU SE TRIMITE LA RECENZIE până nu sunt bifate toate trei** (verificat în `server/ah-sp-aplicatie.php`,
-> 18 nov. 2026, 12:07: niciuna nu e încă în fragment):
+> **NU SE TRIMITE LA RECENZIE până nu sunt bifate toate trei.** Stare 18 nov. 2026, seara: primele două sunt în
+> fragment, cu teste (`server/README.md`); se bifează după verificarea pe build-ul din TestFlight / testul intern Play.
 > - [ ] **Contul de recenzie** (cod fix pentru o singură adresă) e în fragment, după `../review-account.md`, cu
 >   testele trecute. Fără el, recenzorii nu pot intra (codul pleacă pe un email pe care nu-l văd) ⇒ respingere 2.1.
 > - [ ] **Fără Google Analytics, pixelul Meta, atribuirea comenzilor WooCommerce și bara Complianz în aplicație**
 >   (cerință fermă în `arhitectura.md`, „Ce ascunde fragmentul”), cu test. Până atunci, propozițiile „no analytics
 >   or tracking” de mai jos și etichetele din `privacy-answers.md` ar fi false (Apple 5.1.2 / 2.3).
-> - [ ] **Push pe iPhone:** build-ul iOS are Firebase Messaging, `GoogleService-Info.plist` în proiect și
->   `aps-environment` (workflow-ul iOS oprește încărcarea în TestFlight dacă lipsesc, cât timp `push_ios` e bifat).
+> - [ ] **Push pe iPhone:** build-ul iOS are Firebase Messaging, fișierul `GoogleService-Info.plist` (valid, din
+>   secretul `GOOGLE_SERVICE_INFO_PLIST`), faza care îl copiază și `aps-environment` (workflow-ul iOS oprește încărcarea
+>   în TestFlight dacă lipsește oricare, cât timp `push_ios` e bifat; corectat 18 nov., seara: înainte, verificarea
+>   căuta doar numele în `project.pbxproj`, unde apare mereu, și trecea și fără fișier).
 >   Dacă versiunea pleacă fără push pe iPhone: din notele Apple se scoate funcția 5, iar din fișa App Store rândul
 >   despre notificări (`listing.md`).
 
@@ -26,7 +28,7 @@ Mai jos, explicația în română pentru proprietară. Stare: 18 nov. 2026, dup�
 
 Intrarea e cu un cod de 6 cifre trimis pe email; recenzorul nu are acces la căsuța noastră. Fragmentul
 `ah-sp-aplicatie.php` **trebuie să accepte** un cod fix pentru o singură adresă de recenzie, setată din admin
-(**18 nov.: încă neimplementat**, vezi caseta de sus). Cerința exactă
+(18 nov., seara: în fragment, secțiunea 9, cu teste; de verificat în TestFlight). Cerința exactă
 pentru coleg și pașii proprietarei (comenzile manuale „Acces gratuit”, cartea „Finalizată”, reînnoirea anuală):
 [`../review-account.md`](../review-account.md).
 
@@ -65,21 +67,25 @@ NATIVE FEATURES (Guideline 4.2) - things the website cannot do
 NO PURCHASES IN THE APP (Guidelines 3.1.1 / 3.1.3(a), reader app)
 The app does not sell anything and has no in-app purchases. There are no prices, no purchase, renewal, upgrade or subscription buttons, no links to product or checkout pages, no subscription-management portal, no gift cards, referral offers or promotional campaigns, and no text telling users where or how to buy. All courses, memberships and e-books are purchased by customers on our website only, independently of the app; the app lets existing customers access what they already own. Content a user does not own simply does not appear, or appears without any price or link. Membership status is shown as plain information ("active until ..."), without any action.
 
-ACCOUNT DELETION (5.1.1(v))
-"Mai mult" (More) > "Aplicația" > "Șterge contul" (Delete account) > check "Am înțeles..." > "Șterge contul". This deletes the user's personal data on our server (cycle data and daily notes, the cycle-phase email subscription, member-area registration, connected devices, push tokens, course reminders and live-meeting registration) and, on the phone, downloads, cycle data and reminders. The user is signed out.
-Orders and invoices are kept because Romanian accounting law requires it; the user is told this before confirming. Access to previously purchased content is tied to those purchase records, so if you sign in again with the same email after deleting the account, the purchased courses, meditations and e-books are visible again (as they would be on our website), but none of the deleted personal data comes back: no cycle data, notes, devices or push tokens.
-
 HEALTH DATA (5.1.1, 5.1.3)
 The cycle map calculates phases on the device. Cycle dates and daily notes are stored in the user's account on our server only if she turns this on and gives explicit consent; this in-account storage is encrypted at rest (AES-256-GCM) and can be deleted at any time. Separately, she can subscribe to cycle-phase emails (opt-in, with consent): for that we store her email, first name, the start date of her last period and her cycle and period lengths, used only to send those emails; she can unsubscribe from any email, and account deletion removes it. No HealthKit, no advertising, no analytics or tracking scripts inside the app (the website's analytics and advertising pixel are not loaded in the app), no data sold. Embedded Vimeo players use Vimeo's "do not track" mode. The app states that phase estimates are not a contraception method and not medical advice.
 
 PARTNER ACCESS (optional, initiated and controlled by her)
-In "Ciclul" she can invite her partner by first name and email, with a separate, mandatory consent checkbox ("I agree that [name] sees my phase today and the estimated dates of the next phases. I can stop this at any time."). He receives a personal link that opens a simple partner space in the same app: today's phase, how to support her, short educational pages and a reminder at the start of each phase. He never sees her notes, symptoms or the exact days she logged. She sees who has access and can stop it instantly ("Oprește accesul"); he can delete his access from his own page in the app. When she deletes her account or her cycle data, all partner access linked to her is deleted too. To see the partner space, open this link on the device: <REVIEW_PARTNER_LINK>
-(On the sign-in screen, "Sunt partenerul ei" (I am her partner) explains how partners sign in.)
+In "Ciclul" she can invite her partner by first name and email, with a separate, mandatory consent checkbox ("I agree that [name] sees my phase today and the estimated dates of the next phases. I can stop this at any time."). He receives a personal link that opens a simple partner space in the same app: today's phase, how to support her, short educational pages and a reminder at the start of each phase. He never sees her notes, symptoms, her situation or the exact days she logged; the server only computes the phase. She sees who has access and can stop it instantly ("Oprește accesul"); he can delete his access from his own page in the app (gear icon > "Șterge accesul meu" (Delete my access)). When she deletes her account or her cycle data, all partner access linked to her is deleted too. The partner account has no password and no purchases.
+Please try the partner space BEFORE deleting the review account: deleting her account removes all partner access by design, and the partner link then shows "this link is no longer valid".
+To see the partner space, use this personal link: <REVIEW_PARTNER_LINK>
+iOS opens links in the app only when they are tapped, not when they are typed or pasted into the Safari address bar. Please either (a) paste the link into Notes or Messages on the test iPhone and tap it there (it opens the app), or (b) in the app, while signed out, tap "Sunt partenerul ei" (I am her partner) on the sign-in screen, paste the link into the field "Sau lipește aici linkul copiat" (Or paste the copied link here) and tap "Deschide linkul" (Open the link).
+The partner space has two tabs, "Azi" (Today) and "Învață" (Learn), and settings under the gear icon. If you are still signed in to the review account on the same phone, the phone's push notifications stay with her account, so the partner page offers phase emails instead of notifications; "Deschide Spațiul meu" in the partner settings (or reopening the app) returns to her account. On a phone where she is not signed in, the partner page offers notifications at the start of each phase. "Ieși" (Sign out) in the partner settings signs the partner out of this phone; the link signs him in again.
+(On the sign-in screen, "Sunt partenerul ei" (I am her partner) explains how partners sign in and accepts a pasted link.)
+
+ACCOUNT DELETION (5.1.1(v))
+"Mai mult" (More) > "Aplicația" > "Șterge contul" (Delete account) > check "Am înțeles..." > "Șterge contul". This deletes the user's personal data on our server (cycle data and daily notes, the cycle-phase email subscription, member-area registration, connected devices, push tokens, course reminders, live-meeting registration and any partner access she granted, including the partners' data and push tokens) and, on the phone, downloads, cycle data and reminders. The user is signed out.
+Orders and invoices are kept because Romanian accounting law requires it; the user is told this before confirming. Access to previously purchased content is tied to those purchase records, so if you sign in again with the same email after deleting the account, the purchased courses, meditations and e-books are visible again (as they would be on our website), but none of the deleted personal data comes back: no cycle data, notes, devices or push tokens.
 
 Contact: <NUME>, <TELEFON>, contact@adelaharu.ro
 ```
 
-*De înlocuit:* `<REVIEW_EMAIL>`, `<REVIEW_CODE>`, `<REVIEW_PARTNER_LINK>` (vezi `review-account.md`, „Partenerul de recenzie”), `<NUME>`, `<TELEFON>`. Blocul PARTNER ACCESS (cu tot ce spune despre partener, inclusiv ștergerea accesului lui) se trimite doar dacă fragmentul `ah-sp-partener.php` („Pentru el”, `arhitectura.md`) e activ în build-ul trimis **și** ascultă de `ah_spa_cont_sters` (ștergerea contului ei îi șterge rândurile); altfel se scoate. (18 nov.: `ah-sp-partener.php` nu există încă.)
+*De înlocuit:* `<REVIEW_EMAIL>`, `<REVIEW_CODE>`, `<REVIEW_PARTNER_LINK>` (vezi `review-account.md`, „Partenerul de recenzie”), `<NUME>`, `<TELEFON>`. Blocul PARTNER ACCESS (cu tot ce spune despre partener, inclusiv ștergerea accesului lui) și mențiunea „partner access” din ACCOUNT DELETION se trimit doar dacă fragmentul `ah-sp-partener.php` („Pentru el”, `docs/partener.md`) e activ pe site când se trimite la recenzie; altfel se scot. Ștergerea contului ei îi șterge partenerii (18 nov., seara: în `ah_spa_sterge_cont`, cu test). De verificat pe build: linkul partenerului, atins în Notițe / Mesaje, deschide aplicația (AASA / `assetlinks.json` cu `/pentru-el`); lipit în câmpul de la „Sunt partenerul ei” (fără cont în aplicație) deschide pagina lui tot în aplicație; Azi / Învață / rotița, „Deschide Spațiul meu” pe telefonul ei, „Șterge accesul meu”. Blocul PARTNER ACCESS stă **înaintea** lui ACCOUNT DELETION, cu rugămintea de a încerca partenerul înainte de ștergere: recenzorii testează des întâi ștergerea, iar ștergerea contului ei anulează linkul partenerului (corect, dar ar arăta ca o funcție stricată, 2.1). După orice ștergere a contului de recenzie, partenerul se reface după `review-account.md`, „Partenerul de recenzie”, punctul 3.
 *De verificat pe build-ul din TestFlight înainte de „Submit for Review”* (altfel se scoate rândul din text, Apple 2.3.1):
 - denumirile: „Trimite-mi codul”, „Intră” (235, verificate 18 nov.), „Descarcă”, „Mai mult” › „Aplicația” ›
   „Șterge contul”, caseta „Am înțeles…” (fragmentul, verificate 18 nov.); bara de jos arată cel mult două dintre
@@ -88,7 +94,8 @@ Contact: <NUME>, <TELEFON>, contact@adelaharu.ro
   funcția 3 și pentru o meditație pornită **online** (puntea trimite starea în pluginul `AhMedia`: notificarea
   „Adela Haru” cu butoane apare, sunetul continuă cu ecranul blocat);
 - după „Șterge contul” pe contul de recenzie, intrarea din nou cu codul fix merge și arată conținutul cumpărat,
-  fără ciclu și notițe (exact ce spune blocul ACCOUNT DELETION);
+  fără ciclu și notițe (exact ce spune blocul ACCOUNT DELETION); apoi refaceți ciclul și partenerul de recenzie
+  (`review-account.md`, „Partenerul de recenzie”, punctul 3) înainte de trimitere;
 - „no analytics or tracking SDKs” e adevărat **doar dacă** fragmentul nu încarcă în aplicație Google Analytics,
   pixelul Meta (facebook-for-woocommerce) și bara Complianz. Vezi „Riscuri”, punctul 3.
 
@@ -96,6 +103,12 @@ Contact: <NUME>, <TELEFON>, contact@adelaharu.ro
 
 ```
 Sign-in uses a one-time email code. For this review account, enter the email above, tap "Trimite-mi codul" and type the fixed code given as the password, then tap "Intră"; no email access is needed. The account has a course, the Inner Temple meditation membership and an e-book. The app sells nothing: content is purchased on www.adelaharu.ro only, and the app shows no prices or purchase links.
+```
+
+A doua instrucțiune (doar cu `ah-sp-partener.php` activ), numele „Cont partener”, utilizator „—”, parola „—”, cu textul:
+
+```
+Partner mode: a woman can invite her partner (Ciclul > "Pentru el", with a separate consent checkbox) to see only her current cycle phase and estimated next phases. The partner has no password: he signs in with a personal link from his invitation email. To see the partner space (Today, Learn, settings with sign-out and "delete my access"), tap this link on the device, for example after pasting it into a note or message (a link typed into the browser address bar opens the website, not the app): <REVIEW_PARTNER_LINK>. Or, in the app while signed out, tap "Sunt partenerul ei" on the sign-in screen and paste the link into the field there. Please try this before deleting the review account: deleting her account removes partner access by design. If the review account is signed in on the same device, notifications stay with her account and the partner page offers phase emails instead.
 ```
 
 ## De ce nu e „un site împachetat” (pentru discuția cu Apple, dacă vine o respingere 4.2)
@@ -128,8 +141,10 @@ Dacă Apple insistă, planul B (în ordinea costului): un ecran nativ de start c
    pixelul Meta = **urmărire** în sensul Apple ⇒ ar trebui ATT (fereastra „Permite urmărirea”) și alte etichete.
    Cerință fermă pentru fragment (`arhitectura.md`): în aplicație nu se încarcă GA, pixelul Meta, atribuirea
    comenzilor WooCommerce și nici bara de cookie-uri (rămân doar cookie-urile funcționale); evenimentele `ev()`
-   din 235 și `masoara()` din 266 nu mai au unde pleca fără `gtag`. **18 nov.: încă neimplementat.** Etichetele din
-   `privacy-answers.md` presupun asta.
+   din 235 și `masoara()` din 266 nu mai au unde pleca fără `gtag`. **18 nov., seara: implementat în fragment
+   (`ah-sp-aplicatie.php` 2.1.0, secțiunea 10), cu teste; de verificat pe build-ul din TestFlight / testul intern cu
+   Web Inspector sau `chrome://inspect`** (nicio cerere spre `googletagmanager.com`, `google-analytics.com`,
+   `connect.facebook.net`, `facebook.com/tr`; nicio bară Complianz). Etichetele din `privacy-answers.md` presupun asta.
 4. **Vimeo** (lecții, explicații video): se redă în cadrul paginii (`player.vimeo.com` e permis în aplicație).
    Videourile cu restricție de domeniu cer ca pagina să fie pe `www.adelaharu.ro` (este). Embed-urile site-ului au
    deja `dnt=1` (235, 44, 51, 265: fără cookie-uri și statistici Vimeo); fragmentul îl adaugă în aplicație oricărui

@@ -28,7 +28,7 @@ function redirect_spre( $uri, $devreme = true ) {
 }
 
 /* ---------- 0. fragmentul se încarcă o singură dată, fără efecte ---------- */
-egal( AH_SPA, '2.0.0', 'versiunea fragmentului' );
+egal( AH_SPA, '2.1.0', 'versiunea fragmentului' );
 verifica( isset( $GLOBALS['ah_test_hooks']['template_redirect'] ), 'cârligul de redirecționare e legat' );
 $n_hooks = count( $GLOBALS['ah_test_hooks'], COUNT_RECURSIVE );
 require __DIR__ . '/../ah-sp-aplicatie.php'; // a doua oară: gărzile AH_SPA și function_exists
@@ -404,9 +404,9 @@ $a = ah_spa_aasa();
 $det = $a['applinks']['details'][0];
 egal( $det['appID'], 'ABCDE12345.ro.adelaharu.app', 'AASA appID' );
 egal( $det['appIDs'], array( 'ABCDE12345.ro.adelaharu.app' ), 'AASA appIDs' );
-egal( $det['paths'], array( '/spatiul-meu', '/spatiul-meu/*', '/app/intra', '/app/intra/*' ), 'AASA căile: Spațiul meu (cu ?cont=) și /app/intra, ca App Links pe Android' );
-egal( $det['components'], array( array( '/' => '/spatiul-meu' ), array( '/' => '/spatiul-meu/*' ), array( '/' => '/app/intra' ), array( '/' => '/app/intra/*' ) ), 'AASA components' );
-egal( wp_json_encode( $a, JSON_UNESCAPED_SLASHES ), '{"applinks":{"apps":[],"details":[{"appID":"ABCDE12345.ro.adelaharu.app","appIDs":["ABCDE12345.ro.adelaharu.app"],"paths":["/spatiul-meu","/spatiul-meu/*","/app/intra","/app/intra/*"],"components":[{"/":"/spatiul-meu"},{"/":"/spatiul-meu/*"},{"/":"/app/intra"},{"/":"/app/intra/*"}]}]}}', 'AASA: JSON-ul exact' );
+egal( $det['paths'], array( '/spatiul-meu', '/spatiul-meu/*', '/app/intra', '/app/intra/*', '/pentru-el', '/pentru-el/*' ), 'AASA căile: Spațiul meu (cu ?cont=), /app/intra și pagina partenerului, ca App Links pe Android' );
+egal( $det['components'], array( array( '/' => '/spatiul-meu' ), array( '/' => '/spatiul-meu/*' ), array( '/' => '/app/intra' ), array( '/' => '/app/intra/*' ), array( '/' => '/pentru-el' ), array( '/' => '/pentru-el/*' ) ), 'AASA components' );
+egal( wp_json_encode( $a, JSON_UNESCAPED_SLASHES ), '{"applinks":{"apps":[],"details":[{"appID":"ABCDE12345.ro.adelaharu.app","appIDs":["ABCDE12345.ro.adelaharu.app"],"paths":["/spatiul-meu","/spatiul-meu/*","/app/intra","/app/intra/*","/pentru-el","/pentru-el/*"],"components":[{"/":"/spatiul-meu"},{"/":"/spatiul-meu/*"},{"/":"/app/intra"},{"/":"/app/intra/*"},{"/":"/pentru-el"},{"/":"/pentru-el/*"}]}]}}', 'AASA: JSON-ul exact' );
 $al = ah_spa_assetlinks();
 egal( $al[0]['target']['package_name'], 'ro.adelaharu.app', 'assetlinks: pachetul' );
 egal( $al[0]['target']['sha256_cert_fingerprints'], array( $fp1, strtoupper( $fp2 ) ), 'assetlinks: amprentele valide, fără dubluri' );
@@ -508,6 +508,246 @@ foreach ( array( "'appUrlOpen'", "'getLaunchUrl'", "'registration'", "'pushNotif
 	verifica( false !== strpos( $js, $x ), 'puntea conține ' . $x );
 }
 verifica( false !== strpos( $js, '/*CICLU-INCEPUT*/' ) && false !== strpos( $js, '/*CICLU-SFARSIT*/' ), 'calculul ciclului e delimitat (pentru testul node)' );
+
+/* ---------- 12. contul de recenzie (docs/review-account.md, punctul 9) ---------- */
+$GLOBALS['ah_test_cookie_sp'] = array();
+$GLOBALS['ah_test_mail_235']  = array();
+if ( ! function_exists( 'ah_mail_trimite' ) ) { function ah_mail_trimite( ...$a ) { $GLOBALS['ah_test_mail_235'][] = $a; return true; } }
+if ( ! function_exists( 'ah_med_cheie_disp' ) ) { function ah_med_cheie_disp( $e ) { return 'ah_med_d_' . md5( strtolower( trim( $e ) ) ); } }
+if ( ! function_exists( 'ah_sc_dispozitive' ) ) { function ah_sc_dispozitive( $c ) { return (array) $c->get_meta( '_ah_sc_disp' ); } }
+$REC  = 'recenzie@adelaharu.ro';
+$COD  = '482916';
+$_SERVER['REMOTE_ADDR'] = '203.0.113.77';
+$cere = function ( $ruta, $corp, $metoda = 'POST' ) {
+	return ah_test_filtru( 'rest_pre_dispatch', null, null, new WP_REST_Request( array( 'Content-Type' => 'application/json' ), $corp, array(), $ruta, $metoda ) );
+};
+$tr235 = function () { return array_values( array_filter( array_keys( $GLOBALS['ah_test_transients'] ), function ( $k ) { return 0 === strpos( $k, 'ah_sp_ip_' ) || 0 === strpos( $k, 'ah_sp_em_' ) || 0 === strpos( $k, 'ah_sp_cod_' ); } ) ); };
+ca_aplicatie();
+delete_option( 'ah_spa_recenzie' );
+egal( ah_spa_recenzie(), array( 'email' => '', 'hash' => '', 'doar_app' => 1 ), 'recenzie: implicit oprit, „doar în aplicație” bifat' );
+foreach ( array( '/ah-sp/v1/cod' => array( 'email' => $REC ), '/ah-sp/v1/intra' => array( 'email' => $REC, 'cod' => $COD ) ) as $ruta => $corp ) {
+	egal( $cere( $ruta, $corp ), null, 'recenzie: opțiunea goală ⇒ ' . $ruta . ' merge la 235' );
+}
+// validarea codului la salvare
+foreach ( array( '123456', '654321', '000000', '999999', '012345', '987654', '12345', '1234567', 'abcdef', '12 34 56', '' ) as $slab ) {
+	verifica( '' !== ah_spa_recenzie_cod_slab( $slab ), 'recenzie: codul „' . $slab . '” e refuzat' );
+}
+egal( ah_spa_recenzie_cod_slab( $COD ), '', 'recenzie: un cod greu de ghicit trece' );
+list( $o, $err ) = ah_spa_curata_recenzie( array( 'recenzie_email' => '  Recenzie@AdelaHaru.RO ', 'recenzie_cod' => $COD, 'recenzie_doar_app' => '1' ), ah_spa_recenzie() );
+egal( array( $o['email'], $o['doar_app'], $err ), array( $REC, 1, '' ), 'recenzie: adresa salvată normalizată' );
+verifica( '' !== $o['hash'] && $o['hash'] !== $COD && password_verify( $COD, $o['hash'] ), 'recenzie: se păstrează doar amprenta codului' );
+verifica( false === strpos( serialize( $o ), $COD ), 'recenzie: codul nu apare nicăieri în opțiune' );
+list( $o2, $err2 ) = ah_spa_curata_recenzie( array( 'recenzie_email' => $REC, 'recenzie_cod' => '123456', 'recenzie_doar_app' => '1' ), $o );
+egal( array( $o2['hash'], $err2 ), array( $o['hash'], 'sir' ), 'recenzie: un cod refuzat nu schimbă codul de acum' );
+list( $o3, $err3 ) = ah_spa_curata_recenzie( array( 'recenzie_email' => $REC, 'recenzie_cod' => '', 'recenzie_doar_app' => '1' ), $o );
+egal( array( $o3['hash'], $err3 ), array( $o['hash'], '' ), 'recenzie: câmpul gol păstrează codul' );
+list( $o4, $err4 ) = ah_spa_curata_recenzie( array( 'recenzie_email' => 'nu-e-email', 'recenzie_cod' => '' ), $o );
+egal( array( $o4['email'], $o4['doar_app'], $err4 ), array( '', 0, 'email' ), 'recenzie: adresă greșită ⇒ oprit, cu mesaj' );
+list( $o5 ) = ah_spa_curata_recenzie( array( 'recenzie_email' => $REC, 'recenzie_sterge_cod' => '1', 'recenzie_doar_app' => '1' ), $o );
+egal( $o5['hash'], '', 'recenzie: „Șterge codul”' );
+update_option( 'ah_spa_recenzie', $o );
+egal( $cere( '/ah-sp/v1/intra', array( 'email' => $REC, 'cod' => $COD ) ), null, 'recenzie: fără 235 (ah_sp_seteaza_cookie) filtrul nu face nimic' );
+if ( ! function_exists( 'ah_sp_seteaza_cookie' ) ) { function ah_sp_seteaza_cookie( $e ) { $GLOBALS['ah_test_cookie_sp'][] = $e; } }
+// altă adresă, altă metodă, altă rută: neatinse
+foreach ( array( 'recenzie+1@adelaharu.ro', 'recenzie@adelaharu.com', 'ana@exemplu.ro', '' ) as $alta ) {
+	egal( $cere( '/ah-sp/v1/cod', array( 'email' => $alta ) ), null, 'recenzie: altă adresă (' . $alta . ') ⇒ ruta 235' );
+	egal( $cere( '/ah-sp/v1/intra', array( 'email' => $alta, 'cod' => $COD ) ), null, 'recenzie: /intra cu altă adresă (' . $alta . ') ⇒ ruta 235' );
+}
+egal( $cere( '/ah-sp/v1/cod', array( 'email' => array( $REC ) ) ), null, 'recenzie: emailul care nu e text ⇒ ruta 235' );
+egal( $cere( '/ah-sp/v1/cod', array( 'email' => $REC ), 'GET' ), null, 'recenzie: GET ⇒ neatins' );
+foreach ( array( '/ah-sp/v1/iesi', '/ah-sp/v1/ciclu-date', '/ah-sp/v1/ciclu-sterge', '/ah-spa/v1/push' ) as $ruta ) {
+	egal( $cere( $ruta, array( 'email' => $REC, 'cod' => $COD ) ), null, 'recenzie: altă rută (' . $ruta . ') ⇒ neatinsă' );
+}
+egal( ah_spa_recenzie_filtru( 'deja', null, new WP_REST_Request( array(), array( 'email' => $REC ), array(), '/ah-sp/v1/cod', 'POST' ) ), 'deja', 'recenzie: un răspuns dat deja de alt filtru rămâne' );
+// „doar în aplicație”: în browser merge pe ruta normală
+ca_browser();
+egal( $cere( '/ah-sp/v1/cod', array( 'email' => $REC ) ), null, 'recenzie: doar_app + browser ⇒ /cod din 235' );
+egal( $cere( '/ah-sp/v1/intra', array( 'email' => $REC, 'cod' => $COD ) ), null, 'recenzie: doar_app + browser ⇒ /intra din 235' );
+ca_aplicatie();
+// /cod: 200 ok, fără email, fără contoarele 235
+$GLOBALS['ah_test_mail'] = array();
+$r = $cere( '/ah-sp/v1/cod', array( 'email' => '  RECENZIE@adelaharu.ro ' ) );
+verifica( $r instanceof WP_REST_Response && 200 === $r->get_status() && array( 'ok' => true ) === $r->get_data(), 'recenzie: /cod ⇒ 200 {"ok":true} (adresa cu majuscule și spații recunoscută)' );
+egal( $r->headers['Cache-Control'] ?? '', 'no-store, private, max-age=0', 'recenzie: /cod fără cache' );
+egal( array( $GLOBALS['ah_test_mail_235'], $GLOBALS['ah_test_mail'] ), array( array(), array() ), 'recenzie: /cod nu trimite niciun email' );
+egal( $tr235(), array(), 'recenzie: contoarele 235 (ah_sp_ip_*, ah_sp_em_*) neatinse' );
+for ( $i = 0; $i < 29; $i++ ) { $cere( '/ah-sp/v1/cod', array( 'email' => $REC ) ); }
+$r = $cere( '/ah-sp/v1/cod', array( 'email' => $REC ) );
+verifica( 429 === $r->get_status() && 'Ai cerut deja câteva coduri. Încearcă din nou peste 15 minute.' === $r->get_data()['mesaj'], 'recenzie: a 31-a cerere de cod pe oră de pe același IP ⇒ 429 (mesajul din 235)' );
+$_SERVER['REMOTE_ADDR'] = '198.51.100.4';
+egal( $cere( '/ah-sp/v1/cod', array( 'email' => $REC ) )->get_status(), 200, 'recenzie: alt IP ⇒ din nou 200' );
+$_SERVER['REMOTE_ADDR'] = '203.0.113.77';
+// dispozitivele: ale recenziei și ale altei cliente
+update_option( 'ah_med_d_' . md5( $REC ), array( 'tel1' => 1, 'tel2' => 2, 'tel3' => 3 ) );
+update_option( 'ah_med_d_' . md5( 'ana@exemplu.ro' ), array( 'tel' => 1 ) );
+$cr = new Ah_Test_Comanda( 16001, 'Recenzie@AdelaHaru.ro', array( '_ah_sc_disp' => array( 'a' => 1, 'b' => 2 ) ) );
+$cr2 = new Ah_Test_Comanda( 16002, $REC, array() );
+$ca = new Ah_Test_Comanda( 16003, 'ana@exemplu.ro', array( '_ah_sc_disp' => array( 'x' => 1 ) ) );
+$GLOBALS['ah_test_wc'] = array( $cr, $cr2, $ca );
+egal( ah_spa_recenzie_goleste_disp( 'ana@exemplu.ro' ), array( 'meditatii' => 0, 'sala' => 0 ), 'recenzie: golirea dispozitivelor nu face nimic pentru altă adresă' );
+// /intra
+$GLOBALS['ah_test_cookie_sp'] = array();
+$r = $cere( '/ah-sp/v1/intra', array( 'email' => ' Recenzie@adelaharu.ro', 'cod' => $COD ) );
+verifica( 200 === $r->get_status() && array( 'ok' => true ) === $r->get_data(), 'recenzie: /intra cu codul bun ⇒ 200 {"ok":true}' );
+egal( $GLOBALS['ah_test_cookie_sp'], array( $REC ), 'recenzie: ah_sp_seteaza_cookie chemat o dată, cu adresa normalizată' );
+egal( $r->headers['Cache-Control'] ?? '', 'no-store, private, max-age=0', 'recenzie: /intra fără cache' );
+egal( get_option( 'ah_med_d_' . md5( $REC ) ), false, 'recenzie: dispozitivele meditațiilor (51) golite' );
+verifica( ! isset( $cr->meta['_ah_sc_disp'] ) && 1 === $cr->salvari && 0 === $cr2->salvari, 'recenzie: dispozitivele sălii (44) golite pe comanda ei' );
+verifica( array( 'tel' => 1 ) === get_option( 'ah_med_d_' . md5( 'ana@exemplu.ro' ) ) && isset( $ca->meta['_ah_sc_disp'] ) && 0 === $ca->salvari, 'recenzie: dispozitivele altei cliente rămân' );
+egal( $tr235(), array(), 'recenzie: /intra nu atinge transientul de cod din 235' );
+egal( $cere( '/ah-sp/v1/intra', array( 'email' => $REC, 'cod' => '482 916' ) )->get_status(), 200, 'recenzie: codul cu spații (cum îl scrie telefonul) trece; nu expiră, nu e de unică folosință' );
+// greșit, apoi limita de 5, apoi după 15 minute
+$GLOBALS['ah_test_cookie_sp'] = array();
+$r = $cere( '/ah-sp/v1/intra', array( 'email' => $REC, 'cod' => '000001' ) );
+verifica( 403 === $r->get_status() && array( 'ok' => false, 'mesaj' => 'Codul nu se potrivește. Verifică cifrele.' ) === $r->get_data(), 'recenzie: cod greșit ⇒ 403 (mesajul din 235)' );
+egal( $cere( '/ah-sp/v1/intra', array( 'email' => $REC, 'cod' => array( 'x' ) ) )->get_status(), 403, 'recenzie: cod care nu e text ⇒ 403' );
+foreach ( array( '135790', '24680', '975310' ) as $g ) { $cere( '/ah-sp/v1/intra', array( 'email' => $REC, 'cod' => $g ) ); }
+$r = $cere( '/ah-sp/v1/intra', array( 'email' => $REC, 'cod' => $COD ) );
+verifica( 429 === $r->get_status() && 'Prea multe încercări. Cere un cod nou.' === $r->get_data()['mesaj'], 'recenzie: a 6-a încercare după 5 greșite ⇒ 429, chiar cu codul bun' );
+egal( $GLOBALS['ah_test_cookie_sp'], array(), 'recenzie: niciun cookie cât e blocat' );
+$GLOBALS['ah_test_transients']['ah_spa_rec_n'][1] = time() - 1; // au trecut 15 minute
+egal( $cere( '/ah-sp/v1/intra', array( 'email' => $REC, 'cod' => $COD ) )->get_status(), 200, 'recenzie: după 15 minute acceptă din nou' );
+egal( get_transient( 'ah_spa_rec_n' ), false, 'recenzie: contorul la zero după o intrare reușită' );
+$n0 = $GLOBALS['ah_test_check_pw'] ?? 0;
+$cere( '/ah-sp/v1/intra', array( 'email' => $REC, 'cod' => $COD ) );
+egal( ( $GLOBALS['ah_test_check_pw'] ?? 0 ) - $n0, 1, 'recenzie: codul se compară cu wp_check_password (timp constant)' );
+// „doar în aplicație” debifat: merge și în browser
+update_option( 'ah_spa_recenzie', array_merge( $o, array( 'doar_app' => 0 ) ) );
+ca_browser();
+egal( $cere( '/ah-sp/v1/intra', array( 'email' => $REC, 'cod' => $COD ) )->get_status(), 200, 'recenzie: doar_app debifat ⇒ merge și pe web' );
+update_option( 'ah_spa_recenzie', $o );
+ca_aplicatie();
+// jurnalul: fără cod, fără adresă, IP trunchiat
+$jur = implode( "\n", array_column( (array) get_option( 'ah_spa_jurnal' ), 1 ) );
+foreach ( array( 'recenzie: cod cerut', 'recenzie: intrare', 'recenzie: cod greșit', 'recenzie: prea multe încercări' ) as $x ) {
+	verifica( false !== strpos( $jur, $x ), 'recenzie: jurnalul are „' . $x . '”' );
+}
+foreach ( array( $COD, '482 916', '000001', '135790', '24680', '975310', $REC, '203.0.113.77' ) as $x ) {
+	verifica( false === strpos( $jur, $x ), 'recenzie: jurnalul nu conține „' . $x . '”' );
+}
+verifica( false !== strpos( $jur, '203.0.113.0/24' ), 'recenzie: IP-ul trunchiat (/24) în jurnal' );
+egal( ah_spa_ip_scurt( '2001:db8:abcd:12:34::1' ), '2001:db8:abcd::/48', 'IPv6 trunchiat la /48' );
+egal( ah_spa_ip_scurt( 'nu-e-ip' ), '?', 'IP stricat: ?' );
+// ștergerea contului pe adresa de recenzie: emailul echipei are mențiunea
+$GLOBALS['ah_test_mail']  = array();
+$GLOBALS['ah_test_email'] = $REC;
+egal( ah_spa_r_sterge_cont( new WP_REST_Request( $H, array( 'confirmare' => true ) ) )->get_status(), 200, 'recenzie: sterge-cont merge normal' );
+egal( $GLOBALS['ah_test_mail'][0][1] ?? '', 'Aplicația: cerere de ștergere a contului (contul de recenzie)', 'recenzie: subiectul emailului către echipă' );
+$GLOBALS['ah_test_mail']  = array();
+$GLOBALS['ah_test_email'] = 'maria@exemplu.ro';
+ah_spa_r_sterge_cont( new WP_REST_Request( $H, array( 'confirmare' => true ) ) );
+egal( $GLOBALS['ah_test_mail'][0][1] ?? '', 'Aplicația: cerere de ștergere a contului', 'recenzie: altă adresă, subiectul obișnuit' );
+$GLOBALS['ah_test_email'] = 'ana@exemplu.ro';
+$GLOBALS['ah_test_wc']    = array();
+delete_option( 'ah_spa_recenzie' );
+
+/* ---------- 13. fără analiză și urmărire în aplicație ---------- */
+foreach ( array( array( 'sourcebuster-js', '' ), array( 'wc-order-attribution', '' ), array( 'wc-facebook-signals', '' ), array( 'cmplz-cookiebanner', '' ), array( 'cmplz-general', '' ), array( 'google_gtagjs', '' ), array( 'x-ga', 'https://www.googletagmanager.com/gtag/js?id=G-52BCW9FS1V' ), array( 'ms-clarity', 'https://www.clarity.ms/tag/yvi25enyux' ), array( 'banner', 'https://www.adelaharu.ro/wp-content/uploads/complianz/css/banner-1-optin.css' ), array( 'fb', 'https://connect.facebook.net/en_US/fbevents.js' ) ) as $x ) {
+	verifica( ah_spa_e_urmarire( $x[0], $x[1] ), 'urmărire: ' . $x[0] . ' e scos' );
+}
+foreach ( array( array( 'ahspx-css', '' ), array( 'cmplz-document', 'https://www.adelaharu.ro/wp-content/plugins/complianz-gdpr/assets/css/document.min.css' ), array( 'jquery-core', 'https://www.adelaharu.ro/wp-includes/js/jquery/jquery.min.js' ), array( 'elementor-frontend', 'https://www.adelaharu.ro/wp-content/plugins/elementor/assets/js/frontend.min.js' ), array( 'wc-cart-fragments', '' ) ) as $x ) {
+	verifica( ! ah_spa_e_urmarire( $x[0], $x[1] ), 'urmărire: ' . $x[0] . ' rămâne' );
+}
+$coada = function () {
+	$GLOBALS['wp_scripts'] = new Ah_Test_Deps();
+	$GLOBALS['wp_styles']  = new Ah_Test_Deps();
+	foreach ( array( 'jquery-core' => '/wp-includes/js/jquery/jquery.min.js', 'sourcebuster-js' => '/wp-content/plugins/woocommerce/assets/js/sourcebuster/sourcebuster.min.js', 'wc-order-attribution' => '/wp-content/plugins/woocommerce/assets/js/frontend/order-attribution.min.js', 'wc-facebook-signals' => '/wp-content/plugins/facebook-for-woocommerce/assets/js/facebook-for-woocommerce-signals.js', 'cmplz-cookiebanner' => '/wp-content/plugins/complianz-gdpr/cookiebanner/js/complianz.min.js', 'elementor-frontend' => '/wp-content/plugins/elementor/assets/js/frontend.min.js', 'clarity-x' => 'https://www.clarity.ms/tag/abc' ) as $h => $src ) { $GLOBALS['wp_scripts']->adauga( $h, $src ); }
+	foreach ( array( 'astra-theme-css' => '/wp-content/themes/astra/style.css', 'cmplz-general' => '/wp-content/plugins/complianz-gdpr/assets/css/cookieblocker.min.css', 'cmplz-banner-1-optin' => '/wp-content/uploads/complianz/css/banner-1-optin.css', 'cmplz-document' => '/wp-content/plugins/complianz-gdpr/assets/css/document.min.css' ) as $h => $src ) { $GLOBALS['wp_styles']->adauga( $h, $src ); }
+};
+$coada();
+ca_browser();
+ah_test_actiune( 'wp_print_scripts' ); ah_test_actiune( 'wp_print_styles' ); ah_test_actiune( 'wp_enqueue_scripts' );
+egal( array( $GLOBALS['wp_scripts']->scoase, $GLOBALS['wp_styles']->scoase ), array( array(), array() ), 'urmărire: în browser coada rămâne neatinsă' );
+ca_aplicatie();
+ah_test_actiune( 'wp_enqueue_scripts' );
+egal( $GLOBALS['wp_scripts']->queue, array( 'jquery-core', 'elementor-frontend' ), 'urmărire: în aplicație rămân doar scripturile site-ului' );
+egal( $GLOBALS['wp_styles']->queue, array( 'astra-theme-css', 'cmplz-document' ), 'urmărire: în aplicație pleacă stilurile barei Complianz' );
+unset( $GLOBALS['wp_scripts'], $GLOBALS['wp_styles'] );
+foreach ( array( 'facebook_for_woocommerce_integration_pixel_enabled', 'wc_order_attribution_allow_tracking', 'cmplz_site_needs_cookiewarning' ) as $f ) {
+	ca_browser();
+	egal( ah_test_filtru( $f, true ), true, 'urmărire: browser, ' . $f . ' neatins' );
+	ca_aplicatie();
+	egal( ah_test_filtru( $f, true ), false, 'urmărire: aplicație, ' . $f . ' = false' );
+}
+foreach ( array( 'googlesitekit_analytics-4_tag_blocked', 'googlesitekit_tagmanager_tag_blocked' ) as $f ) {
+	ca_browser();
+	egal( ah_test_filtru( $f, false ), false, 'urmărire: browser, ' . $f . ' neatins' );
+	ca_aplicatie();
+	egal( ah_test_filtru( $f, false ), true, 'urmărire: aplicație, ' . $f . ' = true' );
+}
+$capi = 'https://graph.facebook.com/v21.0/1234567890/events';
+verifica( ah_test_filtru( 'pre_http_request', false, array(), $capi ) instanceof WP_Error, 'urmărire: Conversions API dintr-o cerere din aplicație nu pleacă' );
+egal( ah_test_filtru( 'pre_http_request', false, array(), 'https://fcm.googleapis.com/v1/projects/x/messages:send' ), false, 'urmărire: alte cereri (FCM) pleacă' );
+ca_browser();
+egal( ah_test_filtru( 'pre_http_request', false, array(), $capi ), false, 'urmărire: în browser Conversions API neatins' );
+ca_aplicatie();
+// pagina publică salvată de pe site (cu GA, Clarity, Complianz, atribuire, Meta) + un pixel Meta clasic
+$pixel = "<!-- Meta Pixel Code -->\n<script type='text/javascript'>!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');</script>\n<script type='text/javascript'>fbq('init', '000000000000000', {}, {\"agent\": \"woocommerce-9.0-3.7.6\"});fbq('track', 'PageView', []);</script>\n<noscript><img height=\"1\" width=\"1\" style=\"display:none\" alt=\"fbpx\" src=\"https://www.facebook.com/tr?id=000000000000000&ev=PageView&noscript=1\" /></noscript>\n<!-- End Meta Pixel Code -->\n";
+$gtm   = '<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-XXXX" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>';
+$ga_ev = '<script>(function(){if(typeof gtag!==\'function\')return;gtag(\'event\',\'x\');})();</script>';
+$pub   = str_replace( '</head>', $pixel . '</head>', file_get_contents( is_file( __DIR__ . '/../../reference/v2/spatiul-meu-public.html' ) ? __DIR__ . '/../../reference/v2/spatiul-meu-public.html' : __DIR__ . '/date/v2/spatiul-meu-public.html' ) /* CI: copia din extrage-referinte.php */ );
+$pub   = preg_replace( '~<body([^>]*)>~', '<body$1>' . $gtm . $ga_ev, $pub, 1 );
+$cur   = ah_spa_fara_urmarire( $pub );
+foreach ( array( 'googletagmanager.com', 'G-52BCW9FS1V', 'function gtag(', 'clarity.ms', 'cmplzCallClarity', 'connect.facebook.net', 'fbq(', 'facebook.com/tr', 'facebook-for-woocommerce', 'sourcebuster', 'order-attribution', 'wc_order_attribution', 'complianz.min.js', 'id="cmplz-cookiebanner-container"', 'cmplz-cookiebanner-js', 'Consent Management powered by Complianz', 'cmplz-general-css', 'cmplz-banner-1-optin-css', 'id="cmplz-manage-consent"', 'data-category="statistics"' ) as $nu ) {
+	verifica( false === strpos( $cur, $nu ), 'urmărire: pagina din aplicație nu mai conține „' . $nu . '”' );
+	verifica( false !== strpos( $pub, $nu ), 'urmărire (martor): pagina din browser conține „' . $nu . '”' );
+}
+foreach ( array( 'id="ahspx-js"', 'window.AH_SPX=', 'var D=window.AH_SP', 'function ev(n,p){try{if(typeof window.gtag', 'id="ah-telefon-1022-js"', 'yoast-schema-graph', 'speculationrules', 'ahbq-fila', $ga_ev, 'id="wp-hooks-js"', 'id="ahsp"' ) as $da ) {
+	verifica( false !== strpos( $cur, $da ), 'urmărire: rămâne „' . substr( $da, 0, 40 ) . '”' );
+}
+egal( substr_count( $cur, '<script' ), substr_count( $pub, '<script' ) - 14, 'urmărire: pleacă exact cele 14 scripturi de urmărire și ale barei' );
+egal( ah_spa_fara_urmarire( $cur ), $cur, 'urmărire: a doua trecere nu mai schimbă nimic' );
+egal( ah_spa_fara_urmarire( '<p>altceva</p><script>var a=1;</script>' ), '<p>altceva</p><script>var a=1;</script>', 'urmărire: alt HTML neatins' );
+verifica( false !== strpos( ah_spa_css(), '#cmplz-cookiebanner-container' ), 'urmărire: și stilul aplicației ascunde bara (dacă ar rămâne)' );
+// Vimeo: dnt=1
+$v = array(
+	'https://player.vimeo.com/video/1?h=a'                         => 'https://player.vimeo.com/video/1?h=a&dnt=1',
+	'https://player.vimeo.com/video/1'                             => 'https://player.vimeo.com/video/1?dnt=1',
+	'https://player.vimeo.com/video/1?h=a&amp;title=0'             => 'https://player.vimeo.com/video/1?h=a&amp;title=0&amp;dnt=1',
+	'https://player.vimeo.com/video/1?dnt=0&h=a'                   => 'https://player.vimeo.com/video/1?h=a&dnt=1',
+	'https://player.vimeo.com/video/1?h=a#t=30s'                   => 'https://player.vimeo.com/video/1?h=a&dnt=1#t=30s',
+	'https://player.vimeo.com/video/1?h=a&title=0&dnt=1&byline=0'  => 'https://player.vimeo.com/video/1?h=a&title=0&dnt=1&byline=0',
+	'//player.vimeo.com/video/2'                                   => '//player.vimeo.com/video/2?dnt=1',
+	'https://vimeo.com/1'                                          => 'https://vimeo.com/1',
+	'https://www.youtube.com/embed/x'                              => 'https://www.youtube.com/embed/x',
+);
+foreach ( $v as $a => $b ) {
+	egal( ah_spa_vimeo_dnt( $a ), $b, 'Vimeo dnt: ' . $a );
+}
+egal( ah_spa_vimeo_dnt_html( '<div><iframe src="https://player.vimeo.com/video/9?h=b" allow="autoplay"></iframe><iframe src="https://www.youtube.com/embed/x"></iframe></div>' ), '<div><iframe src="https://player.vimeo.com/video/9?h=b&dnt=1" allow="autoplay"></iframe><iframe src="https://www.youtube.com/embed/x"></iframe></div>', 'Vimeo dnt în HTML; YouTube neatins' );
+egal( ah_spa_vimeo_dnt_html( '<iframe class="cmplz-iframe" data-src-cmplz="https://player.vimeo.com/video/9?h=b" src="about:blank"></iframe>' ), '<iframe class="cmplz-iframe" src="https://player.vimeo.com/video/9?h=b&dnt=1"></iframe>', 'Vimeo ținut de Complianz: pornește cu dnt=1' );
+// ob_start: doar în aplicație, doar pe paginile ei
+$GLOBALS['ah_test_e_pagina'] = true;
+$_SERVER['REQUEST_URI']      = '/spatiul-meu/';
+ca_browser();
+$n0 = ob_get_level();
+egal( array( ah_spa_porneste_filtru_html(), ob_get_level() ), array( false, $n0 ), 'urmărire: în browser nicio prelucrare a paginii' );
+ca_aplicatie();
+ob_start(); // „browserul” care primește pagina
+egal( array( ah_spa_porneste_filtru_html(), ob_get_level() ), array( true, $n0 + 2 ), 'urmărire: în aplicație pagina trece prin filtru' );
+echo $pub;
+ob_end_flush(); // WordPress, la final (wp_ob_end_flush_all)
+$iesit = ob_get_clean();
+egal( $iesit, ah_spa_vimeo_dnt_html( ah_spa_fara_urmarire( $pub ) ), 'urmărire: ieșirea paginii e cea curățată' );
+$GLOBALS['ah_test_e_pagina'] = false;
+$_SERVER['REQUEST_URI']      = '/?ah_med_api=audio&id=5';
+egal( ah_spa_porneste_filtru_html(), false, 'urmărire: sunetul meditațiilor (/?ah_med_api) nu trece prin filtru' );
+verifica( isset( $GLOBALS['ah_test_hooks']['template_redirect'] ) && in_array( 9999, array_column( $GLOBALS['ah_test_hooks']['template_redirect'], 1 ), true ), 'urmărire: filtrul pornește după redirecționări (template_redirect, 9999)' );
+// Apple Podcasts: playerul nu se încarcă în aplicație, linkul episodului rămâne
+$C2 = ah_spa_curata_date( $D );
+egal( array_unique( array_column( $C2['podcast']['episoade'], 'embed' ) ), array( 'about:blank' ), 'podcast: playerul Apple (embed) nu se încarcă în aplicație' );
+egal( array_column( $C2['podcast']['episoade'], 'apple' ), array_column( $D['podcast']['episoade'], 'apple' ), 'podcast: linkul episodului spre Apple Podcasts rămâne' );
+verifica( false === strpos( wp_json_encode( $C2 ), 'embed.podcasts.apple.com' ), 'podcast: nicio adresă embed.podcasts.apple.com în datele din aplicație' );
+
+/* ---------- 14. JS: refacerea ciclului, tipul tokenului, iframe-urile ---------- */
+$js = ah_spa_js();
+foreach ( array( 'function refacere()', "PREF.ia('ah_ciclu')", 'v.cine!==S.cine', "new HashChangeEvent('hashchange')", 'ahspa-refac', 'ciSters', 'cine:S.cine', "fel:function(tok)", "r.token==='fcm'", 'PUSH.primit(t.value)', 'dntVimeo', 'embed\\.podcasts\\.apple\\.com', 'Ascultă în Apple Podcasts' ) as $x ) {
+	verifica( false !== strpos( $js, $x ), 'puntea conține ' . $x );
+}
+verifica( false !== strpos( ah_spa_css(), 'html.ahspa-refac #ahsp{visibility:hidden}' ), 'stilul: Spațiul meu ascuns cât se reface ciclul' );
+foreach ( array( 'googletagmanager', 'connect.facebook', 'clarity.ms', 'gtag(' ) as $nu ) {
+	verifica( false === strpos( $js, $nu ), 'puntea nu conține „' . $nu . '” (nu ar trece de propriul filtru)' );
+}
 
 echo "\n" . $GLOBALS['ok'] . ' teste trecute, ' . $GLOBALS['rau'] . " picate.\n";
 exit( $GLOBALS['rau'] ? 1 : 0 );

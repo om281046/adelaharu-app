@@ -61,6 +61,12 @@
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Aplicația folosește microfonul doar când alegi tu să filmezi un video pe care să-l încarci în contul tău.</string>
 
+	<!-- Firebase Messaging (doar pentru tokenul FCM al notificărilor push): AppDelegate îi dă singur tokenul APNs,
+	     deci fără „swizzling”; tokenul FCM se face doar după ce ea permite notificările (register), nu la pornire. -->
+	<key>FirebaseAppDelegateProxyEnabled</key>
+	<false/>
+	<key>FirebaseMessagingAutoInitEnabled</key>
+	<false/>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>UIUserInterfaceStyle</key>

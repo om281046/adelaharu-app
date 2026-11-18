@@ -115,11 +115,14 @@ capturi** (Apple 2.3.1: metadate exacte). De verificat în special:
 - „cărțile electronice, de citit oriunde”: Cărțile mele se deschid din aplicație (231), cu internet.
 - „Afli când apare o meditație nouă”: pe **iPhone** e adevărat doar dacă build-ul iOS are Firebase Messaging,
   `GoogleService-Info.plist` și `aps-environment` (`release.md`, „Ce mai trebuie”). Fără ele, puntea nu oferă deloc
-  notificări pe iPhone, deci rândul se scoate din descrierea **App Store** (în Google Play rămâne);
+  notificări pe iPhone, deci rândul se scoate din descrierea **App Store**. În Google Play rămâne, iar workflow-ul
+  Android nu încarcă în Play o versiune fără `google-services.json` cât timp `push_android` e bifat;
 - „le asculți și cu ecranul blocat”: pe Android, de verificat pe telefon real și pentru meditațiile ascultate online
   (pluginul `AhMedia`, prin punte); pe iPhone îl face sistemul;
 - „Fără reclame și fără urmărire”: adevărat **doar după** ce fragmentul nu mai încarcă în aplicație Google
-  Analytics, pixelul Meta și bara Complianz (`privacy-answers.md`, condiția de la început; 18 nov.: neimplementat);
+  Analytics, pixelul Meta și bara Complianz (`privacy-answers.md`, condiția de la început). 18 nov., seara: implementat
+  în fragment (`ah-sp-aplicatie.php` 2.1.0, secțiunea 10), cu teste; rămâne de verificat pe build-ul din TestFlight /
+  testul intern cu Web Inspector sau `chrome://inspect` (și cu excluderile LiteSpeed din `release.md`);
 - „acolo stau criptate”: e despre păstrarea ciclului în cont (AES-256-GCM). Abonarea la emailurile fazelor ține data
   menstruației necriptat (`privacy-answers.md`); fraza nu vorbește despre ea, deci rămâne exactă așa cum e.
 

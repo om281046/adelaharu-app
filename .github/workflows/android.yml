@@ -21,6 +21,10 @@ on:
         type: choice
         options: [completed, draft]
         default: completed
+      push_android:
+        description: "Versiunea promite notificări push pe Android (fișa Google Play). Debifat = fără push; scoateți-l din fișă"
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -151,15 +155,35 @@ jobs:
       - name: Dependențe
         run: npm ci
 
-      - name: Firebase (google-services.json), dacă există secretul
+      - name: Firebase (google-services.json); obligatoriu la încărcare dacă versiunea promite push
         env:
           GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+          AH_PUSH: ${{ inputs.push_android && '1' || '0' }}
+          AH_UPLOAD: ${{ inputs.incarca && '1' || '0' }}
         run: |
+          # Ca la iOS (.github/scripts/verifica-push-ios.sh): fișa Google Play promite notificări (docs/store/listing.md),
+          # deci nu încărcăm în Play o versiune fără Firebase, afară de cazul în care push_android e debifat.
           if [ -n "$GOOGLE_SERVICES_JSON" ]; then
             mkdir -p android/app
             printf '%s' "$GOOGLE_SERVICES_JSON" > android/app/google-services.json
+          fi
+          f=android/app/google-services.json
+          problema=""
+          if [ ! -s "$f" ]; then
+            problema="lipsește google-services.json (secretul GOOGLE_SERVICES_JSON)"
+          elif ! node -e 'const j=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));if(!j.project_info||!Array.isArray(j.client)||!j.client.length)process.exit(1)' "$f"; then
+            problema="google-services.json nu e valid (JSON cu project_info și client)"
+          fi
+          if [ "$AH_PUSH" != "1" ]; then
+            echo "::notice::Versiune FĂRĂ push pe Android (push_android debifat): scoateți rândul despre notificări din fișa Google Play (docs/store/listing.md)."
+          elif [ -n "$problema" ]; then
+            if [ "$AH_UPLOAD" = "1" ]; then
+              echo "::error::Push pe Android promis în fișă, dar $problema. Nu încarc în Google Play o versiune care nu poate primi notificări; adăugați secretul sau rulați cu push_android debifat și scoateți push-ul din fișă."
+              exit 1
+            fi
+            echo "::warning::Push pe Android: $problema. Versiunea NU va avea notificări push."
           else
-            echo "::warning::Fără GOOGLE_SERVICES_JSON: versiunea pentru magazin NU va avea notificări push."
+            echo "Push pe Android: google-services.json e în proiect."
           fi
 
       - name: Pagina offline (dist/offline.html)

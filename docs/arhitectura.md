@@ -40,7 +40,8 @@ Nu se urcă nimic pe site fără OK-ul lui Mircea (se urcă inactiv, cu copie de
 - Info.plist: `UIBackgroundModes` = `audio` (+ `remote-notification` doar dacă trimitem notificări silențioase:
   NU în v1), Associated Domains `applinks:www.adelaharu.ro`, `PrivacyInfo.xcprivacy`.
   AndroidManifest: App Links `autoVerify` pentru `/spatiul-meu` (cu `?cont=` din emailuri) și `/app/intra`
-  (exact + subcăile cu „/”; aceleași căi în AASA: `/spatiul-meu`, `/spatiul-meu/*`, `/app/intra`, `/app/intra/*`),
+  (exact + subcăile cu „/”; aceleași căi în AASA: `/spatiul-meu`, `/spatiul-meu/*`, `/app/intra`, `/app/intra/*`)
+  și `/pentru-el` (pagina partenerului, linkul `/pentru-el/?t=` din emailul lui: `/pentru-el`, `/pentru-el/*`),
   `POST_NOTIFICATIONS`, `FOREGROUND_SERVICE_MEDIA_PLAYBACK` dacă e cazul.
 
 ## Puntea (în fragment, JavaScript tipărit doar în aplicație pe /spatiul-meu/, /sala-de-curs/, /cartile-mele/, /meditatiile-mele/)
@@ -147,25 +148,40 @@ Dacă ciclul ei nu e încă salvat în cont (`ah_sp_ciclu`), invitația îi cere
 El primește un email (cadrul comun al emailurilor) cu un link personal permanent: `/pentru-el/?t=<token>`
 (32 de octeți aleatori; pe server doar sha256). Linkul deschide aplicația (universal link) sau pagina din browser și
 îl ține conectat (cookie semnat `ah_spp`, 1 an). Link pierdut: „Trimite-mi din nou linkul” cu emailul lui → token nou,
-cel vechi se anulează. Ea vede în „Ciclul meu”: cine e invitat, dacă a intrat, ultima vizită; „Oprește accesul” (pe loc)
-și „Trimite din nou invitația”. Cel mult 2 parteneri activi.
+cel vechi se anulează când îl folosește pe cel nou (review 18 nov.). Ea vede în „Ciclul meu”: cine e invitat, dacă a intrat, ultima vizită; „Oprește accesul” (pe loc)
+și „Trimite din nou invitația” (token și sesiune noi: deconectează orice telefon sau browser al lui). Cel mult 2 parteneri activi.
 
 **Ce primește el (sincronizat, minim):** `GET /wp-json/ah-spp/v1/azi` (cookie `ah_spp` sau `?t=`) calculează pe server,
 din datele ei criptate (`ah_sp_ciclu`: `ciclu.starturi`, `lung`, `men`, `sit`), cu EXACT regula `CI.faze`/`CI.lung` din 235:
 `{nume_ea, stare:'ok'|'pauza'|'oprit', faza, zi, lungime, pana_la, urmatoarea:{faza, de_la}, inceputuri:[{faza,data}… 6 luni],
 texte:{ce, sprijin[], citate[]}}`. NICIODATĂ notițele ei, simptomele, situația (`sit`) sau zilele exacte notate.
 Dacă `sit` nu e `natural`/`alaptare`/`perimenopauza` sau ea a șters ciclul → `stare:'pauza'` cu un text neutru
-(„Pentru moment, ea a oprit estimările.”). Accesul oprit → `stare:'oprit'`.
+(„Pentru moment, aici nu e nicio estimare.”, fără motiv). La fel (decizie de confirmat, `docs/partener.md`): prima zi în viitor și
+menstruația întârziată, oricât de puțin (review 18 nov.: el nu vede întârzierea, nici ziua din ciclu peste lungime); `sit` lipsă
+= `natural`, ca pe ecranul ei. Accesul oprit → `stare:'oprit'`.
 
 **Notificări pentru el:** în aplicație, push (FCM) din cron-ul zilnic, la începutul fiecărei faze, doar dacă s-a schimbat faza
 (la fel și când ea notează o menstruație nouă care mută faza). Fără aplicație: email la începutul fiecărei faze, doar dacă
 bifează asta pe pagina lui (oprire din orice email). Tokenurile push ale lui sunt separate de ale ei.
 
-**În aplicație:** pe ecranul de intrare apare „Sunt partenerul ei” → „Deschide linkul primit pe email” sau „Trimite-mi din nou
-linkul”. Apple: același cont simplu (fără parolă, fără cumpărături).
+**Un telefon = un cont, pentru push** (integrare, 18 nov.): tokenul FCM e al telefonului, nu al contului, deci stă într-un
+singur tabel o dată. Serverul îl mută: `POST /ah-spa/v1/push` (ea) îl scoate din `wp_ah_spp_push`, `POST /ah-spp/v1/push`
+(el) îl scoate din `wp_ah_spa_push`. Pe telefon, `Preferences.ah_push = {token, cont:'ea'|'el', …}` spune al cui e
+(rândurile fără `cont`, de dinainte, sunt ale ei). **Contul activ** = pagina deschisă: aplicația pornește din
+`/spatiul-meu/`; cu ea intrată (`ah_sp`) e contul ei, altfel cu cookie-ul lui (`ah_spp`) serverul o duce la `/pentru-el/`.
+Pe un telefon cu ea intrată, telefonul e al ei: pagina lui nu oferă notificări (`cont_ea`) și `POST /ah-spp/v1/push`
+întoarce 409 `cont_ea`. Puntea ei (`AHApp`) se tipărește doar pe paginile ei, deci nu poate lega telefonul lui de contul
+ei; pagina lui are scriptul ei, care scrie doar la `ah-spp/v1`. „Ieși”/„Șterge accesul meu” la el scot doar tokenul lui
+(`unregister()` doar dacă `ah_push.cont` e `el`); ieșirea ei scoate doar tokenul ei și nu atinge tokenul lui cât e intrat
+el (`AH_SPA.el`); pe o pagină fără niciun cont, un token rămas al lui pleacă prin `DELETE /ah-spp/v1/push`.
+
+**În aplicație:** `/pentru-el/` e pe lista permisă (filtrul `ah_spa_permise`), deschisă în aplicație (`allowNavigation`
+`www.adelaharu.ro`, App Links / AASA); fără analiză, fără Google Fonts, fără cărți. Pe ecranul de intrare apare „Sunt partenerul ei” → „Deschide linkul primit pe email” (cu un câmp pentru
+linkul copiat, care îl deschide în aplicație) sau „Trimite-mi din nou linkul”. Apple: același cont simplu (fără parolă, fără cumpărături).
 
 **Datele lui:** prenume, email (criptat; hash pentru căutare), token (hash), tokenuri push, ultima vizită. El își poate șterge
-accesul din pagina lui; când ea își șterge contul sau ciclul, rândurile lui se șterg. Paragraf nou în Politica de confidențialitate.
+accesul din pagina lui; când ea își șterge contul (`sterge-cont`, cu numărul în emailul echipei: `pentru_el`) sau ciclul,
+rândurile lui și tokenurile lui push se șterg pe loc. Paragraf nou în Politica de confidențialitate.
 
 **Învață:** 6–8 pagini scurte, CIORNĂ pentru Adela, din textele ei existente (Harta ciclului 41, citatele din „Magia Ciclului
 Feminin” din 235, episoadele de podcast), fără afirmații medicale, cu nota „estimare, nu metodă de contracepție”.

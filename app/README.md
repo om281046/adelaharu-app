@@ -15,7 +15,8 @@ Ecranele React, API-ul și datele de probă din v1 au fost scoase (rămân în i
 | Pagina principală | `capacitor.config.ts` → `server.url` | WebView-ul încarcă Spațiul meu; ce adaugă echipa pe site apare fără versiune nouă. |
 | Recunoașterea aplicației | `ios.appendUserAgent` / `android.appendUserAgent` | UA se termină cu `AdelaHaruApp/2.0.0 (ios)` sau `(android)`; versiunea vine din `package.json`. |
 | Fără internet | `server.errorPath: 'offline.html'` | Capacitor încarcă pagina locală când pagina principală nu se încarcă (iOS: `didFail`/`didFailProvisionalNavigation`, mai puțin navigările anulate -999 / WebKit 102, pe care le filtrează `AhNavigare` din `AhAppPlugin.swift`; Android: `onReceivedError` **și** `onReceivedHttpError` pe cadrul principal, deci și la un 404/500 de pe site). |
-| Linkuri externe | `server.allowNavigation` | Rămân în aplicație doar `www.adelaharu.ro`, `adelaharu.ro`, `player.vimeo.com`, `*.vimeocdn.com`, `embed.podcasts.apple.com`. Orice altă adresă de nivel superior (Spotify, Apple Podcasts, Zoom, WhatsApp, `mailto:`, `tel:`) o deschide **Capacitor singur** în aplicația/browserul sistemului — nu e nevoie de script: iOS `WebViewDelegationHandler.decidePolicyFor` → `UIApplication.shared.open`; Android `Bridge.launchIntent` → `Intent.ACTION_VIEW`. iframe-urile (Vimeo, YouTube) nu sunt afectate. |
+| Contul pentru el | `server.url` + fragmentul `ah-sp-partener.php` | Aceeași aplicație, alt cont: partenerul ei intră cu linkul `/pentru-el/?t=…` din email (App Link / universal link, căile `/pentru-el*`) și vede doar pagina lui `/pentru-el/` (Azi, Învață, notificările fazelor). Aplicația pornește tot din `/spatiul-meu/`: fără contul ei, cu cookie-ul lui, serverul o duce la `/pentru-el/`. `www.adelaharu.ro` e în `allowNavigation`, deci pagina rămâne în aplicație. Nimic de construit în `app/` pentru asta. |
+| Linkuri externe | `server.allowNavigation` | Rămân în aplicație doar `www.adelaharu.ro`, `adelaharu.ro`, `player.vimeo.com`, `*.vimeocdn.com`, `embed.podcasts.apple.com` (acesta din urmă nu mai e folosit: în aplicație fragmentul pune linkul episodului în locul playerului Apple Podcasts, care se deschide în aplicația Podcasts). Orice altă adresă de nivel superior (Spotify, Apple Podcasts, Zoom, WhatsApp, `mailto:`, `tel:`) o deschide **Capacitor singur** în aplicația/browserul sistemului — nu e nevoie de script: iOS `WebViewDelegationHandler.decidePolicyFor` → `UIApplication.shared.open`; Android `Bridge.launchIntent` → `Intent.ACTION_VIEW`. iframe-urile (Vimeo, YouTube) nu sunt afectate. |
 | Pluginuri | `package.json` | App, PushNotifications, LocalNotifications, Preferences, Filesystem, FileTransfer (`@capacitor/file-transfer`), Browser, Device, SplashScreen, StatusBar + `AhApp` și `AhMedia` (ale noastre). Pagina site-ului le folosește prin `window.Capacitor.Plugins.*` (Capacitor injectează puntea pe originea `https://www.adelaharu.ro`). |
 | Splash, bara de sus | `plugins.SplashScreen`, `plugins.StatusBar`, `SystemBars` | Fond `#FBF6F3` (Spațiul meu), splash ascuns singur după 1,5 s (puntea îl poate ascunde mai devreme cu `SplashScreen.hide()`); seara: `StatusBar.setStyle({style:'DARK'})` din punte. |
 | Cereri HTTP | `CapacitorHttp` / `CapacitorCookies` **oprite** | Site-ul își face singur cererile cu cookie-ul `ah_sp`; interceptarea lor ar strica sesiunea. |
@@ -60,7 +61,8 @@ Textele noi sunt marcate `CIORNĂ` în cod, pentru Adela. Textele fazelor și si
 
 | Cheie Preferences | Scrisă de punte | Formă |
 |---|---|---|
-| `ah_ciclu` | la fiecare schimbare în Ciclul meu | JSON `{starturi:["YYYY-MM-DD",…], lung, men, sit, actualizat}` (aceleași câmpuri ca `localStorage.ahsp_ciclu`; ideal rezultatul lui `CI.d()`, care unește și `ah_ciclu_v1`) |
+| `ah_ciclu` | la fiecare schimbare în Ciclul meu | JSON `{starturi:["YYYY-MM-DD",…], lung, men, sit, cine, actualizat}` (`cine` = amprenta contului: puntea reface din ea `localStorage.ahsp_ciclu` când iOS golește stocarea paginii; pagina offline o ignoră) (aceleași câmpuri ca `localStorage.ahsp_ciclu`; ideal rezultatul lui `CI.d()`, care unește și `ah_ciclu_v1`) |
+| `ah_push` | la înregistrarea push (puntea ei sau pagina lui) | JSON `{token, cont:'ea'\|'el', cine?, la}`: tokenul FCM al telefonului și **al cui e** (un telefon = un cont; fără `cont` = al ei). Ieșirea fiecăruia scoate doar tokenul propriu; `unregister()` doar pe tokenul propriu. Pagina offline nu-l citește. |
 | `ah_descarcate` | la descărcare / ștergere | JSON `[{id, titlu, durata, fisier, poza, descarcat, dir?}]`; `fisier`/`poza` = căi relative (`meditatii/12.mp3`) în `dir` (puntea scrie `LIBRARY_NO_CLOUD` pe iOS, fără copie în iCloud, și `DATA` pe Android; dacă lipsește, același folder; acceptă și `LIBRARY`, `CACHE`) sau `file://…`; `durata` în secunde (sau „12:30”) |
 
 Pluginurile noastre (le folosește și puntea):
@@ -95,16 +97,34 @@ AhMedia.addListener('actiune', ({tip, pozitie}) => …); // play | pause | inain
 
 ## Push
 
-Ghidat la rulare, fără variabile de build: `AhApp.info().push` e `true` doar dacă
-- Android: există `android/app/google-services.json` (pluginul Gradle generează resursa `google_app_id`);
-- iOS: aplicația e construită cu Firebase Messaging (pachet SPM `firebase-ios-sdk`, produsele `FirebaseCore` +
-  `FirebaseMessaging` adăugate în ținta App) **și** există `GoogleService-Info.plist`. `AppDelegate` folosește
-  `#if canImport(FirebaseMessaging)`: fără SDK se compilează ca acum; cu SDK trimite la Capacitor tokenul **FCM**
-  (serverul trimite prin FCM HTTP v1). Tot atunci: capabilitatea Push Notifications + `aps-environment` în `App.entitlements`.
+Ghidat la rulare, fără variabile de build: `AhApp.info()` → `{push, token}`.
+- **Android**: `push` = există `android/app/google-services.json` (pluginul Gradle generează resursa `google_app_id`);
+  `token` = `'fcm'` (`@capacitor/push-notifications` dă mereu tokenul FCM). În manifest: `firebase_messaging_auto_init_enabled`
+  = false (tokenul apare abia la `register()`, după ce ea permite) și `firebase_analytics_collection_deactivated` = true.
+- **iOS** (varianta aleasă: Firebase Messaging în `AppDelegate`, nu `@capacitor-firebase/messaging`, care pornește
+  Firebase singur și ar opri aplicația fără plist): proiectul are pachetul SPM `firebase-ios-sdk` (≥ 12.0, doar `FirebaseCore`
+  + `FirebaseMessaging`, adăugat în `App.xcodeproj`, nu în `CapApp-SPM`, pe care îl rescrie `cap sync`). Faza de build
+  „GoogleService-Info.plist (dacă există)” copiază `ios/App/App/GoogleService-Info.plist` (ignorat de git; îl scrie CI-ul
+  din secret) în aplicație. `AppDelegate` pornește Firebase **doar** dacă fișierul există; la `didRegisterForRemoteNotifications`
+  dă tokenul APNs lui Firebase Messaging și trimite la Capacitor tokenul **FCM** (String). Fără plist: aplicația merge normal,
+  `push` = false, `token` = `'apns'`, puntea nu cere notificări. `Info.plist`: `FirebaseAppDelegateProxyEnabled` = NO (tokenul îl
+  dăm noi), `FirebaseMessagingAutoInitEnabled` = NO (tokenul FCM doar după permisiune). Entitlements: `App.entitlements`
+  (Release: `aps-environment` = `production`, plus Associated Domains) și `AppDebug.entitlements` (Debug: `development`).
+  App ID-ul are nevoie de capabilitatea Push Notifications (`docs/release.md`, pasul 7).
 
-Fără Firebase, aplicația merge normal; puntea doar nu cere permisiunea de notificări. Puntea (`PUSH.disponibil()` în
-`ah-sp-aplicatie.php`) întreabă `AhApp.info().push` înainte de întrebare, de comutatorul „Notificări” și de orice
-`register()`/`unregister()` (pe Android, fără Firebase, oricare din ele oprește aplicația); fără `AhApp` = fără push.
+La încărcarea în magazine, workflow-urile opresc o versiune care promite push fără Firebase: iOS cu `push_ios`
+(`.github/scripts/verifica-push-ios.sh` cere fișierul plist valid și faza care îl copiază, nu doar numele în
+`project.pbxproj`, unde apare mereu), Android cu `push_android` (`google-services.json` valid).
+
+Puntea (`PUSH` în `ah-sp-aplicatie.php`) cere notificări doar cu `push: true` și `token: 'fcm'`, iar la `registration`
+nu trimite serverului un token APNs brut (64 de cifre hexa); platforma trimisă e cea din Capacitor. Fără `AhApp` = fără push.
+
+**Partenerul (contul pentru el):** pagina lui `/pentru-el/` (fragmentul `ah-sp-partener.php`) are scriptul ei, cu aceleași
+reguli (`AhApp.info()` `push: true` + `token: 'fcm'`, fără APNs brut) și propriul endpoint (`/wp-json/ah-spp/v1/push`,
+separat de al ei). Același telefon are un singur token FCM, deci el aparține unui singur cont: `Preferences.ah_push.cont`,
+iar serverul îl mută dintr-un tabel în celălalt. Pe un telefon cu ea intrată, contul ei e cel activ (aplicația o deschide
+pe ea), iar pagina lui nu oferă notificări. Atingerea unei notificări a lui (`data.url` = `/pentru-el/`, `data.tip` =
+`pentru-el`) deschide Azi pe pagina lui; la pornirea rece, aplicația ajunge acolo prin `/spatiul-meu/` (302).
 
 ## Comenzi
 
@@ -139,7 +159,8 @@ aplicația arată Spațiul meu exact ca în browser.
 3. Offline: mod avion → închideți și redeschideți aplicația ⇒ pagina offline. Porniți o meditație descărcată, blocați
    ecranul: trebuie să apară comenzile și să meargă ±15 s.
 4. App Links: după ce `assetlinks.json` e pe site cu amprenta cheii, `adb shell pm verify-app-links --re-verify ro.adelaharu.app`
-   și `adb shell am start -a android.intent.action.VIEW -d "https://www.adelaharu.ro/spatiul-meu/"`.
+   și `adb shell am start -a android.intent.action.VIEW -d "https://www.adelaharu.ro/spatiul-meu/"` (la fel cu
+   `https://www.adelaharu.ro/pentru-el/?t=<linkul din invitație>` pentru contul lui).
 
 **iPhone** (macOS + Xcode 16+):
 1. `npm install && npm run sync:ios && npx cap open ios`
@@ -159,10 +180,10 @@ La o versiune nouă se schimbă toate trei, plus `versionCode` / `CURRENT_PROJEC
 
 - **iOS**: `Info.plist` — `UIBackgroundModes` doar `audio`, `CFBundleLocalizations` ro, texte de permisiune în română
   (cameră, galerie, microfon: pentru eventualele `<input type="file">` de pe site), `arm64`.
-  `App.entitlements` — `applinks:www.adelaharu.ro`. `PrivacyInfo.xcprivacy` — UserDefaults (CA92.1, Preferences),
+  `App.entitlements` (Release) / `AppDebug.entitlements` (Debug) — `applinks:www.adelaharu.ro`, `aps-environment` production / development. `PrivacyInfo.xcprivacy` — UserDefaults (CA92.1, Preferences),
   FileTimestamp (C617.1, Filesystem), date colectate legate de cont, doar pentru funcționare, fără urmărire:
   email, nume, sănătate (ciclul, doar dacă îl păstrează în cont), istoricul accesului/abonamentelor, interacțiunea
   (progres), DeviceID (tokenul push). `AhAppPlugin.swift` (+ `AhBridgeViewController`, folosit în `SceneDelegate`).
-- **Android**: `AndroidManifest.xml` — App Links `autoVerify` pentru `/spatiul-meu*` și `/app/intra*`, `POST_NOTIFICATIONS`,
+- **Android**: `AndroidManifest.xml` — App Links `autoVerify` pentru `/spatiul-meu*`, `/app/intra*` și `/pentru-el*` (aceleași căi ca AASA; testul `server/tests/integrare/run.php` le compară), `POST_NOTIFICATIONS`,
   `FOREGROUND_SERVICE` + `FOREGROUND_SERVICE_MEDIA_PLAYBACK`, serviciul `AhMediaService`, `allowBackup=false`.
   `androidx.media:media` pentru MediaSession. Iconița de notificare `ic_stat_lotus` (folosită și de LocalNotifications).
