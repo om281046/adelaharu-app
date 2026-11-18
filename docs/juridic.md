@@ -77,7 +77,14 @@ Ce face deja codul și trebuie păstrat la orice schimbare:
   pauza de un moment anume. Același mesaj neutru apare pentru orice motiv al pauzei.
 - **Datele lui:** emailul e criptat (AES-256-GCM, cheie separată de cea a ciclului). Din versiunea 1.3.0 cheia nu
   mai stă în baza de date: e în `wp-config.php` (constanta `AH_SPP_CHEIE`) sau derivată din sărurile WordPress de
-  acolo. Linkul e păstrat doar ca sha256. Ea e identificată printr-o cheie HMAC, nu prin email.
+  acolo. Pe un site care a avut 1.2.0, cheia veche mai stă în baza de date 30 de zile după urcare (din 1.4.0, ca
+  întoarcerea la versiunea veche să nu piardă datele), apoi rândurile se recriptează și cheia veche se șterge.
+  Linkul e păstrat doar ca sha256. Ea e identificată printr-o cheie HMAC, nu prin email.
+- **Ecranul blocat al lui (1.4.0):** notificarea nu spune faza ei („Ciclul ei” / „Începe o fază nouă. Vezi cum o poți
+  sprijini.”), iar pe Android e marcată privată (fără text pe ecranul blocat). Subiectul emailului e la fel de neutru.
+  Faza (o dată despre sănătatea ei, art. 9) se vede doar în pagina lui, deci nu ajunge la cine se uită la telefonul lui.
+- **Adresa lui se verifică strict (1.4.0):** o adresă cu diacritice sau spații e refuzată, nu „corectată”. Altfel
+  invitația, cu prenumele ei, ar fi putut ajunge la un străin.
 - **Cererile care schimbă ceva** (invitația, oprirea, ștergerea, notificările) vin doar din paginile site-ului:
   pe lângă cookie-urile SameSite, cer un antet pe care alt site nu-l poate trimite.
 - **Retrimiterea linkului:** răspunde la fel, în același timp, pentru orice adresă. Așa nu se poate afla cine a
@@ -149,7 +156,7 @@ conțin deja materialul ei.
 | Ea e presată să-i dea acces sau nu-l poate opri | mică / mare | oprire dintr-un buton, pe loc, fără să-l anunțe; ea vede cine a intrat |
 | Un link trimis mai departe ajunge la altcineva | medie / medie | link personal; retrimiterea deconectează toate sesiunile vechi; ea vede ultima vizită |
 | Cineva află cine e invitat | mică / medie | aceeași răspuns și același timp pentru orice adresă; limite pe IP și pe adresă |
-| Scurgere din baza de date | mică / mare | emailul lui criptat cu o cheie ținută în afara bazei de date (`wp-config.php`); linkuri doar ca sha256. **Ciclul ei e criptat, dar cheia lui (opțiunea `ah_sp_ciclu_secret` a fragmentului 235) stă în aceeași bază de date**, deci o copie a bazei de date ajunge pentru a-l citi. Recomandare: mutarea acestei chei în `wp-config.php`, ca la contul lui (de hotărât de Mircea; 235 nu a fost schimbat). Backup criptat la găzduire (de verificat) |
+| Scurgere din baza de date | mică / mare | emailul lui criptat cu o cheie ținută în afara bazei de date (`wp-config.php`; pe un site venit de la 1.2.0, cheia veche rămâne 30 de zile după urcare); linkuri doar ca sha256. **Ciclul ei e criptat, dar cheia lui (opțiunea `ah_sp_ciclu_secret` a fragmentului 235) stă în aceeași bază de date**, deci o copie a bazei de date ajunge pentru a-l citi. Recomandare: mutarea acestei chei în `wp-config.php`, ca la contul lui (de hotărât de Mircea; 235 nu a fost schimbat). Backup criptat la găzduire (de verificat) |
 | Tracker pus mai târziu pe site rulează în aplicație | medie / medie | listă de trackere în fragment; verificare la fiecare versiune (secțiunea 5) |
 
 **Rezultat:** riscul rămas e acceptabil cu măsurile de mai sus.

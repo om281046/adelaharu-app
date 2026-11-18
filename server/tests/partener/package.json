@@ -1,0 +1,8 @@
+{
+  "name": "ahspp-teste-partener",
+  "private": true,
+  "description": "Harnașul vizual „Pentru el” (poze.cjs): axe-core pentru verificările de accesibilitate. Playwright vine din mediul de test.",
+  "devDependencies": {
+    "axe-core": "4.10.3"
+  }
+}

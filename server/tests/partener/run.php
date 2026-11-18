@@ -35,7 +35,7 @@ function randuri() { global $wpdb; return $wpdb->get_results( 'SELECT * FROM wp_
 function la( $uri, $get = array() ) { $_SERVER['REQUEST_URI'] = $uri; $_GET = $get; }
 
 /* ---------- 0. încărcarea ---------- */
-egal( AH_SPP, '1.3.0', 'versiunea fragmentului' );
+egal( AH_SPP, '1.4.0', 'versiunea fragmentului' );
 verifica( ah_spp_gata(), 'dependențele din 235 sunt găsite' );
 $n_hooks = count( $GLOBALS['ah_test_hooks'], COUNT_RECURSIVE );
 require __DIR__ . '/../../ah-sp-partener.php';
@@ -388,7 +388,8 @@ egal( $v[ (int) $R1['id'] ], 'email', 'vara începe azi: fără modulul aplicaț
 verifica( false !== strpos( json_encode( get_option( 'ah_spp_jurnal' ), JSON_UNESCAPED_UNICODE ), 'push OPRIT (modulul aplicație nu e activ)' ), 'push fără modulul aplicație: doar jurnal' );
 egal( $v[ (int) $L[1]['id'] ], 'notat', 'Radu n-a intrat încă: nimic trimis' );
 $m = ultimul_mail();
-egal( array( $m['catre'], $m['subiect'] ), array( 'mihai@exemplu.ro', 'Începe Vara ei interioară' ), 'emailul fazei' );
+egal( array( $m['catre'], $m['subiect'] ), array( 'mihai@exemplu.ro', 'Ciclul ei: o fază nouă' ), 'emailul fazei: subiect neutru (fără numele fazei: se vede în lista de emailuri)' );
+egal( $m['a']['titlu'], 'Începe Vara ei interioară', 'emailul fazei: faza, doar în corpul emailului' );
 verifica( false !== strpos( $m['a']['motiv'], 'HARU TRAINING SRL' ) && false !== strpos( $m['a']['motiv'], '/politica-de-confidentialitate/' ), 'emailul fazei: operatorul și politica' );
 verifica( false !== strpos( $m['a']['continut'], 'Fazele sunt o estimare: nu sunt o metodă de contracepție.' ), 'emailul fazei: nota, cu cuvintele de pe site' );
 verifica( false !== strpos( $m['a']['dezabonare'], 'fara-emailuri=' ), 'emailul fazei are link de oprire' );
@@ -407,8 +408,10 @@ $v = ah_spp_verifica_toti();
 egal( $v[ (int) $R1['id'] ], 'push+email', 'toamna: push și email' );
 egal( count( $GLOBALS['ah_test_http'] ), 2, 'push: câte o cerere pe telefon' );
 $b = json_decode( $GLOBALS['ah_test_http'][0][1]['body'], true );
-egal( array( $b['message']['notification']['title'], $b['message']['data']['url'] ), array( 'Începe Toamna ei interioară', 'https://www.adelaharu.ro/pentru-el/' ), 'push: titlul (numele fazei) și pagina lui' );
-egal( $b['message']['notification']['body'], ah_sp_partener_texte()['toamna']['sprijin'][0], 'push: primul rând din „cum o poți sprijini” (ca fișierul .ics din 235)' );
+egal( array( $b['message']['notification']['title'], $b['message']['data']['url'] ), array( 'Ciclul ei', 'https://www.adelaharu.ro/pentru-el/' ), 'push: titlul neutru „Ciclul ei” și pagina lui' );
+egal( $b['message']['notification']['body'], 'Începe o fază nouă. Vezi cum o poți sprijini.', 'push: textul neutru (faza nu apare pe ecranul blocat)' );
+verifica( ! preg_match( '/Toamna|Iarna|Vara|Primăvara|luteal|menstru/iu', json_encode( $b, JSON_UNESCAPED_UNICODE ) ), 'push: nimic despre fază în mesajul FCM' );
+egal( $b['message']['android']['notification']['visibility'] ?? '', 'PRIVATE', 'push: Android, vizibilitate PRIVATE pe ecranul blocat' );
 egal( count( ah_spp_push_ale_lui( $R1['id'] ) ), 1, 'tokenul necunoscut lui Firebase s-a șters' );
 // corectare din urmă: ea mută data înapoi, faza „nouă” a început acum 5 zile → doar notat
 ciclu_in_cont( $ANA, array( 'starturi' => array( zi( 4 ), zi( 32 ) ), 'lung' => 28, 'men' => 5, 'sit' => 'natural' ) );
@@ -429,7 +432,7 @@ egal( count( $GLOBALS['ah_test_cron'] ), 1, 'nu se programează de două ori' );
 $GLOBALS['ah_test_http'] = array();
 ah_test_actiune( 'ah_spp_verifica', ah_sp_ciclu_cheie( $ANA ) );
 egal( count( $GLOBALS['ah_test_http'] ), 1, 'iarna începe azi: push trimis' );
-egal( json_decode( $GLOBALS['ah_test_http'][0][1]['body'], true )['message']['notification']['title'], 'Începe Iarna ei interioară', 'push: iarna' );
+egal( json_decode( $GLOBALS['ah_test_http'][0][1]['body'], true )['message']['notification']['title'], 'Ciclul ei', 'push: iarna, tot cu titlul neutru' );
 // situația devine „hormonal”: nimic, iar la revenire nu „anunțăm” faza din mijloc
 ciclu_in_cont( $ANA, array( 'starturi' => array( zi( 0 ), zi( 28 ) ), 'lung' => 28, 'men' => 5, 'sit' => 'hormonal' ) );
 $GLOBALS['ah_test_http'] = array();
@@ -698,55 +701,355 @@ $GLOBALS['ah_test_http'] = array();
 egal( array( ah_spp_verifica_partener( $rv, $cv, ah_spp_azi0() ), ah_spp_verifica_partener( $rv, $cv, ah_spp_azi0() ) ), array( 'push', '' ), 'două rulări simultane: o singură notificare' );
 egal( count( $GLOBALS['ah_test_http'] ), 1, 'două rulări simultane: o singură cerere FCM' );
 
-/* ---------- 16. migrarea cheii din baza de date (opțiunea ah_spp_secret, până la 1.2.0) ---------- */
+/* ---------- 16. cheia veche din baza de date (opțiunea ah_spp_secret, până la 1.2.0): tranziția de 30 de zile, apoi mutarea ---------- */
 $VECHI = str_repeat( 'ab12', 16 );
 $wpdb->query( 'DELETE FROM wp_ah_spp_parteneri' );
 $wpdb->query( 'DELETE FROM wp_ah_spp_push' );
 ciclu_in_cont( $ANA, array( 'starturi' => array( zi( 9 ), zi( 37 ) ), 'lung' => 28, 'men' => 5, 'sit' => 'natural' ) );
 $zv = ah_spp_ciclul_ei( ah_sp_ciclu_cheie( $ANA ), ah_spp_azi0() )['z'];
 $rand_vechi = function ( $email, $tok ) use ( $wpdb, $VECHI, $zv, $ANA ) {
-	$wpdb->insert( 'wp_ah_spp_parteneri', array( 'ea' => ah_sp_ciclu_cheie( $ANA ), 'nume' => 'Vechi', 'nume_ea' => 'Ana', 'email_c' => ah_spp_cripteaza( $email, $VECHI ), 'email_h' => ah_spp_hash_email( $email, $VECHI ), 'token_h' => hash( 'sha256', $tok ), 'ses' => str_repeat( 'c', 32 ), 'acord' => '2026-11-18 10:00:00', 'acord_v' => AH_SPP_ACORD_V, 'creat' => '2026-11-18 10:00:00', 'invitat' => '2026-11-18 10:00:00', 'intrat' => '2026-11-18 10:00:00', 'email_faze' => 1, 'faza_trimisa' => ah_spp_semn_faza( $zv, $VECHI ) ) );
+	$wpdb->insert( 'wp_ah_spp_parteneri', array( 'ea' => ah_sp_ciclu_cheie( $ANA ), 'nume' => 'Vechi', 'nume_ea' => 'Ana', 'email_c' => ah_spp_cripteaza( $email, $VECHI ), 'email_h' => ah_spp_hash_email( $email, $VECHI ), 'token_h' => hash( 'sha256', $tok ), 'ses' => str_repeat( 'c', 32 ), 'acord' => '2026-11-18 10:00:00', 'acord_v' => AH_SPP_ACORD_V, 'creat' => '2026-11-18 10:00:00', 'invitat' => '2026-11-18 10:00:00', 'intrat' => '2026-11-18 10:00:00', 'faza_trimisa' => ah_spp_semn_faza( $zv, $VECHI ) ) );
 	return ah_spp_rand( $wpdb->insert_id );
 };
 $V1 = $rand_vechi( 'vlad@exemplu.ro', str_repeat( 'v', 43 ) );
 $V2 = $rand_vechi( 'ion@exemplu.ro', str_repeat( 'i', 43 ) );
 $wpdb->update( 'wp_ah_spp_parteneri', array( 'email_c' => base64_encode( random_bytes( 40 ) ) ), array( 'id' => $V2['id'] ) ); // un rând stricat
+$V1c = $V1['email_c'];
 update_option( 'ah_spp_secret', $VECHI );
 $exp = time() + 5000;
 $COOKIE_VECHI = $V1['id'] . '.' . $exp . '.' . ah_spp_semn_cookie( $V1['id'], $exp, $V1['ses'], ah_spp_cheie( 'cookie', $VECHI ) );
 $STOP_VECHI = $V1['id'] . '.' . substr( hash_hmac( 'sha256', 'stop|' . (int) $V1['id'], ah_spp_cheie( 'stop', $VECHI ) ), 0, 24 );
 $_COOKIE['ah_spp'] = $COOKIE_VECHI;
-egal( ah_spp_din_cookie(), null, 'înainte de migrare: cookie-ul semnat cu cheia veche nu e cunoscut (cheia nouă e alta)' );
+egal( ah_spp_din_cookie(), null, 'înainte de tranziție: cookie-ul semnat cu cheia veche nu e cunoscut (cheia nouă e alta)' );
 ah_test_actiune( 'init' );
-egal( get_option( 'ah_spp_secret' ), false, 'migrarea: opțiunea cu cheia veche a fost ștearsă' );
-$V1n = ah_spp_rand( $V1['id'] );
-egal( ah_spp_decripteaza( $V1n['email_c'] ), 'vlad@exemplu.ro', 'migrarea: emailul lui, criptat acum cu cheia nouă' );
-egal( ah_spp_decripteaza( $V1n['email_c'], $VECHI ), null, '…și nu mai merge cu cheia veche' );
-egal( $V1n['email_h'], ah_spp_hash_email( 'vlad@exemplu.ro' ), 'migrarea: amprenta emailului refăcută (căutarea merge)' );
-egal( $V1n['faza_trimisa'], ah_spp_semn_faza( $zv ), 'migrarea: semnul fazei refăcut (cronul nu crede că s-a schimbat faza)' );
-egal( ah_spp_verifica_toti( ah_sp_ciclu_cheie( $ANA ) )[ (int) $V1['id'] ], '', 'după migrare: nicio notificare falsă' );
-egal( ah_spp_rand( $V2['id'] )['email_h'], $V2['email_h'], 'rândul care nu se decripta: lăsat cum era' );
-verifica( false !== strpos( json_encode( get_option( 'ah_spp_jurnal' ), JSON_UNESCAPED_UNICODE ), '1 rânduri mutate, 1 care nu se puteau decripta' ), 'migrarea: în jurnal, fără adrese' );
+// pasul 1: tranziția începe, nimic nu se rescrie, cheia veche rămâne (o întoarcere la 1.2 găsește aceeași cheie și aceleași rânduri)
+egal( get_option( 'ah_spp_secret' ), $VECHI, 'tranziția: cheia veche rămâne în baza de date 30 de zile (întoarcerea la 1.2 e sigură)' );
+egal( ah_spp_rand( $V1['id'] )['email_c'], $V1c, 'tranziția: rândul vechi nu se rescrie' );
+egal( array( ah_spp_decripteaza( $V1c, $VECHI ), ah_spp_rand( $V1['id'] )['email_h'] ), array( 'vlad@exemplu.ro', ah_spp_hash_email( 'vlad@exemplu.ro', $VECHI ) ), 'tranziția: 1.2 (cheia veche) citește încă emailul și amprenta' );
+egal( ah_spp_rand( $V1['id'] )['faza_trimisa'], ah_spp_semn_faza( $zv, $VECHI ), 'tranziția: semnul fazei rămâne cel vechi' );
+egal( ah_spp_decripteaza( $V1c ), 'vlad@exemplu.ro', 'tranziția: 1.4 citește rândul vechi (cu cheia veche, cât ține tranziția)' );
+ea( $ANA );
+$L16 = date_r( ah_spp_r_parteneri( cerere() ) )['parteneri'];
+egal( array_column( $L16, 'email' ), array( 'vlad@exemplu.ro', '' ), 'tranziția: lista ei arată adresa rândului vechi (rândul stricat: gol)' );
+fara_limite();
+egal( date_r( ah_spp_r_invita( cerere( array( 'nume' => 'Vlad', 'email' => 'vlad@exemplu.ro', 'nume_ea' => 'Ana', 'acord' => true ) ) ) )['motiv'] ?? '', 'exista', 'tranziția: „L-ai invitat deja” recunoaște și amprenta veche' );
+ea( '' );
+$GLOBALS['ah_test_mail_cadru'] = array();
+$_SERVER['REMOTE_ADDR'] = '203.0.113.60';
+ah_spp_r_trimite_link( cerere( array( 'email' => 'vlad@exemplu.ro' ) ) );
+ah_test_actiune( 'shutdown' ); // emailul pleacă după răspuns (fastcgi_finish_request e definită mai sus)
+$GLOBALS['ah_test_hooks']['shutdown'] = array();
+egal( array_column( $GLOBALS['ah_test_mail_cadru'], 'catre' ), array( 'vlad@exemplu.ro' ), 'tranziția: „Trimite-mi din nou linkul” găsește rândul vechi (amprenta veche)' );
+$wpdb->update( 'wp_ah_spp_parteneri', array( 'token_nou_h' => '' ), array( 'id' => $V1['id'] ) );
+egal( ah_spp_verifica_toti( ah_sp_ciclu_cheie( $ANA ) )[ (int) $V1['id'] ], '', 'tranziția: semnul vechi al aceleiași faze → nicio notificare falsă' );
+egal( ah_spp_rand( $V1['id'] )['faza_trimisa'], ah_spp_semn_faza( $zv, $VECHI ), 'tranziția: semnul vechi nu se rescrie (1.2 l-ar citi)' );
 $tr = get_option( 'ah_spp_tranzitie' );
-verifica( is_array( $tr ) && array_keys( $tr ) === array( 'cookie', 'stop', 'pana' ) && false === strpos( json_encode( $tr ), $VECHI ), 'tranziția: doar subcheile cookie/stop, nu cheia veche' );
+verifica( is_array( $tr ) && array_keys( $tr ) === array( 'cookie', 'stop', 'pana' ) && false === strpos( json_encode( $tr ), $VECHI ), 'tranziția: subcheile cookie/stop, nu cheia veche' );
 verifica( $tr['pana'] > time() + 29 * 86400 && $tr['pana'] <= time() + 30 * 86400, 'tranziția: 30 de zile' );
 $_COOKIE['ah_spp'] = $COOKIE_VECHI;
 egal( (int) ( ah_spp_din_cookie()['id'] ?? 0 ), (int) $V1['id'], 'tranziția: cookie-ul semnat cu cheia veche e primit' );
-egal( $_COOKIE['ah_spp'], ah_spp_valoare_cookie( $V1n, $exp ), '…și semnat din nou cu cheia nouă, cu aceeași expirare' );
+egal( $_COOKIE['ah_spp'], ah_spp_valoare_cookie( ah_spp_rand( $V1['id'] ), $exp ), '…și semnat din nou cu cheia nouă, cu aceeași expirare' );
 la( '/pentru-el/', array( 'fara-emailuri' => $STOP_VECHI ) );
 egal( array( ah_spp_proceseaza_el(), (int) ah_spp_rand( $V1['id'] )['email_faze'] ), array( array( 'mesaj' => 'fara_emailuri' ), 0 ), 'tranziția: linkul „Oprește emailurile” dintr-un email vechi merge' );
-egal( ah_spp_migreaza_cheia(), 0, 'migrarea: o singură dată' );
-update_option( 'ah_spp_secret', $VECHI ); // o rulare întreruptă: rândurile deja mutate sunt sărite
-egal( ah_spp_migreaza_cheia(), 0, 'migrarea din nou: rândurile deja mutate nu se ating' );
-egal( ah_spp_decripteaza( ah_spp_rand( $V1['id'] )['email_c'] ), 'vlad@exemplu.ro', '…și se decriptează în continuare' );
+egal( ah_spp_migreaza_cheia(), 0, 'tranziția: în cele 30 de zile nu se mută nimic' );
+// o invitație nouă, în tranziție: cu cheia nouă
+ea( $ANA );
+fara_limite();
+$wpdb->update( 'wp_ah_spp_parteneri', array( 'oprit' => date( 'Y-m-d H:i:s' ) ), array( 'id' => $V2['id'] ) );
+ah_spp_r_invita( cerere( array( 'nume' => 'Nou', 'email' => 'nou@exemplu.ro', 'nume_ea' => 'Ana', 'acord' => true ) ) );
+$VN = ultim_rand();
+egal( array( ah_spp_decripteaza( $VN['email_c'], ah_spp_secret() ), $VN['email_h'] ), array( 'nou@exemplu.ro', ah_spp_hash_email( 'nou@exemplu.ro' ) ), 'tranziția: ce e nou se scrie cu cheia nouă' );
+ea( '' );
+// pasul 2: la capătul tranziției, rândurile vechi se recriptează și cheia veche pleacă
 $tr['pana'] = time() - 1;
 update_option( 'ah_spp_tranzitie', $tr );
+ah_test_actiune( 'init' );
+egal( array( get_option( 'ah_spp_secret' ), get_option( 'ah_spp_tranzitie' ) ), array( false, false ), 'capătul tranziției: cheia veche și subcheile au plecat din baza de date' );
+$V1n = ah_spp_rand( $V1['id'] );
+egal( ah_spp_decripteaza( $V1n['email_c'], ah_spp_secret() ), 'vlad@exemplu.ro', 'capătul tranziției: emailul lui, criptat acum cu cheia nouă' );
+egal( ah_spp_decripteaza( $V1n['email_c'], $VECHI ), null, '…și nu mai merge cu cheia veche' );
+egal( $V1n['email_h'], ah_spp_hash_email( 'vlad@exemplu.ro' ), 'capătul tranziției: amprenta emailului refăcută (căutarea merge)' );
+egal( $V1n['faza_trimisa'], ah_spp_semn_faza( $zv ), 'capătul tranziției: semnul fazei refăcut (cronul nu crede că s-a schimbat faza)' );
+egal( ah_spp_rand( $VN['id'] )['email_c'], $VN['email_c'], 'capătul tranziției: rândul scris deja cu cheia nouă nu se atinge' );
+egal( ah_spp_verifica_toti( ah_sp_ciclu_cheie( $ANA ) )[ (int) $V1['id'] ], '', 'după mutare: nicio notificare falsă' );
+egal( ah_spp_rand( $V2['id'] )['email_h'], $V2['email_h'], 'rândul care nu se decripta: lăsat cum era' );
+verifica( false !== strpos( json_encode( get_option( 'ah_spp_jurnal' ), JSON_UNESCAPED_UNICODE ), '1 rânduri mutate, 1 care nu se puteau decripta' ), 'mutarea: în jurnal, fără adrese' );
 $_COOKIE['ah_spp'] = $COOKIE_VECHI;
 egal( ah_spp_din_cookie(), null, 'după 30 de zile: semnătura veche nu mai e primită' );
-egal( get_option( 'ah_spp_tranzitie' ), false, 'după 30 de zile: subcheile vechi au plecat din baza de date' );
 la( '/pentru-el/', array( 'fara-emailuri' => $STOP_VECHI ) );
 egal( ah_spp_proceseaza_el(), array( 'mesaj' => 'link' ), 'după 30 de zile: linkul de oprire vechi nu mai merge' );
+egal( ah_spp_migreaza_cheia(), 0, 'mutarea: o singură dată' );
+// o întoarcere la 1.2 după capăt își face altă cheie: la revenirea pe 1.4, rândurile deja mutate nu se ating
+update_option( 'ah_spp_secret', str_repeat( 'cd34', 16 ) );
+ah_test_actiune( 'init' );
+$tr = get_option( 'ah_spp_tranzitie' );
+$tr['pana'] = time() - 1;
+update_option( 'ah_spp_tranzitie', $tr );
+egal( ah_spp_migreaza_cheia(), 0, 'altă cheie veche: rândurile deja mutate nu se ating' );
+egal( ah_spp_decripteaza( ah_spp_rand( $V1['id'] )['email_c'] ), 'vlad@exemplu.ro', '…și se decriptează în continuare' );
 la( '/pentru-el/', array() );
+// un site trecut prin 1.3 (cheia veche ștearsă atunci, subcheile încă acolo): subcheile pleacă la capăt
+update_option( 'ah_spp_tranzitie', array( 'cookie' => str_repeat( 'a', 64 ), 'stop' => str_repeat( 'b', 64 ), 'pana' => time() - 1 ) );
+egal( array( ah_spp_cheie_veche( 'cookie' ), get_option( 'ah_spp_tranzitie' ) ), array( null, false ), 'după 1.3: subcheile vechi pleacă la capătul tranziției' );
+
+/* ---------- 17. a doua rundă de review (1.4.0) ---------- */
+$wpdb->query( 'DELETE FROM wp_ah_spp_parteneri' );
+$wpdb->query( 'DELETE FROM wp_ah_spp_push' );
+unset( $_COOKIE['ah_spp'] );
+ciclu_in_cont( $ANA, array( 'starturi' => array( zi( 9 ), zi( 37 ) ), 'lung' => 28, 'men' => 5, 'sit' => 'natural' ) );
+ea( $ANA );
+fara_limite();
+$GLOBALS['ah_test_mail_cadru'] = array();
+
+// H1: adresa lui, strict — diacriticele și spațiile nu se mai „curăță” spre adresa altcuiva
+foreach ( array( 'andrei.ștefan@gmail.com', 'andrei stefan@gmail.com', 'ana-maria.ionescu@yahoo.ro ', "mihai\u{00A0}@exemplu.ro", 'ioana@exemplu.rо', 'radu@exemplu.ro' . "\u{200B}" ) as $i => $adr ) {
+	$r = ah_spp_r_invita( cerere( array( 'nume' => 'Andrei', 'email' => $adr, 'nume_ea' => 'Ana', 'acord' => true ) ) );
+	if ( 2 === $i ) { // doar spațiul de la capăt: se taie, adresa e bună
+		egal( date_r( $r )['ok'] ?? false, true, 'H1: spațiile de la capete se taie (' . trim( $adr ) . ')' );
+		continue;
+	}
+	egal( array( $r->get_status(), date_r( $r )['motiv'] ?? '', date_r( $r )['mesaj'] ?? '' ), array( 400, 'email', 'Adresa conține caractere nepermise (diacritice sau spații).' ), 'H1: refuzat, cu mesaj clar: ' . json_encode( $adr, JSON_UNESCAPED_UNICODE ) );
+}
+egal( array_column( $GLOBALS['ah_test_mail_cadru'], 'catre' ), array( 'ana-maria.ionescu@yahoo.ro' ), 'H1: nicio invitație la andrei.tefan@gmail.com sau altă adresă „curățată”' );
+egal( ah_spp_email_strict( 'Andrei.Stefan@Gmail.COM' ), 'andrei.stefan@gmail.com', 'H1: majusculele devin mici (aceeași adresă)' );
+foreach ( array( 'andrei.stefan@gmail', 'andrei"x"@gmail.com', 'a@b@c.ro', 'andrei<x>@gmail.com' ) as $adr ) {
+	egal( ah_spp_email_strict( $adr ), '', 'H1: adresă invalidă sau schimbată de sanitize_email → refuz: ' . $adr );
+}
+$wpdb->query( 'DELETE FROM wp_ah_spp_parteneri' );
+fara_limite();
+ea( '' );
+$_SERVER['REMOTE_ADDR'] = '203.0.113.70';
+$r = ah_spp_r_trimite_link( cerere( array( 'email' => 'andrei.ștefan@gmail.com' ) ) );
+egal( array( $r->get_status(), date_r( $r )['mesaj'] ?? '' ), array( 400, 'Adresa conține caractere nepermise (diacritice sau spații).' ), 'H1: „Trimite-mi din nou linkul” la fel de strict' );
+egal( ah_spp_r_trimite_link( cerere( array( 'email' => 'nu-e' ) ) )->get_status(), 400, 'H1: /trimite-link, adresă incompletă: 400' );
+$src = file_get_contents( __DIR__ . '/../../ah-sp-partener.php' );
+egal( substr_count( $src, '/[^\x21-\x7E]/.test(' ), 3, 'H1: și în pagini (cardul ei, „Trimite-mi linkul” la el și pe ecranul de intrare) adresa cu diacritice sau spații e oprită' );
+
+// L2: „Trimite din nou invitația”: dacă emailul nu pleacă, linkul și sesiunea lui rămân
+ea( $ANA );
+fara_limite();
+ah_spp_r_invita( cerere( array( 'nume' => 'Mihai', 'email' => 'mihai@exemplu.ro', 'nume_ea' => 'Ana', 'acord' => true ) ) );
+$RL = ultim_rand();
+$TOKL = token_din_mail( ultimul_mail() );
+$CL = ah_spp_valoare_cookie( $RL, time() + 3600 );
+$GLOBALS['ah_test_mail_esec'] = true;
+$j = date_r( ah_spp_r_retrimite( cerere( array( 'id' => $RL['id'] ) ) ) );
+unset( $GLOBALS['ah_test_mail_esec'] );
+egal( array( $j['ok'], $j['email'] ), array( true, false ), 'L2: emailul n-a plecat → răspunsul o spune' );
+$RL2 = ah_spp_rand( $RL['id'] );
+egal( array( $RL2['token_h'], $RL2['ses'], $RL2['invitat'] ), array( $RL['token_h'], $RL['ses'], $RL['invitat'] ), 'L2: tokenul, sesiunea și data invitației nu s-au schimbat' );
+egal( (int) ( ah_spp_rand_token( $TOKL )['id'] ?? 0 ), (int) $RL['id'], 'L2: linkul vechi merge în continuare' );
+$_COOKIE['ah_spp'] = $CL;
+verifica( null !== ah_spp_din_cookie(), 'L2: telefonul lui rămâne conectat' );
+unset( $_COOKIE['ah_spp'] );
+$j = date_r( ah_spp_r_retrimite( cerere( array( 'id' => $RL['id'] ) ) ) );
+egal( array( $j['email'], ah_spp_rand_token( $TOKL ), (int) ( ah_spp_rand_token( token_din_mail( ultimul_mail() ) )['id'] ?? 0 ) ), array( true, null, (int) $RL['id'] ), 'L2: cu emailul plecat, linkul se schimbă (cel vechi nu mai merge)' );
+
+// L3: linkul unei invitații oprite nu ia locul unei sesiuni active
+ea( 'bia@exemplu.ro' );
+ciclu_in_cont( 'bia@exemplu.ro', array( 'starturi' => array( zi( 3 ) ), 'lung' => 30, 'men' => 4, 'sit' => 'natural' ) );
+fara_limite();
+ah_spp_r_invita( cerere( array( 'nume' => 'Mihai', 'email' => 'mihai@exemplu.ro', 'nume_ea' => 'Bia', 'acord' => true ) ) );
+$RB2 = ultim_rand();
+$TOKB = token_din_mail( ultimul_mail() );
+ah_spp_r_opreste( cerere( array( 'id' => $RB2['id'] ) ) );
+$RL = ah_spp_rand( $RL['id'] );
+$_COOKIE['ah_spp'] = ah_spp_valoare_cookie( $RL, time() + 3600 );
+$CL = $_COOKIE['ah_spp'];
+la( '/pentru-el/', array( 't' => $TOKB ) );
+egal( ah_spp_proceseaza_el(), array( 'mesaj' => 'oprit' ), 'L3: linkul unei invitații oprite, cu o sesiune activă: pagina rămâne, cu un rând scurt' );
+egal( $_COOKIE['ah_spp'], $CL, 'L3: cookie-ul activ nu se schimbă' );
+unset( $_COOKIE['ah_spp'] );
+la( '/pentru-el/', array( 't' => $TOKB ) );
+egal( array( ah_spp_proceseaza_el(), (int) ( ah_spp_din_cookie()['id'] ?? 0 ) ), array( array( 'redirect' => 'https://www.adelaharu.ro/pentru-el/' ), (int) $RB2['id'] ), 'L3: fără sesiune activă, linkul oprit duce ca înainte la „Linkul a fost oprit”' );
+$h = ah_spp_pagina_el( array( 'mesaj' => 'oprit' ) + ah_spp_cfg_el() );
+verifica( false !== strpos( $h, "D.mesaj==='oprit'" ) && false !== strpos( $h, 'Linkul acesta nu mai e activ.' ), 'L3: pagina arată rândul „Linkul acesta nu mai e activ.”' );
+unset( $_COOKIE['ah_spp'] );
+la( '/pentru-el/', array() );
+
+// L4: invitat de două femei: tokenul lui stă lângă amândouă invitațiile
+fara_limite();
+ea( 'bia@exemplu.ro' );
+ah_spp_r_invita( cerere( array( 'nume' => 'Mihai', 'email' => 'Mihai@exemplu.ro', 'nume_ea' => 'Bia', 'acord' => true ) ) );
+$RB3 = ultim_rand();
+ea( '' );
+$_COOKIE['ah_spp'] = ah_spp_valoare_cookie( $RL, time() + 3600 );
+$PT = 'fcm-tok-mihai-l4-' . str_repeat( 'k', 30 );
+egal( date_r( ah_spp_r_push( cerere( array( 'token' => $PT, 'platforma' => 'android' ) ) ) ), array( 'ok' => true ), 'L4: POST /push (pe pagina Anei)' );
+egal( array( count( ah_spp_push_ale_lui( $RL['id'] ) ), count( ah_spp_push_ale_lui( $RB3['id'] ) ), count( ah_spp_push_ale_lui( $RB2['id'] ) ) ), array( 1, 1, 0 ), 'L4: tokenul stă lângă ambele invitații active (Ana și Bia), nu lângă cea oprită' );
+$_COOKIE['ah_spp'] = ah_spp_valoare_cookie( $RB3, time() + 3600 );
+ah_spp_r_push( cerere( array( 'token' => $PT, 'platforma' => 'android' ) ) );
+egal( array( count( ah_spp_push_ale_lui( $RL['id'] ) ), count( ah_spp_push_ale_lui( $RB3['id'] ) ) ), array( 1, 1 ), 'L4: deschizând pagina Biei, tokenul NU se mută de la Ana (amândouă îl notifică)' );
+egal( ah_spp_azi_pentru( ah_spp_rand( $RB3['id'] ) )['nume_ea'], 'Bia', 'L4: pagina lui spune a cui e pagina deschisă (nume_ea)' );
+// faza nouă la amândouă: câte o notificare de la fiecare
+$GLOBALS['ah_test_http'] = array();
+$GLOBALS['ah_test_http_raspuns'] = null;
+$wpdb->update( 'wp_ah_spp_parteneri', array( 'intrat' => date( 'Y-m-d H:i:s' ), 'faza_trimisa' => 'x:0' ), array( 'id' => $RL['id'] ) );
+$wpdb->update( 'wp_ah_spp_parteneri', array( 'intrat' => date( 'Y-m-d H:i:s' ), 'faza_trimisa' => 'x:0' ), array( 'id' => $RB3['id'] ) );
+ciclu_in_cont( $ANA, array( 'starturi' => array( zi( 0 ), zi( 28 ) ), 'lung' => 28, 'men' => 5, 'sit' => 'natural' ) );
+ciclu_in_cont( 'bia@exemplu.ro', array( 'starturi' => array( zi( 0 ), zi( 30 ) ), 'lung' => 30, 'men' => 4, 'sit' => 'natural' ) );
+$v = ah_spp_verifica_toti();
+egal( array( $v[ (int) $RL['id'] ], $v[ (int) $RB3['id'] ], count( $GLOBALS['ah_test_http'] ) ), array( 'push', 'push', 2 ), 'L4: faza nouă la Ana și la Bia → telefonul lui primește de la amândouă' );
+// ea (Ana) oprește: tokenul pleacă doar de lângă ea
+ea( $ANA );
+ah_spp_r_opreste( cerere( array( 'id' => $RL['id'] ) ) );
+egal( array( count( ah_spp_push_ale_lui( $RL['id'] ) ), count( ah_spp_push_ale_lui( $RB3['id'] ) ) ), array( 0, 1 ), 'L4: Ana oprește accesul → tokenul rămâne doar lângă Bia' );
+ea( '' );
+// iesi / ștergere: POST /push/sterge scoate tokenul de pe toate
+fara_limite();
+ea( $ANA );
+ah_spp_r_invita( cerere( array( 'nume' => 'Mihai', 'email' => 'mihai@exemplu.ro', 'nume_ea' => 'Ana', 'acord' => true ) ) );
+$RL5 = ultim_rand();
+ea( '' );
+$_COOKIE['ah_spp'] = ah_spp_valoare_cookie( $RL5, time() + 3600 );
+la( '/pentru-el/' );
+ah_spp_cfg_el(); // prima intrare pe invitația nouă a Anei: telefonul lui (de lângă Bia) ajunge și aici
+egal( array( count( ah_spp_push_ale_lui( $RL5['id'] ) ), count( ah_spp_push_ale_lui( $RB3['id'] ) ) ), array( 1, 1 ), 'L4: la prima intrare pe o invitație nouă, telefonul lui de pe cealaltă invitație ajunge și acolo' );
+ah_test_actiune( 'rest_api_init' );
+verifica( isset( $GLOBALS['ah_test_rute']['ah-spp/v1/push/sterge'] ) && 'POST' === $GLOBALS['ah_test_rute']['ah-spp/v1/push/sterge']['methods'] && 'ah_spp_r_push_sterge' === $GLOBALS['ah_test_rute']['ah-spp/v1/push/sterge']['callback'], 'POST /push/sterge (WAF: fără DELETE)' );
+egal( array_column( $GLOBALS['ah_test_rute']['ah-spp/v1/push'], 'methods' ), array( 'POST', 'DELETE' ), 'DELETE /push rămâne, pentru compatibilitate' );
+ah_spp_r_push_sterge( cerere( array( 'token' => $PT ) ) );
+egal( (int) $wpdb->get_var( 'SELECT COUNT(*) FROM wp_ah_spp_push' ), 0, 'L4: „Ieși” (POST /push/sterge) scoate tokenul de pe toate invitațiile lui' );
+ah_spp_r_push( cerere( array( 'token' => $PT, 'platforma' => 'android' ) ) );
+egal( (int) $wpdb->get_var( 'SELECT COUNT(*) FROM wp_ah_spp_push' ), 2, 'L4: pus din nou, pe ambele' );
+ah_spp_r_sterge( cerere( array( 'confirmare' => true ) ) );
+egal( (int) $wpdb->get_var( 'SELECT COUNT(*) FROM wp_ah_spp_push' ), 0, 'L4: „Șterge accesul meu” scoate telefonul lui și de lângă cealaltă invitație' );
+verifica( null !== ah_spp_rand( $RB3['id'] ), 'L4: invitația Biei rămâne (doar telefonul a plecat)' );
+// alt bărbat pe același telefon: tokenul pleacă de la primul
+$_COOKIE['ah_spp'] = ah_spp_valoare_cookie( ah_spp_rand( $RB3['id'] ), time() + 3600 );
+ah_spp_r_push( cerere( array( 'token' => $PT, 'platforma' => 'android' ) ) );
+fara_limite();
+ea( $ANA );
+ah_spp_r_invita( cerere( array( 'nume' => 'Dan', 'email' => 'dan@exemplu.ro', 'nume_ea' => 'Ana', 'acord' => true ) ) );
+$RD = ultim_rand();
+ea( '' );
+$_COOKIE['ah_spp'] = ah_spp_valoare_cookie( $RD, time() + 3600 );
+ah_spp_r_push( cerere( array( 'token' => $PT, 'platforma' => 'android' ) ) );
+egal( array( count( ah_spp_push_ale_lui( $RB3['id'] ) ), count( ah_spp_push_ale_lui( $RD['id'] ) ) ), array( 0, 1 ), 'L4: alt bărbat pe același telefon: tokenul trece la el (un telefon = un cont)' );
+unset( $_COOKIE['ah_spp'] );
+
+// L5: /invita sub lacăt — cu lacătul ținut de altă cerere, nimic nu trece
+$wpdb->query( 'DELETE FROM wp_ah_spp_parteneri' );
+$wpdb->query( 'DELETE FROM wp_ah_spp_push' );
+fara_limite();
+ea( $ANA );
+$GLOBALS['ah_test_lacate'][ 'ah_spp_' . substr( ah_sp_ciclu_cheie( $ANA ), 0, 40 ) ] = 'alta-cerere';
+$r = ah_spp_r_invita( cerere( array( 'nume' => 'Mihai', 'email' => 'mihai@exemplu.ro', 'nume_ea' => 'Ana', 'acord' => true ) ) );
+egal( array( $r->get_status(), date_r( $r )['motiv'] ?? '', count( randuri() ) ), array( 503, 'ocupat', 0 ), 'L5: lacătul ținut de altă cerere (peste 3 s) → 503, nimic salvat' );
+$GLOBALS['ah_test_lacate'] = array();
+ah_spp_r_invita( cerere( array( 'nume' => 'Mihai', 'email' => 'mihai@exemplu.ro', 'nume_ea' => 'Ana', 'acord' => true ) ) );
+egal( $GLOBALS['ah_test_lacate'], array(), 'L5: lacătul se eliberează după invitație' );
+ah_spp_r_invita( cerere( array( 'nume' => 'Mihai', 'email' => 'mihai@exemplu.ro', 'nume_ea' => 'Ana', 'acord' => true ) ) );
+egal( $GLOBALS['ah_test_lacate'], array(), 'L5: și după un refuz (exista)' );
+verifica( (bool) preg_match( "/'ah_spp_' \. substr\( \(string\) \\\$k, 0, 40 \)/", $src ), 'L5: numele lacătului încape în 64 de caractere (MySQL)' );
+// rafală în paralel: 6 procese, fiecare cu altă adresă, deodată (SQLite pe disc, lacătul = flock, citirea limitei încetinită)
+function ah_test_rafala( $fara_lacat ) {
+	global $wpdb, $ANA;
+	$dir = sys_get_temp_dir() . '/ahspp-rafala-' . getmypid() . '-' . (int) $fara_lacat;
+	@mkdir( $dir );
+	$db = $dir . '/db.sqlite';
+	@unlink( $db );
+	$wpdb->query( 'DELETE FROM wp_ah_spp_parteneri' );
+	$wpdb->pdo->exec( 'VACUUM INTO ' . $wpdb->pdo->quote( $db ) );
+	$start = microtime( true ) + 0.4;
+	$copii = array();
+	for ( $i = 0; $i < 6; $i++ ) {
+		$pid = pcntl_fork();
+		if ( 0 === $pid ) {
+			$wpdb->pdo = new PDO( 'sqlite:' . $db );
+			$wpdb->pdo->setAttribute( PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION );
+			$wpdb->pdo->exec( 'PRAGMA busy_timeout = 10000' );
+			$GLOBALS['ah_test_lacat_dosar'] = $dir;
+			$GLOBALS['ah_test_fara_lacat']  = $fara_lacat;
+			$GLOBALS['ah_test_incet']       = 150000; // 150 ms între citirea partenerilor ei și inserare
+			$GLOBALS['ah_test_transients']  = array();
+			ea( $ANA );
+			while ( microtime( true ) < $start ) { usleep( 1000 ); }
+			$r = ah_spp_r_invita( cerere( array( 'nume' => 'P' . $i, 'email' => 'p' . $i . '@exemplu.ro', 'nume_ea' => 'Ana', 'acord' => true ) ) );
+			file_put_contents( $dir . '/r' . $i, $r->get_status() . ':' . ( date_r( $r )['motiv'] ?? 'ok' ) );
+			exit( 0 );
+		}
+		$copii[] = $pid;
+	}
+	foreach ( $copii as $pid ) { pcntl_waitpid( $pid, $st ); }
+	$p = new PDO( 'sqlite:' . $db );
+	$n = (int) $p->query( 'SELECT COUNT(*) FROM wp_ah_spp_parteneri WHERE oprit IS NULL' )->fetchColumn();
+	$rasp = array();
+	for ( $i = 0; $i < 6; $i++ ) { $rasp[] = (string) @file_get_contents( $dir . '/r' . $i ); }
+	sort( $rasp );
+	array_map( 'unlink', glob( $dir . '/*' ) );
+	rmdir( $dir );
+	return array( $n, $rasp );
+}
+if ( function_exists( 'pcntl_fork' ) ) {
+	list( $n, $rasp ) = ah_test_rafala( true );
+	verifica( $n > AH_SPP_MAX, 'L5: controlul — fără lacăt, rafala chiar trece de limită (' . $n . ' rânduri: testul vede cursa)' );
+	list( $n, $rasp ) = ah_test_rafala( false );
+	egal( $n, AH_SPP_MAX, 'L5: cu lacătul, 6 invitații trimise deodată → exact ' . AH_SPP_MAX . ' parteneri activi' );
+	egal( array_count_values( $rasp ), array( '200:ok' => 2, '409:max' => 4 ), 'L5: rafala: 2 reușite, 4 refuzuri „max”' );
+} else {
+	echo "(L5: fără pcntl, rafala în paralel e sărită)\n";
+}
+$wpdb->query( 'DELETE FROM wp_ah_spp_parteneri' );
+fara_limite();
+
+// L7: versiunea tabelelor se notează doar dacă dbDelta chiar a mers
+$GLOBALS['ah_test_options']['ah_spp_tabel'] = '4';
+$GLOBALS['ah_test_dbdelta'] = array();
+$wpdb->pdo->exec( 'DROP INDEX partener_token' );
+$wpdb->pdo->exec( 'DROP INDEX token_h' );
+$wpdb->pdo->exec( 'CREATE UNIQUE INDEX token_h ON wp_ah_spp_push ( token_h )' ); // tabelul 4: tokenul unic
+ah_spp_db();
+egal( get_option( 'ah_spp_tabel' ), '4', 'L7: dbDelta n-a făcut indexul partener_token → versiunea NU se notează' );
+verifica( count( $GLOBALS['ah_test_dbdelta'] ) === 2 && false !== strpos( $GLOBALS['ah_test_dbdelta'][1], 'UNIQUE KEY partener_token (partener,token_h)' ) && false !== strpos( $GLOBALS['ah_test_dbdelta'][1], ' KEY token_h (token_h)' ), 'L7: dbDelta cere tabelul 5 (unic pe partener + token)' );
+egal( $wpdb->get_results( "SHOW INDEX FROM wp_ah_spp_push WHERE Key_name = 'token_h'" ), array(), 'tabelul 5: indexul unic vechi token_h a plecat întâi (dbDelta nu șterge indexuri)' );
+verifica( false !== strpos( json_encode( get_option( 'ah_spp_jurnal' ), JSON_UNESCAPED_UNICODE ), 'tabelele NU s-au actualizat' ), 'L7: în jurnal' );
+$GLOBALS['ah_test_dbdelta'] = array();
+ah_spp_db();
+egal( count( $GLOBALS['ah_test_dbdelta'] ), 0, 'L7: nu se reîncearcă la fiecare cerere (o oră)' );
+delete_transient( 'ah_spp_db_incercat' );
+$wpdb->pdo->exec( 'CREATE UNIQUE INDEX partener_token ON wp_ah_spp_push ( partener, token_h )' );
+$wpdb->pdo->exec( 'CREATE INDEX token_h ON wp_ah_spp_push ( token_h )' );
+$wpdb->pdo->exec( 'ALTER TABLE wp_ah_spp_parteneri RENAME COLUMN pauza_de_la TO pauza_x' ); // o coloană lipsă
+ah_spp_db();
+egal( get_option( 'ah_spp_tabel' ), '4', 'L7: lipsește pauza_de_la → versiunea NU se notează' );
+delete_transient( 'ah_spp_db_incercat' );
+$wpdb->pdo->exec( 'ALTER TABLE wp_ah_spp_parteneri RENAME COLUMN pauza_x TO pauza_de_la' );
+ah_spp_db();
+egal( get_option( 'ah_spp_tabel' ), '5', 'L7: coloanele și indexul sunt acolo → versiunea 5' );
+
+// cârligele cu modulul aplicație: ah_spa_cont_mutat, ah_spa_are_acces_el; ultima rulare a cronului
+ea( $ANA );
+ah_spp_r_invita( cerere( array( 'nume' => 'Mihai', 'email' => 'mihai@exemplu.ro', 'nume_ea' => 'Ana', 'acord' => true ) ) );
+$RC = ultim_rand();
+ciclu_in_cont( 'ana.noua@exemplu.ro', array( 'starturi' => array( zi( 9 ) ), 'lung' => 28, 'men' => 5 ) );
+ah_test_actiune( 'ah_spa_cont_mutat', $ANA, 'ana.noua@exemplu.ro' );
+egal( ah_spp_rand( $RC['id'] )['ea'], ah_sp_ciclu_cheie( 'ana.noua@exemplu.ro' ), 'ah_spa_cont_mutat: rândurile ei trec pe cheia adresei noi' );
+ea( 'ana.noua@exemplu.ro' );
+egal( count( date_r( ah_spp_r_parteneri( cerere() ) )['parteneri'] ), 1, 'ah_spa_cont_mutat: cu adresa nouă își vede partenerii' );
+ea( $ANA );
+egal( count( date_r( ah_spp_r_parteneri( cerere() ) )['parteneri'] ), 0, 'ah_spa_cont_mutat: adresa veche nu mai are nimic' );
+egal( ah_spp_curata(), 0, 'ah_spa_cont_mutat: curățenia nu șterge rândurile mutate (ciclul ei e pe cheia nouă)' );
+ea( '' );
+unset( $_COOKIE['ah_spp'] );
+egal( ah_test_filtru( 'ah_spa_are_acces_el', false ), false, 'ah_spa_are_acces_el: fără cookie-ul lui → false' );
+$_COOKIE['ah_spp'] = ah_spp_valoare_cookie( ah_spp_rand( $RC['id'] ), time() + 3600 );
+egal( ah_test_filtru( 'ah_spa_are_acces_el', false ), true, 'ah_spa_are_acces_el: cookie valid, acces activ → true' );
+$wpdb->update( 'wp_ah_spp_parteneri', array( 'oprit' => date( 'Y-m-d H:i:s' ) ), array( 'id' => $RC['id'] ) );
+egal( ah_test_filtru( 'ah_spa_are_acces_el', false ), false, 'ah_spa_are_acces_el: acces oprit → false' );
+egal( ah_test_filtru( 'ah_spa_are_acces_el', true ), false, 'ah_spa_are_acces_el: acces oprit → false, chiar dacă valoarea primită era true (doar „are cookie”)' );
+$_COOKIE['ah_spp'] = '1.' . ( time() + 99 ) . '.' . str_repeat( 'a', 40 );
+egal( ah_test_filtru( 'ah_spa_are_acces_el', false ), false, 'ah_spa_are_acces_el: cookie fals → false' );
+unset( $_COOKIE['ah_spp'] );
+delete_option( 'ah_spp_ultima_rulare' );
+$GLOBALS['ah_test_cron'] = array();
+ah_test_actiune( 'ah_spp_zilnic' );
+verifica( abs( (int) get_option( 'ah_spp_ultima_rulare' ) - time() ) <= 2, 'ah_spp_ultima_rulare: notată la fiecare rulare a cronului zilnic' );
+set_transient( 'ah_spp_lacat', 1, 120 );
+update_option( 'ah_spp_ultima_rulare', 5 );
+ah_test_actiune( 'ah_spp_zilnic' );
+verifica( (int) get_option( 'ah_spp_ultima_rulare' ) > 5, 'ah_spp_ultima_rulare: și când altă rulare ține lacătul (cronul e viu)' );
+delete_transient( 'ah_spp_lacat' );
 
 echo "\n" . $GLOBALS['ok'] . ' verificări trecute, ' . $GLOBALS['rau'] . " picate.\n";
 exit( $GLOBALS['rau'] ? 1 : 0 );

@@ -221,13 +221,60 @@ class Ah_Test_Wpdb_Spp extends Ah_Test_Wpdb {
 	public function __construct() {
 		parent::__construct();
 		$this->pdo->exec( 'CREATE TABLE wp_ah_spp_parteneri ( id INTEGER PRIMARY KEY AUTOINCREMENT, ea TEXT NOT NULL, nume TEXT DEFAULT \'\', nume_ea TEXT DEFAULT \'\', email_c TEXT NOT NULL, email_h TEXT NOT NULL, token_h TEXT NOT NULL UNIQUE, token_nou_h TEXT NOT NULL DEFAULT \'\', ses TEXT NOT NULL, acord TEXT NOT NULL, acord_v TEXT NOT NULL DEFAULT \'\', creat TEXT NOT NULL, invitat TEXT NOT NULL, intrat TEXT DEFAULT NULL, vizita TEXT DEFAULT NULL, oprit TEXT DEFAULT NULL, email_faze INTEGER NOT NULL DEFAULT 0, faza_trimisa TEXT NOT NULL DEFAULT \'\', pauza_de_la TEXT NOT NULL DEFAULT \'\' )' );
-		$this->pdo->exec( 'CREATE TABLE wp_ah_spp_push ( id INTEGER PRIMARY KEY AUTOINCREMENT, partener INTEGER NOT NULL, token TEXT NOT NULL, token_h TEXT NOT NULL UNIQUE, platforma TEXT DEFAULT \'\', creat TEXT NOT NULL, vazut TEXT NOT NULL )' );
+		$this->pdo->exec( 'CREATE TABLE wp_ah_spp_push ( id INTEGER PRIMARY KEY AUTOINCREMENT, partener INTEGER NOT NULL, token TEXT NOT NULL, token_h TEXT NOT NULL, platforma TEXT DEFAULT \'\', creat TEXT NOT NULL, vazut TEXT NOT NULL )' );
+		$this->pdo->exec( 'CREATE UNIQUE INDEX partener_token ON wp_ah_spp_push ( partener, token_h )' ); // tabelul 5 (1.4.0)
+		$this->pdo->exec( 'CREATE INDEX token_h ON wp_ah_spp_push ( token_h )' );
 	}
-	public function get_col( $q ) { return array_map( function ( $r ) { return $r[0]; }, $this->pdo->query( $q )->fetchAll( PDO::FETCH_NUM ) ); }
+	public function esc_like( $s ) { return addcslashes( (string) $s, '_%\\' ); }
+	/* ce nu știe SQLite, imitat: SHOW TABLES LIKE / SHOW COLUMNS / SHOW INDEX, ALTER TABLE … DROP INDEX, GET_LOCK / RELEASE_LOCK */
+	private function mysql( $q ) {
+		if ( preg_match( "/^SHOW TABLES LIKE '([^']*)'$/", $q, $m ) ) {
+			$t = stripslashes( $m[1] );
+			return $this->pdo->query( 'SELECT name FROM sqlite_master WHERE type = \'table\' AND name = ' . $this->pdo->quote( $t ) )->fetchAll( PDO::FETCH_NUM );
+		}
+		if ( preg_match( '/^SHOW COLUMNS FROM (\w+)$/', $q, $m ) ) {
+			return array_map( function ( $c ) { return array( $c['name'], 'Field' => $c['name'] ); }, $this->pdo->query( 'PRAGMA table_info(' . $m[1] . ')' )->fetchAll( PDO::FETCH_ASSOC ) );
+		}
+		if ( preg_match( "/^SHOW INDEX FROM (\w+) WHERE Key_name = '(\w+)'$/", $q, $m ) ) {
+			$o = array();
+			foreach ( $this->pdo->query( 'PRAGMA index_list(' . $m[1] . ')' )->fetchAll( PDO::FETCH_ASSOC ) as $i ) {
+				if ( $i['name'] === $m[2] ) { $o[] = array( 'Key_name' => $i['name'], 'Non_unique' => $i['unique'] ? '0' : '1' ); }
+			}
+			return $o;
+		}
+		if ( preg_match( '/^SELECT (GET_LOCK|RELEASE_LOCK)\(\'([^\']+)\'(, \d+)?\)$/', $q, $m ) ) {
+			return array( array( ah_test_lacat( $m[1], $m[2] ) ) );
+		}
+		return null;
+	}
+	public function get_results( $q, $o = null ) { $r = $this->mysql( $q ); if ( null !== $r ) { return array_map( function ( $x ) { return array_filter( $x, 'is_string', ARRAY_FILTER_USE_KEY ) ?: $x; }, $r ); } if ( ! empty( $GLOBALS['ah_test_incet'] ) && false !== strpos( $q, 'oprit IS NULL ORDER BY id ASC' ) && false !== strpos( $q, 'WHERE ea =' ) ) { $l = parent::get_results( $q, $o ); usleep( $GLOBALS['ah_test_incet'] ); return $l; } return parent::get_results( $q, $o ); }
+	public function get_var( $q ) { $r = $this->mysql( $q ); if ( null !== $r ) { return $r ? array_values( $r[0] )[0] : null; } return parent::get_var( $q ); }
+	public function get_col( $q ) { $r = $this->mysql( $q ); if ( null !== $r ) { return array_map( function ( $x ) { return array_values( $x )[0]; }, $r ); } return array_map( function ( $r ) { return $r[0]; }, $this->pdo->query( $q )->fetchAll( PDO::FETCH_NUM ) ); }
+	public function query( $q ) { if ( preg_match( '/^ALTER TABLE (\w+) DROP INDEX (\w+)$/', $q, $m ) ) { return $this->pdo->exec( 'DROP INDEX ' . $m[2] ); } return parent::query( $q ); }
 	public function insert( $t, $d ) { $n = parent::insert( $t, $d ); $this->insert_id = (int) $this->pdo->lastInsertId(); return $n; }
 }
+/**
+ * GET_LOCK / RELEASE_LOCK imitate. Implicit: în memorie (un singur proces; $GLOBALS['ah_test_lacate'][nume] = cine îl ține).
+ * Cu $GLOBALS['ah_test_lacat_dosar'] (testul cu procese paralele): flock pe un fișier, așteptând cel mult 3 secunde, ca MySQL.
+ * Cu $GLOBALS['ah_test_fara_lacat']: lacătul nu oprește nimic (controlul negativ: fără el, cursa chiar apare).
+ */
+function ah_test_lacat( $f, $nume ) {
+	if ( ! empty( $GLOBALS['ah_test_fara_lacat'] ) ) { return '1'; }
+	if ( ! empty( $GLOBALS['ah_test_lacat_dosar'] ) ) {
+		if ( 'RELEASE_LOCK' === $f ) { if ( isset( $GLOBALS['ah_test_flock'][ $nume ] ) ) { flock( $GLOBALS['ah_test_flock'][ $nume ], LOCK_UN ); fclose( $GLOBALS['ah_test_flock'][ $nume ] ); unset( $GLOBALS['ah_test_flock'][ $nume ] ); } return '1'; }
+		$h = fopen( $GLOBALS['ah_test_lacat_dosar'] . '/' . md5( $nume ), 'c' );
+		$t = microtime( true );
+		while ( ! flock( $h, LOCK_EX | LOCK_NB ) ) { if ( microtime( true ) - $t > 3 ) { fclose( $h ); return '0'; } usleep( 5000 ); }
+		$GLOBALS['ah_test_flock'][ $nume ] = $h;
+		return '1';
+	}
+	if ( 'RELEASE_LOCK' === $f ) { unset( $GLOBALS['ah_test_lacate'][ $nume ] ); return '1'; }
+	if ( isset( $GLOBALS['ah_test_lacate'][ $nume ] ) ) { return '0'; } // ținut de altă conexiune (testul îl pune de mână)
+	$GLOBALS['ah_test_lacate'][ $nume ] = 'eu';
+	return '1';
+}
 $GLOBALS['wpdb'] = new Ah_Test_Wpdb_Spp();
-$GLOBALS['ah_test_options']['ah_spp_tabel']   = '4'; // tabelele de mai sus țin locul lui dbDelta (AH_SPP_TABEL_VER)
+$GLOBALS['ah_test_options']['ah_spp_tabel']   = '5'; // tabelele de mai sus țin locul lui dbDelta (AH_SPP_TABEL_VER)
 define( 'AH_SPP_LINK_MS', 60 ); // /trimite-link: timpul minim, mic în teste
 $GLOBALS['ah_test_options']['ah_sp_ciclu_db'] = '1';
 

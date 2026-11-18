@@ -35,6 +35,19 @@ const asteapta = (ms) => new Promise((r) => setTimeout(r, ms));
 const poza = async (page, nume, tot) => { await page.screenshot({ path: path.join(OUT, `partener-${nume}.png`), fullPage: !!tot }); };
 const laVedere = async (page, sel) => { await page.evaluate((s) => { const e = document.querySelector(s); if (e) { e.scrollIntoView({ block: 'start' }); window.scrollBy(0, -84); } }, sel); await asteapta(250); };
 
+/* axe-core (server/tests/partener/package.json): 0 încălcări „serious” sau „critical” pe ecranele lui și pe cardul ei */
+const AXE = fs.readFileSync(require.resolve('axe-core/axe.min.js', { paths: [__dirname] }), 'utf8');
+const axe = async (page, nume, include) => {
+  await page.evaluate(AXE);
+  const r = await page.evaluate(async (inc) => { const x = await window.axe.run(inc ? { include: [inc] } : document, { resultTypes: ['violations'] }); return x.violations.filter((v) => v.impact === 'serious' || v.impact === 'critical').map((v) => v.id + ' (' + v.impact + '): ' + v.nodes.slice(0, 3).map((n) => n.target.join(' ')).join(' | ')); }, include || null);
+  egal(r, [], 'axe: ' + nume + ' — 0 serious/critical');
+};
+/* zoom 200% pe un telefon de 390 px = 195 px CSS: fără derulare orizontală */
+const faraOrizontal = async (page, nume) => {
+  const w = await page.evaluate(() => [document.documentElement.scrollWidth, document.documentElement.clientWidth, [...document.querySelectorAll('body *')].filter((e) => { const r = e.getBoundingClientRect(); return r.width && r.right > document.documentElement.clientWidth + 1 && getComputedStyle(e).position !== 'fixed' && !e.closest('[aria-hidden=true],[style*="-9999px"]'); }).slice(0, 3).map((e) => e.tagName + '.' + e.className)]);
+  verifica(w[0] <= w[1] && !w[2].length, 'zoom 200% (195 px): ' + nume + ' — fără derulare orizontală (' + w[0] + '/' + w[1] + (w[2].length ? ', ies: ' + w[2].join(', ') : '') + ')');
+};
+
 const azi = new Date(); azi.setHours(12, 0, 0, 0);
 const zi = (n) => { const d = new Date(azi); d.setDate(d.getDate() - n); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
 const CICLU = { starturi: [zi(8), zi(36), zi(64)], lung: 28, men: 5, sit: 'natural' };
@@ -53,7 +66,7 @@ const FONTS = {
 const fontCss = (l) => l.map((f) => `@import url("${SITE}/fonts/${f}");`).join('\n');
 
 /* starea „serverului” pentru ea și pentru el */
-const S = { ciclu: false, parteneri: [], cereri: [], el: 'ok', extern: [] };
+const S = { ciclu: false, parteneri: [], cereri: [], el: 'ok', extern: [], esec: {} };
 async function ruta(ctx) {
   await ctx.route('**/*', async (route) => {
     const req = route.request(), u = new URL(req.url());
@@ -65,9 +78,13 @@ async function ruta(ctx) {
     if (p.startsWith('/fonts/')) { const f = path.join(FONT, p.slice(7)); return fs.existsSync(f) ? route.fulfill({ status: 200, path: f, headers: { 'Access-Control-Allow-Origin': '*' } }) : route.fulfill({ status: 404, body: '' }); }
     if (p.startsWith('/wp-json/')) S.cereri.push({ m: req.method(), p, corp: req.postData() ? JSON.parse(req.postData()) : null, antet: req.headers()['x-ah-spp'] || '' });
     if (p === '/spatiul-meu/') return route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: fs.readFileSync(path.join(TMP, S.cont === false ? 'sp-intrare.html' : 'sp-ea.html')) });
+    if (p === '/pentru-el/' && S.navigari) S.navigari.push(u.search);
     if (p === '/pentru-el/') return route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: fs.readFileSync(path.join(TMP, `el-${S.el}.html`)) });
+    if (p === '/wp-json/ah-sp/v1/ciclu-date' && req.method() === 'POST' && S.esec.ciclu) return route.abort('internetdisconnected');
     if (p === '/wp-json/ah-sp/v1/ciclu-date') { if (req.method() === 'POST') { S.ciclu = true; return json({ ok: true, actualizat: zi(0) + ' 10:00:00' }); } return json({ ok: true, acord: S.ciclu }); }
     if (p === '/wp-json/ah-spp/v1/parteneri') return json({ ok: true, ciclu: S.ciclu, max: 2, parteneri: S.parteneri });
+    if (p === '/wp-json/ah-spp/v1/invita' && S.esec.invita) { await asteapta(400); return json({ ok: false, motiv: 'ocupat', mesaj: 'N-a mers. Mai încearcă o dată.' }, 503); }
+    if (p === '/wp-json/ah-spp/v1/trimite-link' && S.esec.link) { await asteapta(400); return json({ ok: false, motiv: 'prea des', mesaj: 'Prea multe cereri. Mai încearcă peste o oră.' }, 429); }
     if (p === '/wp-json/ah-spp/v1/invita') { const b = JSON.parse(req.postData()); S.parteneri.push({ id: 10 + S.parteneri.length, nume: b.nume, email: b.email.toLowerCase(), stare: 'invitat', vizita: '', creat: zi(0) }); return json({ ok: true, email: true, parteneri: S.parteneri }); }
     if (p === '/wp-json/ah-spp/v1/opreste') { const b = JSON.parse(req.postData()); S.parteneri = S.parteneri.filter((x) => x.id !== b.id); return json({ ok: true, parteneri: S.parteneri }); }
     if (p === '/wp-json/ah-spp/v1/retrimite') return json({ ok: true, email: true, parteneri: S.parteneri });
@@ -122,6 +139,15 @@ const hApel = (page) => page.evaluate(() => JSON.parse(sessionStorage.getItem('h
     verifica(!(await page.locator('#spp-form').count()), 'ea: fără formular până nu e ciclul în cont');
     verifica(/link vechi „Pentru el”/.test(await page.locator('#spp-loc').innerText()), 'ea: linkul vechi e amintit, cu „Oprește linkul vechi”');
     await laVedere(page, '#spp-loc'); await poza(page, 'ea-1-ciclul-in-cont');
+    await axe(page, 'ea, cardul (ciclul nu e în cont)', '#spp-loc');
+    /* acordul pentru ciclul în cont nu merge (fără internet): după 8 s, mesajul, butonul din nou activ și cu focus */
+    S.esec.ciclu = true;
+    await page.click('[data-spp="sync"]'); await asteapta(400);
+    egal(await page.locator('#spp-msg').innerText(), 'Se salvează…', 'ea: „Se salvează…” cât așteaptă');
+    await asteapta(8600);
+    egal(await page.evaluate(() => [document.getElementById('spp-msg').textContent, document.querySelector('[data-spp="sync"]').disabled, document.activeElement && document.activeElement.getAttribute('data-spp')]), ['Nu am putut salva. Verifică internetul și mai încearcă.', false, 'sync'], 'ea: salvarea n-a mers → mesajul, butonul activ, cu focus (nu se resetează pe tăcute)');
+    await laVedere(page, '#spp-loc'); await poza(page, 'ea-1b-nu-am-putut-salva');
+    S.esec.ciclu = false;
     S.cereri = [];
     await page.click('[data-spp="sync"]'); await asteapta(2600);
     verifica(S.cereri.some((c) => c.m === 'POST' && c.p === '/wp-json/ah-sp/v1/ciclu-date' && c.corp && c.corp.acord === 1 && c.corp.date && c.corp.date.ciclu), 'ea: acordul trece prin ciclu-date din 235 (acord:1, datele ei)');
@@ -141,6 +167,21 @@ const hApel = (page) => page.evaluate(() => JSON.parse(sessionStorage.getItem('h
     verifica(!S.cereri.some((c) => c.p.endsWith('/invita')), 'ea: fără bifă, nicio cerere');
     await page.check('#spp-acord');
     await laVedere(page, '#spp-loc'); await poza(page, 'ea-2-invitatie');
+    await axe(page, 'ea, formularul invitației', '#spp-loc');
+    /* H1: adresa cu diacritice sau spații se oprește în pagină (nu pleacă spre o adresă „curățată”) */
+    await page.fill('#spp-email', 'andrei.ștefan@gmail.com'); S.cereri = [];
+    await page.click('#spp-trimite'); await asteapta(200);
+    egal(await page.evaluate(() => [document.getElementById('spp-msg').textContent, document.activeElement.id, document.getElementById('spp-email').getAttribute('aria-invalid')]), ['Adresa conține caractere nepermise (diacritice sau spații).', 'spp-email', 'true'], 'ea: adresă cu diacritice → mesaj clar, focus pe câmp');
+    await page.fill('#spp-email', 'mihai @exemplu.ro'); await page.click('#spp-trimite'); await asteapta(150);
+    egal(await page.locator('#spp-msg').innerText(), 'Adresa conține caractere nepermise (diacritice sau spații).', 'ea: adresă cu spațiu → același mesaj');
+    verifica(!S.cereri.some((c) => c.p.endsWith('/invita')), 'ea: nicio cerere cu adresa greșită');
+    /* cererea nu merge (503): aria-busy cât așteaptă, apoi butonul din nou activ, cu focus */
+    await page.fill('#spp-email', 'Mihai@exemplu.ro'); S.esec.invita = true;
+    await page.click('#spp-trimite'); await asteapta(120);
+    egal(await page.evaluate(() => [document.getElementById('spp-form').getAttribute('aria-busy'), document.getElementById('spp-trimite').disabled]), ['true', true], 'ea: cât pleacă invitația: aria-busy pe formular, butonul oprit');
+    await asteapta(700);
+    egal(await page.evaluate(() => [document.getElementById('spp-form').getAttribute('aria-busy'), document.getElementById('spp-trimite').disabled, document.activeElement.id, document.getElementById('spp-msg').textContent]), [null, false, 'spp-trimite', 'N-a mers. Mai încearcă o dată.'], 'ea: invitația n-a mers → butonul activ, cu focus, mesajul');
+    S.esec.invita = false; S.cereri = [];
     await page.click('#spp-trimite'); await asteapta(700);
     const inv = S.cereri.find((c) => c.p.endsWith('/invita'));
     egal(inv && inv.corp, { nume: 'Mihai', email: 'Mihai@exemplu.ro', nume_ea: 'Ana', acord: true }, 'ea: invitația trimite acordul explicit');
@@ -149,6 +190,7 @@ const hApel = (page) => page.evaluate(() => JSON.parse(sessionStorage.getItem('h
     verifica(inv && inv.antet === '1', 'ea: invitația trimite antetul X-AH-SPP');
     verifica(/Invitat pe .* încă nu a intrat/.test(await page.locator('.spp-p').first().innerText()), 'ea: starea „invitat”');
     await laVedere(page, '#spp-loc'); await poza(page, 'ea-3-invitat');
+    await axe(page, 'ea, lista (invitat)', '#spp-loc');
     /* el a intrat, ea a invitat și pe Radu: limita de 2 */
     S.parteneri = [{ id: 10, nume: 'Mihai', email: 'mihai@exemplu.ro', stare: 'a_intrat', vizita: zi(0), creat: zi(3) }, { id: 11, nume: 'Radu', email: 'radu@exemplu.ro', stare: 'invitat', vizita: '', creat: zi(1) }];
     await page.reload(); await asteapta(1300);
@@ -156,6 +198,8 @@ const hApel = (page) => page.evaluate(() => JSON.parse(sessionStorage.getItem('h
     verifica(/A intrat · ultima vizită:/.test(txt) && /Ai invitat 2 persoane, cât se poate/.test(txt), 'ea: „a intrat”, ultima vizită și limita de 2');
     verifica(!(await page.locator('#spp-form').count()), 'ea: la limită, fără formular');
     await laVedere(page, '#spp-loc'); await poza(page, 'ea-4-doi-parteneri');
+    egal(await page.evaluate(() => [...document.querySelectorAll('.spp-p [data-spp="retrimite"]')].map((b) => b.textContent)), ['Trimite-i din nou linkul', 'Trimite din nou invitația'], 'ea: cine a intrat deja: „Trimite-i din nou linkul”; cine nu: „Trimite din nou invitația”');
+    await axe(page, 'ea, doi parteneri', '#spp-loc');
     egal(await page.evaluate(() => { const st = document.querySelector('.spp-st'), i = st.querySelector('i'); return [getComputedStyle(st).alignItems, getComputedStyle(i).marginTop !== '0px']; }), ['flex-start', true], 'ea: punctul de stare aliniat la primul rând');
     const h44 = await page.evaluate(() => [...document.querySelectorAll('#spp-loc .legatura')].map((e) => Math.round(e.getBoundingClientRect().height)));
     verifica(h44.length >= 3 && h44.every((h) => h >= 44), 'ea: „Oprește accesul” și „Oprește linkul vechi”: cel puțin 44 px (' + h44.join(', ') + ')');
@@ -163,6 +207,8 @@ const hApel = (page) => page.evaluate(() => JSON.parse(sessionStorage.getItem('h
     await page.locator('.spp-p[data-id="11"] [data-spp="opreste"]').click(); await asteapta(300);
     egal(await page.evaluate(() => { const f = document.querySelector('.spp-foaie [role=dialog]'); return f ? [f.getAttribute('aria-modal'), document.getElementById(f.getAttribute('aria-labelledby')).textContent, document.activeElement.textContent] : null; }), ['true', 'Oprești accesul lui Radu?', 'Renunț'], 'ea: „Oprește accesul” deschide foaia (role=dialog, aria-labelledby), cu focusul pe „Renunț”');
     await poza(page, 'ea-4b-foaie-opreste');
+    egal(await page.evaluate(() => { const c = document.querySelector('.spp-foaie .ci-but'), b = [...c.querySelectorAll('.btn')].map((x) => x.getBoundingClientRect()); return [b.length, b.every((r) => Math.abs(r.width - c.getBoundingClientRect().width) < 1), b[0].bottom <= b[1].top, b.every((r) => r.height < 60)]; }), [2, true, true, true], 'ea: foaia — butoanele unul sub altul, pe toată lățimea, fiecare pe un rând');
+    await axe(page, 'ea, foaia „Oprești accesul”', '.spp-foaie');
     await page.click('.spp-foaie [data-f="nu"]'); await asteapta(200);
     verifica(!(await page.locator('.spp-foaie').count()) && !S.cereri.some((c) => c.p.endsWith('/opreste')) && (await page.locator('.spp-p').count()) === 2, 'ea: „Renunț” închide foaia, nimic oprit');
     await page.locator('.spp-p[data-id="11"] [data-spp="opreste"]').click(); await asteapta(250);
@@ -201,6 +247,15 @@ const hApel = (page) => page.evaluate(() => JSON.parse(sessionStorage.getItem('h
     const t = await page.locator('#spp-cutie-el').innerText();
     verifica(/Deschide linkul primit pe email/.test(t) && /Trimite-mi din nou linkul/.test(t), 'intrare: cele două drumuri');
     egal(await page.evaluate(() => [document.getElementById('spp-lpb').classList.contains('lite'), document.getElementById('spp-lb').classList.contains('lite'), getComputedStyle(document.getElementById('spp-lm')).display]), [false, true, 'none'], 'intrare: „Deschide linkul” principal, „Trimite-mi linkul” secundar; mesajul gol nu ocupă loc');
+    await axe(page, 'intrare, panoul lui', '#spp-cutie-el');
+    await page.fill('#spp-le', 'andrei.ștefan@gmail.com'); await page.click('#spp-lb'); await asteapta(150);
+    egal(await page.evaluate(() => [document.getElementById('spp-lm').textContent, document.activeElement.id]), ['Adresa conține caractere nepermise (diacritice sau spații).', 'spp-le'], 'intrare: „Trimite-mi linkul” cu diacritice → mesaj, focus pe câmp');
+    S.esec.link = true;
+    await page.fill('#spp-le', 'mihai@exemplu.ro'); await page.click('#spp-lb'); await asteapta(120);
+    egal(await page.evaluate(() => [document.getElementById('spp-lf').getAttribute('aria-busy'), document.getElementById('spp-lb').disabled]), ['true', true], 'intrare: aria-busy cât așteaptă');
+    await asteapta(700);
+    egal(await page.evaluate(() => [document.getElementById('spp-lf').getAttribute('aria-busy'), document.getElementById('spp-lb').disabled, document.activeElement.id]), [null, false, 'spp-lb'], 'intrare: cererea n-a mers → butonul activ, cu focus');
+    S.esec.link = false;
     await page.fill('#spp-le', 'mihai@exemplu.ro'); await page.click('#spp-lb'); await asteapta(500);
     verifica(/Dacă adresa a fost invitată/.test(await page.locator('#spp-lm').innerText()), 'intrare: același răspuns, oricare ar fi adresa');
     verifica(await page.evaluate(() => document.getElementById('spp-lm').classList.contains('ok')), 'intrare: răspunsul în culoarea „ok”');
@@ -213,8 +268,12 @@ const hApel = (page) => page.evaluate(() => JSON.parse(sessionStorage.getItem('h
     verifica(/nu pare întreg/.test(await page.locator('#spp-lpm').innerText()) && /\/spatiul-meu\//.test(page.url()), 'intrare: link lipit greșit → mesaj, fără navigare');
     const TOK = 'A'.repeat(20) + '-_' + 'b'.repeat(21);
     await page.fill('#spp-lpi', ' Deschide pagina ei: https://www.adelaharu.ro/pentru-el/?t=' + TOK + ' ');
+    S.navigari = [];
     await Promise.all([page.waitForURL(/\/pentru-el\//), page.click('#spp-lpb')]);
-    egal(new URL(page.url()).search, '?t=' + TOK, 'intrare: linkul lipit deschide /pentru-el/?t= în aceeași pagină (în aplicație)');
+    egal(S.navigari, ['?t=' + TOK], 'intrare: linkul lipit deschide /pentru-el/?t= în aceeași pagină (în aplicație)');
+    await asteapta(300);
+    egal(new URL(page.url()).search, '', 'el: adresa din bară se curăță (fără ?t=, nici în istoric)');
+    S.navigari = null;
     egal(erori, [], 'intrare: fără erori JS');
     await ctx.close();
     S.cont = true;
@@ -238,22 +297,37 @@ const hApel = (page) => page.evaluate(() => JSON.parse(sessionStorage.getItem('h
     verifica(!/NOTITA|mihai@|ana@/.test(await page.content()), 'el: nicio notiță sau adresă în pagină');
     await poza(page, 'el-1-azi');
     await poza(page, 'el-1-azi-toata', true);
+    egal(await page.evaluate(() => [document.querySelectorAll('main').length, !!document.querySelector('main > .ecran'), document.querySelectorAll('ul.luni > li.r').length, document.title]), [1, true, 2, 'Azi · Ciclul ei · Adela Haru'], 'el: <main> în jurul ecranului, „Ce urmează” ca listă (ul/li), titlul paginii');
+    await axe(page, 'el, Azi');
+    const ecran = async (nume, h1, titlu) => {
+      egal(await page.evaluate(() => [document.activeElement && document.activeElement.tagName, document.activeElement && document.activeElement.getAttribute('tabindex'), document.activeElement && document.activeElement.textContent, document.title, Math.round(window.scrollY)]), ['H1', '-1', h1, titlu + ' · Ciclul ei · Adela Haru', 0], 'el: ' + nume + ' — focus pe h1 (tabindex=-1), titlul documentului, sus');
+    };
     await page.click('.bara a[href="#invata"]'); await asteapta(400);
+    await ecran('Învață', 'Învață', 'Învață');
     egal(await page.locator('.lista a').count(), 6, 'el: Învață — 6 pagini');
+    await axe(page, 'el, Învață');
     verifica(await page.locator('a.spp-carte').first().isVisible(), 'el (browser): cărțile se văd (rândul paginii ?ciclul-ei)');
     await poza(page, 'el-2-invata', true);
     await page.click('.lista a[href="#invata/faze"]'); await asteapta(400);
+    await ecran('pagina „Cele 4 faze”', 'Cele 4 faze ale ciclului feminin', 'Cele 4 faze ale ciclului feminin');
     verifica(/Cele 4 faze ale ciclului feminin/.test(await page.evaluate(() => document.body.innerText)), 'el: pagina „Cele 4 faze”');
     await poza(page, 'el-3-invata-faze', true);
     await page.evaluate(() => { location.hash = '#invata/toamna'; }); await asteapta(400);
     const tt = await page.evaluate(() => document.body.innerText);
     verifica(/Toamna ei interioară/.test(tt) && /crește nivelul de intuiție/.test(tt) && /Cum o poți sprijini/.test(tt) && !/Zilele dinaintea menstruației/.test(tt), 'el: pagina „Toamna ei interioară”, doar din textele site-ului');
     await poza(page, 'el-3-invata-toamna', true);
+    egal(await page.evaluate(() => [document.querySelectorAll('.pag h3').length, document.querySelectorAll('.pag section h2').length > 0, document.querySelector('.inapoi[data-a="inapoi-invata"]').getAttribute('aria-label')]), [0, true, 'Înapoi la Învață'], 'el: în paginile din Învață, titlurile secțiunilor sunt h2 (sub h1); „Înapoi la Învață”');
+    await axe(page, 'el, Învață — Toamna');
     await page.evaluate(() => { location.hash = '#invata/podcast'; }); await asteapta(400);
     egal(await page.locator('.pod').count(), 5, 'el: podcastul — episoadele 2–6');
+    verifica(await page.evaluate(() => [...document.querySelectorAll('.pod a')].every((a) => a.getAttribute('aria-label') === 'Ascultă „' + a.parentNode.querySelector('b').textContent + '” în Apple Podcasts')), 'el: podcast — fiecare „Ascultă episodul” spune ce episod (aria-label)');
+    await axe(page, 'el, Învață — podcastul');
     await poza(page, 'el-4-invata-podcast', true);
     await page.click('#spp-set'); await asteapta(400);
+    await ecran('Setări', 'Bună, Mihai', 'Setări');
     verifica(await page.locator('#spp-sw-email').isVisible() && !(await page.locator('#spp-sw-push').count()), 'el (browser): emailurile, fără notificări push');
+    egal(await page.evaluate(() => { const c = document.querySelector('.but.col'), i = c.querySelector('[data-a="iesi"]').getBoundingClientRect(), d = c.querySelector('[data-a="sterge"]').getBoundingClientRect(); return [Math.abs(i.width - c.getBoundingClientRect().width) < 1, i.bottom <= d.top]; }), [true, true], 'el: Setări — „Ieși” pe toată lățimea, „Șterge accesul meu” dedesubt (la fel în browser și în aplicație)');
+    await axe(page, 'el, Setări');
     S.cereri = [];
     egal(await page.locator('[data-a="iesi"]').innerText(), 'Ieși din cont', 'el (browser): „Ieși din cont” (fără „pe acest telefon”)');
     egal(await page.evaluate(() => getComputedStyle(document.getElementById('spp-set-m')).display), 'none', 'el: mesajul gol din setări nu ocupă loc');
@@ -270,6 +344,8 @@ const hApel = (page) => page.evaluate(() => JSON.parse(sessionStorage.getItem('h
     await page.click('.leg[data-a="sterge"]'); await asteapta(250);
     verifica(await page.locator('.foaie [role=dialog][aria-labelledby="spp-foaie-t"]').isVisible(), 'el: „Șterge accesul meu” deschide foaia');
     await poza(page, 'el-5b-foaie-sterge');
+    egal(await page.evaluate(() => { const c = document.querySelector('.foaie .but'), b = [...c.querySelectorAll('.btn')].map((x) => x.getBoundingClientRect()); return [Math.abs(b[0].width - c.getBoundingClientRect().width) < 1, b[0].bottom <= b[1].top, b.every((r) => r.height < 60)]; }), [true, true, true], 'el: foaia — „Șterge accesul meu” și „Renunț” unul sub altul, pe toată lățimea, fără rânduri rupte');
+    await axe(page, 'el, foaia „Ștergi accesul”', '.foaie');
     await page.keyboard.press('Escape'); await asteapta(150);
     verifica(!(await page.locator('.foaie').count()) && !S.cereri.some((c) => c.p.endsWith('/sterge')), 'el: Escape închide foaia, nimic șters');
     /* telefonul culcat: bara rămâne jos; pe tabletă / laptop, sus */
@@ -294,6 +370,7 @@ const hApel = (page) => page.evaluate(() => JSON.parse(sessionStorage.getItem('h
       return { fond, text: r(getComputedStyle(p).color, fond), titlu: r(getComputedStyle(h).color, fond), mic: r(getComputedStyle(mic).color, fond) }; });
     verifica(c.fond === 'rgb(34, 25, 34)', 'seara (' + nume + '): fundalul închis (' + c.fond + ')');
     verifica(c.text >= 4.5 && c.mic >= 4.5 && c.titlu >= 3, `seara (${nume}): contrast AA (text ${c.text.toFixed(1)}, notă ${c.mic.toFixed(1)}, titlu ${c.titlu.toFixed(1)})`);
+    if (!init) await axe(page, 'el, seara (Azi)');
     if (!init) { await poza(page, 'el-13-seara'); await page.evaluate(() => { location.hash = '#invata/toamna'; }); await asteapta(400); await poza(page, 'el-13-seara-invata'); }
     egal(erori, [], 'seara: fără erori JS');
     await ctx.close();
@@ -332,6 +409,7 @@ const hApel = (page) => page.evaluate(() => JSON.parse(sessionStorage.getItem('h
     await page.goto(SITE + '/pentru-el/'); await asteapta(900);
     verifica(await page.locator('#spp-anunt [data-a="push"]').isVisible(), 'aplicație: „Vrei să afli când începe o fază nouă?” (push)');
     await poza(page, 'el-6-aplicatie-azi');
+    await axe(page, 'el, aplicație (Azi, cu anunțul)');
     await page.click('#spp-anunt [data-a="push"]'); await asteapta(500);
     const pu = S.cereri.find((c) => c.p === '/wp-json/ah-spp/v1/push' && c.m === 'POST');
     egal(pu && pu.corp.platforma, 'ios', 'aplicație: tokenul FCM ajunge la /ah-spp/v1/push');
@@ -342,6 +420,8 @@ const hApel = (page) => page.evaluate(() => JSON.parse(sessionStorage.getItem('h
     verifica(await page.locator('#spp-sw-push').isVisible(), 'aplicație: comutatorul de notificări');
     egal(await page.locator('[data-a="iesi"]').innerText(), 'Ieși din cont pe acest telefon', 'aplicație: „Ieși din cont pe acest telefon”');
     await poza(page, 'el-7-aplicatie-setari');
+    await axe(page, 'el, aplicație (Setări)');
+    egal(await page.evaluate(() => { const c = document.querySelector('.but.col'), i = c.querySelector('[data-a="iesi"]').getBoundingClientRect(), d = c.querySelector('[data-a="sterge"]').getBoundingClientRect(); return [Math.abs(i.width - c.getBoundingClientRect().width) < 1, i.bottom <= d.top, i.height < 60]; }), [true, true, true], 'aplicație: Setări — „Ieși din cont pe acest telefon” pe un rând, „Șterge accesul meu” dedesubt (ca în browser)');
     egal(S.extern, [], 'aplicație: nicio cerere în afara site-ului (fără Google Fonts)');
     await page.evaluate(() => { location.hash = '#azi'; }); await asteapta(300);
     verifica(await page.evaluate(() => [...document.querySelectorAll('blockquote, .arh, .cap .marca small')].every((e) => !/Cormorant/.test(getComputedStyle(e).fontFamily) && /Figtree/.test(getComputedStyle(e).fontFamily) && getComputedStyle(e).fontStyle === 'italic')), 'aplicație: citatele în Figtree cursiv (fără Cormorant, care ar cădea pe Georgia)');
@@ -384,8 +464,9 @@ const hApel = (page) => page.evaluate(() => JSON.parse(sessionStorage.getItem('h
     S.cereri = [];
     await page.click('[data-a="iesi"]'); await asteapta(900);
     const pasi = S.cereri.map((c) => c.m + ' ' + c.p);
-    verifica(pasi.indexOf('DELETE /wp-json/ah-spp/v1/push') > -1 && pasi.indexOf('POST /wp-json/ah-spp/v1/iesi') > pasi.indexOf('DELETE /wp-json/ah-spp/v1/push'), '„Ieși”: întâi tokenul lui, apoi /iesi (' + pasi.join(', ') + ')');
-    const del = S.cereri.find((c) => c.m === 'DELETE');
+    verifica(pasi.indexOf('POST /wp-json/ah-spp/v1/push/sterge') > -1 && pasi.indexOf('POST /wp-json/ah-spp/v1/iesi') > pasi.indexOf('POST /wp-json/ah-spp/v1/push/sterge'), '„Ieși”: întâi tokenul lui (POST /push/sterge, fără DELETE: WAF), apoi /iesi (' + pasi.join(', ') + ')');
+    verifica(!S.cereri.some((c) => c.m === 'DELETE'), '„Ieși”: nicio cerere DELETE');
+    const del = S.cereri.find((c) => c.p.endsWith('/push/sterge'));
     egal(del && del.corp.token, pu && pu.corp.token, '„Ieși”: se scoate exact tokenul lui');
     verifica(!('ah_push' in await hPrefs(page)) && (await hApel(page)).includes('PushNotifications.unregister'), '„Ieși”: Preferences.ah_push șters, unregister');
     egal(erori, [], 'aplicație (push, ieși): fără erori JS');
@@ -439,17 +520,74 @@ const hApel = (page) => page.evaluate(() => JSON.parse(sessionStorage.getItem('h
       verifica(await page.locator('.lista a[href="#invata"]').isVisible() && /Cele 4 faze ale ciclului feminin/.test(t), 'el: pauza: un card spre Învață, sub mesaj');
     }
     if (st === 'iesit' || st === 'link') {
-      egal(await page.locator('h1').count(), 0, 'el ' + st + ': fără titlul „Ciclul ei” dublat (e deja în cap)');
+      egal(await page.evaluate(() => [...document.querySelectorAll('h1')].map((h) => h.textContent)), ['Intră în pagina ei'], 'el ' + st + ': un h1, „Intră în pagina ei” (fără „Ciclul ei” dublat)');
       egal(await page.evaluate(() => [document.getElementById('spp-lpb').classList.contains('lite'), document.getElementById('spp-b').classList.contains('lite')]), [false, true], 'el ' + st + ': „Deschide linkul” principal, „Trimite-mi linkul” secundar');
     }
+    if (st === 'link') egal(await page.evaluate(() => document.querySelector('main .msg').getAttribute('role')), 'alert', 'el, link expirat: mesajul e role=alert');
     if (st === 'iesit') {
+      await page.fill('#spp-e', 'andrei.ștefan@gmail.com'); await page.click('#spp-b'); await asteapta(150);
+      egal(await page.evaluate(() => [document.getElementById('spp-m').textContent, document.activeElement.id]), ['Adresa conține caractere nepermise (diacritice sau spații).', 'spp-e'], 'el: „Trimite-mi linkul” cu diacritice → mesaj, focus pe câmp');
+      S.esec.link = true;
+      await page.fill('#spp-e', 'mihai@exemplu.ro'); await page.click('#spp-b'); await asteapta(120);
+      egal(await page.evaluate(() => [document.getElementById('spp-f').getAttribute('aria-busy'), document.getElementById('spp-b').disabled]), ['true', true], 'el: „Trimite-mi linkul” — aria-busy cât așteaptă');
+      await asteapta(700);
+      egal(await page.evaluate(() => [document.getElementById('spp-f').getAttribute('aria-busy'), document.getElementById('spp-b').disabled, document.activeElement.id, document.getElementById('spp-m').textContent]), [null, false, 'spp-b', 'Prea multe cereri. Mai încearcă peste o oră.'], 'el: cererea n-a mers → butonul activ, cu focus, mesajul');
+      S.esec.link = false;
+      await page.fill('#spp-e', ''); await page.evaluate(() => { document.getElementById('spp-m').textContent = ''; document.getElementById('spp-e').removeAttribute('aria-invalid'); });
       await page.fill('#spp-lpi', 'nu e un link'); await page.click('#spp-lpb'); await asteapta(150);
       verifica(/nu pare întreg/.test(await page.locator('#spp-lpm').innerText()), 'el fără cont: câmpul pentru linkul lipit, cu mesaj la greșeală');
       await page.fill('#spp-lpi', ''); await page.evaluate(() => { document.getElementById('spp-lpm').textContent = ''; document.getElementById('spp-lpi').removeAttribute('aria-invalid'); document.activeElement.blur(); });
     }
     await poza(page, nume);
+    await axe(page, 'el, ' + st);
     egal(erori, [], 'el ' + st + ': fără erori JS');
     await ctx.close();
+  }
+
+  /* ===== 6. el: linkul unei invitații oprite, deschis cu o sesiune activă (L3) ===== */
+  {
+    S.el = 'ok-oprit';
+    const ctx = await browser.newContext({ ...ctxOpt, userAgent: UA_SAFARI });
+    await ruta(ctx);
+    const page = await ctx.newPage(); const erori = []; page.on('pageerror', (e) => erori.push(e.message));
+    await page.goto(SITE + '/pentru-el/?t=' + 'Z'.repeat(43)); await asteapta(700);
+    egal(await page.evaluate(() => { const m = document.querySelector('main .msg'); return [m && m.textContent, m && m.getAttribute('role'), !!document.querySelector('.sus h1'), location.search]; }), ['Linkul acesta nu mai e activ.', 'status', true, ''], 'el: link oprit, sesiune activă — pagina lui rămâne, cu un rând scurt; adresa curată');
+    await poza(page, 'el-16-link-oprit-sesiune-activa');
+    await page.evaluate(() => { location.hash = '#invata'; }); await asteapta(300); await page.evaluate(() => { location.hash = '#azi'; }); await asteapta(300);
+    egal(await page.evaluate(() => [...document.querySelectorAll('main .msg')].filter((m) => /nu mai e activ/.test(m.textContent)).length), 0, 'el: rândul apare o singură dată');
+    egal(erori, [], 'el, link oprit: fără erori JS');
+    await ctx.close();
+  }
+
+  /* ===== 7. zoom 200% (390 px → 195 px CSS): fără derulare orizontală, titlurile se rup ===== */
+  {
+    S.el = 'ok';
+    const ctx = await browser.newContext({ ...ctxOpt, viewport: { width: 195, height: 422 }, deviceScaleFactor: 4, userAgent: UA_SAFARI });
+    await ruta(ctx);
+    const page = await ctx.newPage(); const erori = []; page.on('pageerror', (e) => erori.push(e.message));
+    await page.goto(SITE + '/pentru-el/'); await asteapta(900);
+    await faraOrizontal(page, 'Azi');
+    egal(await page.evaluate(() => [getComputedStyle(document.querySelector('h1')).overflowWrap, getComputedStyle(document.querySelector('.luni .r')).flexWrap]), ['anywhere', 'wrap'], 'zoom 200%: h1 overflow-wrap:anywhere, rândurile „Ce urmează” se rup');
+    await poza(page, 'el-17-zoom200-azi', true);
+    for (const h of ['invata', 'invata/faze', 'invata/podcast', 'setari']) {
+      await page.evaluate((x) => { location.hash = '#' + x; }, h); await asteapta(350);
+      await faraOrizontal(page, h);
+    }
+    await poza(page, 'el-17-zoom200-setari', true);
+    await page.click('.leg[data-a="sterge"]'); await asteapta(250);
+    await faraOrizontal(page, 'foaia „Șterge accesul meu”');
+    verifica(await page.evaluate(() => [...document.querySelectorAll('.foaie .btn')].every((b) => b.scrollWidth <= b.clientWidth + 1)), 'zoom 200%: butoanele foii nu taie textul');
+    await poza(page, 'el-17-zoom200-foaie');
+    await ctx.close();
+    S.el = 'iesit';
+    const ctx2 = await browser.newContext({ ...ctxOpt, viewport: { width: 195, height: 422 }, deviceScaleFactor: 4, userAgent: UA_SAFARI });
+    await ruta(ctx2);
+    const p2 = await ctx2.newPage(); p2.on('pageerror', (e) => erori.push(e.message));
+    await p2.goto(SITE + '/pentru-el/'); await asteapta(700);
+    await faraOrizontal(p2, 'fără cont (Intră în pagina ei)');
+    await poza(p2, 'el-17-zoom200-fara-cont', true);
+    await ctx2.close();
+    egal(erori, [], 'zoom 200%: fără erori JS');
   }
 
   await browser.close();

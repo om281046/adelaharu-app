@@ -217,5 +217,24 @@ $js = ah_spa_js();
 verifica( false !== strpos( $js, "cont:'ea'" ) && false !== strpos( $js, "al:function(v){return v&&v.cont==='el'?'el':'ea';}" ), 'puntea: Preferences.ah_push.cont = ea; rândurile vechi (fără cont) sunt ale ei' );
 verifica( false !== strpos( $js, "if(S.el||!S.api_el)return;" ), 'puntea: tokenul lui nu se atinge cât e intrat el' );
 
+/* ---------- 8. interfețele comune (1.4.0): ah_spa_cont_mutat, ah_spa_are_acces_el, POST /push/sterge, ah_spp_ultima_rulare ---------- */
+ea( '' );
+el( null );
+ciclu_in_cont( 'maria@exemplu.ro' );
+$mm = invita( 'maria@exemplu.ro', 'Ion', 'ion@exemplu.ro' );
+ciclu_in_cont( 'maria.noua@exemplu.ro' );
+do_action( 'ah_spa_cont_mutat', 'maria@exemplu.ro', 'maria.noua@exemplu.ro' );
+egal( $wpdb->get_var( 'SELECT ea FROM wp_ah_spp_parteneri WHERE id = ' . (int) $mm['id'] ), ah_sp_ciclu_cheie( 'maria.noua@exemplu.ro' ), 'ah_spa_cont_mutat (do_action): rândurile ei trec pe adresa nouă' );
+el( $mm );
+egal( (bool) apply_filters( 'ah_spa_are_acces_el', true, 'x@exemplu.ro' ), true, 'ah_spa_are_acces_el: cookie-ul lui, acces activ → true' );
+$wpdb->update( 'wp_ah_spp_parteneri', array( 'oprit' => date( 'Y-m-d H:i:s' ) ), array( 'id' => $mm['id'] ) );
+egal( (bool) apply_filters( 'ah_spa_are_acces_el', true, 'x@exemplu.ro' ), false, 'ah_spa_are_acces_el: acces oprit → false (rândul „Ciclul ei” nu apare)' );
+el( null );
+egal( (bool) apply_filters( 'ah_spa_are_acces_el', false, 'x@exemplu.ro' ), false, 'ah_spa_are_acces_el: fără cookie → false' );
+ah_test_actiune( 'rest_api_init' );
+verifica( isset( $GLOBALS['ah_test_rute']['ah-spp/v1/push/sterge'] ), 'POST /ah-spp/v1/push/sterge există (puntea ei îl folosește)' );
+ah_test_actiune( 'ah_spp_zilnic' );
+verifica( abs( (int) get_option( 'ah_spp_ultima_rulare' ) - time() ) <= 2, 'ah_spp_ultima_rulare: notată de cronul zilnic (avizul din admin)' );
+
 echo $GLOBALS['ok'] . ' verificări trecute, ' . $GLOBALS['rau'] . " picate.\n";
 exit( $GLOBALS['rau'] ? 1 : 0 );

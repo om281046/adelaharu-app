@@ -5,7 +5,7 @@
  *   sp-intrare.html  același, fără cont (ecranul de intrare, cu „Sunt partenerul ei”)
  *   el-*.html        pagina lui (/pentru-el/), tipărită de fragment cu date reale (ciclul ei criptat în $wpdb-ul de test):
  *                    ok (browser), ok (aplicație), ok (aplicație, cu ea intrată pe telefon), toamna (fereastra iernii), pauza,
- *                    oprit, fără cont, link expirat
+ *                    oprit, fără cont, link expirat, ok cu rândul „linkul acesta nu mai e activ” (L3)
  * Rulare: php construieste.php <dosar>   (o face poze.cjs)
  */
 $dir = rtrim( $argv[1] ?? '', '/' );
@@ -75,6 +75,8 @@ $scrie = function ( $nume, $cfg ) use ( $dir ) {
 	file_put_contents( $dir . '/el-' . $nume . '.json', wp_json_encode( $cfg['azi'] ? $cfg['azi'] : array( 'ok' => false, 'stare' => 'iesit' ) ) );
 };
 $scrie( 'ok', ah_spp_cfg_el() );
+// linkul unei invitații oprite, deschis cu o sesiune activă: pagina rămâne, cu „Linkul acesta nu mai e activ.”
+$scrie( 'ok-oprit', ah_spp_cfg_el( 'oprit' ) );
 eval( 'function ah_spa_e_aplicatie(){ return ! empty( $GLOBALS["ah_test_app"] ); }' );
 $GLOBALS['ah_test_app'] = true;
 $scrie( 'aplicatie', ah_spp_cfg_el() );

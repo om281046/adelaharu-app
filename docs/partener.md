@@ -15,9 +15,16 @@ pentru puținele rânduri funcționale care nu au echivalent pe site.
    activare; păstrată și în copia de siguranță a lui `wp-config.php`, nu în baza de date). Fără ea, cheia se derivă din sărurile
    WordPress (`AUTH_KEY`/`SECURE_AUTH_KEY` + `_SALT`). **Schimbarea constantei sau a sărurilor** face emailurile partenerilor de
    necitit și îi deconectează pe toți (ei trebuie să-i retrimită invitația). Pe un site unde a rulat 1.2.0 (cheia în opțiunea
-   `ah_spp_secret`), primul `init` mută rândurile pe cheia nouă și șterge opțiunea; cookie-urile și linkurile „Oprește emailurile”
-   vechi mai merg 30 de zile (opțiunea `ah_spp_tranzitie`, doar cele două subchei, ștearsă la capăt).
-3. La activare, primul `init` creează tabelele (`dbDelta`, versiunea în opțiunea `ah_spp_tabel`, acum `4`: `2` a adus `token_nou_h`, `3` `acord_v`, `4` `pauza_de_la`) și cronul zilnic `ah_spp_zilnic` (8:10, ora site-ului: un lanț de evenimente unice, fiecare rulare o programează pe următoarea; un eveniment „daily” rămas de la 1.2.0 e înlocuit).
+   `ah_spp_secret`), trecerea se face în doi pași (1.4.0): primul `init` începe o **tranziție de 30 de zile** (opțiunea
+   `ah_spp_tranzitie`: subcheile cookie/stop + data de sfârșit) în care nimic nu se rescrie — rândurile vechi se citesc cu cheia veche
+   (emailul, amprenta, semnul fazei), ce e nou se scrie cu cheia nouă, cookie-urile și linkurile „Oprește emailurile” vechi merg;
+   la capăt, rândurile vechi se recriptează și `ah_spp_secret` + `ah_spp_tranzitie` se șterg.
+   **Întoarcerea sub 1.3 (rollback) e sigură doar în cele 30 de zile de după urcarea lui 1.3/1.4**: 1.2 găsește atunci aceeași cheie
+   și aceleași rânduri (doar invitațiile făcute între timp trebuie retrimise, iar un el al cărui cookie a fost semnat din nou își
+   deschide încă o dată linkul din email). După 30 de zile cheia veche nu mai există: **ștergeți copia veche a fragmentului**
+   (Code Snippets), ca să nu fie activată din greșeală (și-ar face altă cheie, iar emailurile lor n-ar mai putea fi citite).
+   (În 1.3.0 opțiunea se ștergea pe loc, deci un rollback ar fi pierdut toate emailurile.)
+3. La activare, primul `init` creează tabelele (`dbDelta`, versiunea în opțiunea `ah_spp_tabel`, acum `5`: `2` a adus `token_nou_h`, `3` `acord_v`, `4` `pauza_de_la`, `5` tokenul push unic pe (partener, token), nu pe token: indexul unic vechi `token_h` se scoate întâi, de mână, pentru că dbDelta nu șterge indexuri). Din 1.4.0 versiunea se notează doar dacă `SHOW COLUMNS` / `SHOW INDEX` arată că tabelele chiar au coloanele `token_nou_h`, `acord_v`, `pauza_de_la` și indexul `partener_token`; altfel jurnal și o nouă încercare peste o oră și cronul zilnic `ah_spp_zilnic` (8:10, ora site-ului: un lanț de evenimente unice, fiecare rulare o programează pe următoarea; un eveniment „daily” rămas de la 1.2.0 e înlocuit).
 4. LiteSpeed Cache › Excludes › Do Not Cache URIs += `/pentru-el/`; Do Not Cache Cookies += `ah_spp` (lista completă, cu cele ale
    modulului aplicație: `server/README.md`, pasul 5)
    (fragmentul trimite și `litespeed_control_set_nocache` + `nocache_headers`, dar o pagină deja în cache e servită înainte de PHP).
@@ -45,7 +52,12 @@ Tabelul `wp_ah_spp_parteneri`: `ea` = `ah_sp_ciclu_cheie(emailul ei)` (fără em
 **Cheia ciclului din 235 stă încă în baza de date** (opțiunea `ah_sp_ciclu_secret`, lângă tabelul `ah_sp_ciclu`): o copie a bazei
 de date ajunge pentru a decripta ciclurile lor. Nu e schimbată de acest fragment (235 rămâne neatins). Recomandare pentru Mircea:
 aceeași mutare în 235 (constantă în `wp-config.php` sau derivare din săruri, cu migrarea rândurilor), cu OK-ul lui și o copie de siguranță.
-Tabelul `wp_ah_spp_push`: tokenurile FCM ale lui (separate de `wp_ah_spa_push` al ei), cel mult 5.
+Tabelul `wp_ah_spp_push`: tokenurile FCM ale lui (separate de `wp_ah_spa_push` al ei), cel mult 5 pe invitație. Din 1.4.0, dacă
+același bărbat (aceeași adresă, `email_h`) e invitat de două femei, tokenul telefonului stă lângă fiecare invitație activă a lui
+(unic pe `partener` + `token_h`): amândouă îl notifică, iar pagina lui spune mereu a cui e pagina deschisă (`nume_ea`). `POST /push`
+îl pune pe toate (și îl scoate de la alt bărbat de pe același telefon); la prima intrare pe o invitație nouă, telefoanele lui de pe
+celelalte ajung și acolo; „Oprește accesul” (ea) îl scoate doar de lângă ea; „Ieși” (`POST /push/sterge`), „Șterge accesul meu” și un
+token pe care Firebase nu-l mai cunoaște îl scot de pe toate.
 
 `GET /azi` calculează pe server din `ah_sp_ciclu` (decriptat), cu portul exact al `CI.d` / `CI.lung` / `CI.faze` / `CI.azi`
 (inclusiv regulile `Number()`/`||`/`Math.round` din JS). Întoarce doar
@@ -82,18 +94,20 @@ cronul zilnic șterge și rândurile al căror rând `ah_sp_ciclu` lipsește (or
 Rutele care schimbă ceva (`invita`, `opreste`, `retrimite`, `email`, `push` POST, `iesi`, `sterge`) cer antetul `X-AH-SPP: 1`,
 altfel 403 `{motiv:'antet'}` (1.3.0; apărare CSRF în plus față de cookie-urile SameSite=Lax: un alt site nu-l poate trimite fără o
 cerere CORS preliminară, pe care WordPress nu o aprobă cât timp antetul nu e pus în `rest_allowed_cors_headers`). Nu îl cer:
-`GET /azi`, `GET /parteneri`, `POST /trimite-link` (fără cont; același răspuns oricui) și `DELETE /push` (șterge doar tokenul dat,
-pe care un alt site nu-l știe; îl cheamă și puntea ei din `ah-sp-aplicatie.php`, fără antetul acesta).
+`GET /azi`, `GET /parteneri`, `POST /trimite-link` (fără cont; același răspuns oricui) și `POST /push/sterge` / `DELETE /push`
+(șterg doar tokenul dat, pe care un alt site nu-l știe; le cheamă și puntea ei din `ah-sp-aplicatie.php`). Pagina lui folosește
+`POST /push/sterge` (1.4.0): unele firewalluri ale gazdei (WAF) blochează DELETE; `DELETE /push` rămâne pentru compatibilitate.
 
 | Ruta | Cine | |
 |---|---|---|
 | `GET /parteneri` | ea (`ah_sp`) | `{ciclu, max, parteneri:[{id,nume,email,stare:invitat\|a_intrat,vizita,creat}]}` |
-| `POST /invita` | ea | `{nume, email, nume_ea, acord:true}`. Refuză: fără acord, fără ciclu în cont (409 `ciclu`), adresa ei, prenume cu linkuri/`@`, același el activ, peste 2 activi, peste 6 invitații pe zi sau 3 pe zi spre aceeași adresă. |
+| `POST /invita` | ea | `{nume, email, nume_ea, acord:true}`. Refuză: fără acord, fără ciclu în cont (409 `ciclu`), adresa ei, prenume cu linkuri/`@`, același el activ, peste 2 activi, peste 6 invitații pe zi sau 3 pe zi spre aceeași adresă. **Adresa, strict (1.4.0)**: doar litere mici și spațiile de la capete tăiate, apoi trebuie să fie `is_email()` și neschimbată de `sanitize_email()`; orice caracter în afara ASCII-ului tipăribil (diacritice, spațiu, spațiu fără întrerupere, caractere invizibile, litere chirilice) → 400 „Adresa conține caractere nepermise (diacritice sau spații).” (înainte, `sanitize_email` le scotea pe tăcute: `andrei.ștefan@gmail.com` ajungea la `andrei.tefan@gmail.com`, adresa altcuiva). Verificarea limitei de 2 și inserarea se fac sub `GET_LOCK('ah_spp_'+cheia ei, 3)` (503 `ocupat` dacă nu se ia în 3 s). |
 | `POST /opreste` | ea | `{id}` — doar ale ei. |
-| `POST /retrimite` | ea | `{id}` — token nou și `ses` nou (linkul vechi și toate cookie-urile lui, pe orice telefon sau browser, nu mai merg), invitația din nou; 3 pe zi. |
+| `POST /retrimite` | ea | `{id}` — token nou și `ses` nou (linkul vechi și toate cookie-urile lui, pe orice telefon sau browser, nu mai merg), invitația din nou; 3 pe zi. Din 1.4.0 emailul pleacă întâi, cu tokenul nou, iar rândul se schimbă doar dacă a plecat (altfel `email:false` și linkul vechi rămâne). |
 | `GET /azi` | el (`ah_spp` sau `?t=`) | vezi mai sus; 401 `{stare:'iesit'}` fără cont. |
-| `POST /trimite-link` | oricine | `{email}` → același răspuns pentru orice adresă, în același timp (emailul pleacă după răspuns, prin `litespeed_finish_request` / `fastcgi_finish_request`; altfel orice răspuns durează cel puțin `AH_SPP_LINK_MS` = 1,5 s). Dacă e invitat activ: un link nou în `token_nou_h`; linkul pe care îl are rămâne valabil până deschide linkul nou (deci altcineva care îi știe adresa nu i-l poate strica); sesiunile deschise nu se ating. 5/oră de pe IP (429), 3/zi pe adresă (tăcut), capcană `site`. |
-| `POST /push`, `DELETE /push` | el / telefonul | `{token, platforma}`; validarea lui `ah_spa_valideaza_push` dacă există (APNs brut refuzat). |
+| `POST /trimite-link` | oricine | `{email}` (aceeași verificare strictă a adresei ca la `invita`) → același răspuns pentru orice adresă, în același timp (emailul pleacă după răspuns, prin `litespeed_finish_request` / `fastcgi_finish_request`; altfel orice răspuns durează cel puțin `AH_SPP_LINK_MS` = 1,5 s). Dacă e invitat activ: un link nou în `token_nou_h`; linkul pe care îl are rămâne valabil până deschide linkul nou (deci altcineva care îi știe adresa nu i-l poate strica); sesiunile deschise nu se ating. 5/oră de pe IP (429), 3/zi pe adresă (tăcut), capcană `site`. |
+| `POST /push` | el | `{token, platforma}`; validarea lui `ah_spa_valideaza_push` dacă există (APNs brut refuzat); tokenul pe toate invitațiile active ale lui. |
+| `POST /push/sterge`, `DELETE /push` | telefonul | `{token}` — scoate tokenul de pe toate invitațiile lui. |
 | `POST /email` | el | `{on}` — emailurile fazelor. Oprire și din orice email: `/pentru-el/?fara-emailuri=<id>.<HMAC>`. |
 | `POST /iesi` | el | scoate cookie-ul (pagina scoate și tokenul push). |
 | `POST /sterge` | el | `{confirmare:true}`. |
@@ -109,8 +123,13 @@ eroare de rețea, emailul n-a plecat), semnul vechi se pune la loc și rularea u
 început azi sau ieri (1.3.0; înainte notificarea se pierdea). Cronul: 8:10 ora site-ului în fiecare zi, și după schimbarea orei.
 Push: refolosește `ah_spa_fcm_cont`, `ah_spa_fcm_acces`, `ah_spa_fcm_mesaj` din modulul aplicație (prin `function_exists`);
 **nu** `ah_spa_trimite_push`, care șterge tokenuri invalide după `id` din tabelul ei (ar șterge rânduri greșite). Fără modulul
-aplicație sau fără cheia Firebase: doar jurnal (`ah_spp_jurnal`, fără adrese). Textul notificării (`ah_spp_mesaj_faza()`):
-titlul „Începe {numele fazei}” (de ex. „Începe Iarna ei interioară”), corpul = primul rând din `sprijin` al fazei (ca fișierul .ics din 235).
+aplicație sau fără cheia Firebase: doar jurnal (`ah_spp_jurnal`, fără adrese). **Textul notificării e neutru (1.4.0)**, pentru că
+se vede pe ecranul blocat: titlul „Ciclul ei”, corpul „Începe o fază nouă. Vezi cum o poți sprijini.” (`ah_spp_push_faza()`); faza
+și sprijinul se văd doar în pagină. Pe Android mesajul are în plus `android.notification.visibility = PRIVATE` (pus peste mesajul lui
+`ah_spa_fcm_mesaj`, în `ah_spp_mesaj_push()`): pe ecranul blocat apare doar că a venit o notificare. Subiectul emailului fazei e
+și el neutru: „Ciclul ei: o fază nouă” (`ah_spp_subiect_faza()`); corpul emailului păstrează numele fazei („Începe Iarna ei
+interioară”) și lista „Cum o poți sprijini”. Fiecare rulare a cronului zilnic notează `ah_spp_ultima_rulare` (unix time): modulul
+aplicație arată un aviz în admin când e veche.
 
 Emailuri (cadrul comun `ah_mail_trimite` / `ah_mail_p`; rezervă `wp_mail`): invitația (rândul ei = mesajul de WhatsApp din 235:
 „Ți-am pregătit ceva, cu textele Adelei Haru: aici vezi în ce anotimp al ciclului sunt și cum mă poți sprijini.”), linkul nou
@@ -133,7 +152,11 @@ Anunțul către ea „a intrat” nu e făcut (ar cere păstrarea emailului ei);
    tokenul dintr-un tabel în celălalt la fiecare `POST /push`. „Ieși” / „Șterge accesul meu” scot doar tokenul lui, `unregister()`
    doar dacă era al lui. Atingerea notificării lui: Azi, fără reîncărcarea paginii. Tokenul se retrimite o dată pe săptămână.
 6. **Ieșirea ei**: puntea nu atinge tokenul lui cât e intrat el (`AH_SPA.el`); pe o pagină fără niciun cont, un token rămas al lui
-   pleacă prin `DELETE /ah-spp/v1/push`.
+   pleacă prin `POST /ah-spp/v1/push/sterge` (din 1.4.0; `DELETE /push` rămâne).
+6b. **Interfețele din 1.4.0**: `do_action('ah_spa_cont_mutat', $vechi, $nou)` (ea și-a schimbat adresa contului) → rândurile ei trec de
+   la `ah_sp_ciclu_cheie($vechi)` la `ah_sp_ciclu_cheie($nou)`; `apply_filters('ah_spa_are_acces_el', …)` → cu un cookie `ah_spp`
+   valid, decide acesta (true doar pentru un acces activ, nu oprit), fără cookie rămâne valoarea primită; aplicația ei arată atunci
+   rândul „Ciclul ei” spre `/pentru-el/`; opțiunea `ah_spp_ultima_rulare` (vezi „Notificări”).
 7. **Harnașele**: `server/tests/vizual/poze.cjs` șterge doar `browser-*`/`aplicatie-*`; `server/tests/ruleaza.sh` rulează și
    `partener/ruleaza.sh` și `integrare/run.php`.
 8. Notele de recenzie, etichetele și adaosul la politică: `docs/store/` (actualizate).
@@ -152,7 +175,7 @@ Anunțul către ea „a intrat” nu e făcut (ar cere păstrarea emailului ei);
 
 `bash server/tests/partener/ruleaza.sh`
 
-- `php server/tests/partener/run.php` — 363 de verificări (stubs: copie a `tests/stubs.php` + funcțiile lui 235 și `ah_ciclu_faze` din 41
+- `php server/tests/partener/run.php` — 442 de verificări (stubs: copie a `tests/stubs.php` + funcțiile lui 235 și `ah_ciclu_faze` din 41
   citite direct din `reference/v2`): încărcare dublă, rute, criptare/GCM/cheie separată, token (format, doar sha256, rotație la
   retrimitere cu sesiune nouă; „trimite-mi linkul” nu anulează linkul vechi până la folosirea celui nou; timpul răspunsului și
   emailul trimis după răspuns), acordul (lipsă/implicit/ciclul nu e în cont), limitele (2 activi, 6/zi, 3 retrimiteri,
@@ -168,9 +191,29 @@ Anunțul către ea „a intrat” nu e făcut (ar cere păstrarea emailului ei);
   fazei refăcute, rând stricat lăsat, o singură dată, cookie și link de oprire vechi primite 30 de zile, apoi refuzate); antetul
   X-AH-SPP pe cele 7 rute; cronul la 8:10 peste schimbările orei (25 oct. 2026, 28 mar. 2027), fără programare dublă, „daily” înlocuit;
   notificarea reîncercată după FCM fără jeton / eroare de rețea, fără dubluri, și la două rulări simultane.
+  Din 1.4.0: adresa strictă (andrei.ștefan@, spațiu în mijloc, spațiu fără întrerupere, „о” chirilic, spațiu de lățime zero → 400 cu
+  mesajul clar și niciun email; spațiile de la capete și majusculele, acceptate; la fel în `/trimite-link`); tranziția cheii (cheia
+  veche rămâne 30 de zile, rândurile vechi nerescrise și lizibile cu cheia veche = rollback sigur, citite de 1.4 prin cheia veche:
+  lista ei, „L-ai invitat deja”, „Trimite-mi linkul”, fără notificare falsă; ce e nou cu cheia nouă; la capăt recriptare, cheia și
+  subcheile șterse, cookie/link vechi refuzate; o altă cheie veche după capăt nu atinge rândurile mutate); notificarea neutră
+  (titlu, corp, nimic despre fază în mesajul FCM, `visibility: PRIVATE`; subiectul emailului); `/retrimite` cu emailul căzut nu
+  schimbă tokenul/sesiunea; linkul unei invitații oprite nu înlocuiește un cookie activ; invitat de două femei: tokenul pe ambele,
+  push de la amândouă, oprirea uneia, `POST /push/sterge` și „Șterge accesul meu” de pe toate, alt bărbat pe același telefon; lacătul
+  `/invita` (ținut → 503, eliberat după reușită și după refuz) și **o rafală reală în paralel** (6 procese `pcntl_fork`, SQLite pe
+  disc, lacătul = `flock`, citirea limitei încetinită 150 ms): fără lacăt trec 6 (controlul), cu lacăt exact 2 + 4 „max”; versiunea
+  tabelelor nenotată când lipsește indexul sau o coloană, reîncercare peste o oră, apoi 5; `ah_spa_cont_mutat`, `ah_spa_are_acces_el`,
+  `ah_spp_ultima_rulare`.
 - `node server/tests/partener/faze.test.cjs` — 12.750 de cazuri (grila 21–40 × 2–9 × fiecare zi + 6.000 de istorii aleatoare cu
   date stricate, numere ca text, zecimale, ani 0–99, luni/zile peste limită, schimbarea orei): `ah_spp_*` = `CI` din `sn235.php`, 73.273 de comparații.
-- `node server/tests/partener/poze.cjs` — 138 de verificări (din 1.3.0 și: foile de confirmare, mesajul persistent `role=status`, `aria-invalid` + focus, tastatura câmpurilor, ținte de 44 px, seara după telefon și după alegerea ei, cu contrast AA măsurat, toamna cu fereastra, pauza cu Învață, bara la telefonul culcat / ecran mare, butonul Înapoi pe Android, Figtree cursiv în aplicație, antetul X-AH-SPP; înainte 92 (Azi fără inel și fără „Ziua N”, „Ce urmează” cu începuturile; Învață: 6 pagini, toamna doar din textele site-ului, podcastul; plus linkul lipit, pe ecranul de intrare și pe pagina lui) în Chromium 390×844 și pozele `docs/screenshots-v2/partener-*.png` (în plus, de la integrare: push-ul lui și al cui e tokenul, fără push fără Firebase / cu APNs / cu ea intrată pe telefon).
+- `node server/tests/partener/poze.cjs` — 197 de verificări (din 1.4.0 și: **axe-core** — `server/tests/partener/package.json`,
+  instalat de `ruleaza.sh` cu `npm ci` — 0 încălcări serious/critical pe Azi, Învață, Toamna, podcast, Setări, foaia, seara, aplicație
+  (Azi, Setări), pauza, oprit, fără cont, link expirat și pe cardul ei (ciclul nu e în cont, formularul, lista, doi parteneri, foaia,
+  panoul „Sunt partenerul ei”); focus pe h1 (`tabindex=-1`, fără derulare) și `document.title` după fiecare schimbare de ecran;
+  `<main>`, „Ce urmează” ca `ul/li`, h2 în paginile din Învață, `aria-label` la podcast și „Înapoi la Învață”, h1 „Intră în pagina
+  ei” și `role=alert` la linkul expirat; zoom 200% (195 px CSS): fără derulare orizontală pe Azi, Învață, pagini, podcast, Setări,
+  foaie, fără cont; foile și Setările cu butoanele unul sub altul, fiecare pe un rând; „Trimite-i din nou linkul”; adresa cu
+  diacritice oprită în cele trei formulare; după o cerere căzută butonul revine activ, cu focus, `aria-busy` cât așteaptă; „Nu am putut
+  salva…” după 8 s; adresa curățată de `?t=`; linkul oprit cu sesiune activă; din 1.3.0 și: foile de confirmare, mesajul persistent `role=status`, `aria-invalid` + focus, tastatura câmpurilor, ținte de 44 px, seara după telefon și după alegerea ei, cu contrast AA măsurat, toamna cu fereastra, pauza cu Învață, bara la telefonul culcat / ecran mare, butonul Înapoi pe Android, Figtree cursiv în aplicație, antetul X-AH-SPP; înainte 92 (Azi fără inel și fără „Ziua N”, „Ce urmează” cu începuturile; Învață: 6 pagini, toamna doar din textele site-ului, podcastul; plus linkul lipit, pe ecranul de intrare și pe pagina lui) în Chromium 390×844 și pozele `docs/screenshots-v2/partener-*.png` (în plus, de la integrare: push-ul lui și al cui e tokenul, fără push fără Firebase / cu APNs / cu ea intrată pe telefon).
 
 ## De decis / de verificat
 
@@ -186,6 +229,14 @@ Anunțul către ea „a intrat” nu e făcut (ar cere păstrarea emailului ei);
 - `wp_date()` pentru „azi” pe server = ora site-ului (Europe/Bucharest); telefonul ei folosește ora telefonului.
 
 ## Rânduri funcționale fără echivalent pe site (de citit de Adela)
+
+**Noi în 1.4.0** (puține, funcționale): „Adresa conține caractere nepermise (diacritice sau spații).” (cardul ei, „Trimite-mi
+linkul” la el și pe ecranul de intrare); notificarea lui „Ciclul ei” / „Începe o fază nouă. Vezi cum o poți sprijini.”; subiectul
+emailului fazei „Ciclul ei: o fază nouă”; h1 „Intră în pagina ei” (el, fără cont / link expirat); „Trimite-i din nou linkul” (ea,
+pentru cine a intrat deja); `aria-label` „Ascultă „{titlu}” în Apple Podcasts” și „Înapoi la Învață”; titlurile documentului
+„{Azi | Învață | {pagina} | Setări} · Ciclul ei · Adela Haru”. Refolosite: „Nu am putut salva. Verifică internetul și mai încearcă.”
+(din 235), „Linkul acesta nu mai e activ.” (din `?ciclul-ei`), „N-a mers. Mai încearcă o dată.”.
+
 
 Tot restul (fazele, sprijinul, citatele, podcastul, nota, „oprit”, „Fă un link nou”, „Oprește linkul”, „Ieși din cont pe acest
 telefon”, „Emailurile fazelor”, „Primești emailurile fazelor.”, „Păstrează-le în contul meu”, „Linkul nu pare întreg…”, „Scrie,
