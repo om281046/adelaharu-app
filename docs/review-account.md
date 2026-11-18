@@ -45,10 +45,18 @@ Orice altă adresă trece neatinsă (filtrul întoarce `$rez` primit). Corpul vi
    fără să atingă contoarele `ah_sp_ip_*` / `ah_sp_em_*` ale lui 235 (recenzorii repetă des și ar da de limita
    de 3 coduri / 15 minute). Limită proprie: 30 de cereri / oră / IP (`ah_spa_l_*`, ca restul fragmentului),
    peste ea `429` cu mesajul din 235 („Ai cerut deja câteva coduri. Încearcă din nou peste 15 minute.”).
-3. **`POST /ah-sp/v1/intra`** cu adresa de recenzie:
-   - întâi limita: după 5 coduri greșite la rând pentru adresa de recenzie ⇒ `429` 15 minute
-     („Prea multe încercări. Cere un cod nou.”, textul din 235), apoi se poate din nou (nu blocare definitivă,
-     ca recenzia să nu se blocheze singură). Contorul în transient `ah_spa_rec_n`, rezervat **înainte** de comparare;
+3. **`POST /ah-sp/v1/intra`** cu adresa de recenzie (2.2.0: contoare **atomice**, tabelul `wp_ah_spa_incercari`,
+   `INSERT IGNORE` + un singur `UPDATE n = n + 1` în baza de date, rezervate **înainte** de comparare; o rafală de cereri
+   trimise deodată nu primește mai multe încercări):
+   - pe IP (IPv6 pe /64): cel mult 5 încercări la 15 minute, apoi `429` („Prea multe încercări. Cere un cod nou.”,
+     textul din 235) până trec cele 15 minute. Alt IP are încercările lui;
+   - plafonul total: după **20 de coduri greșite** (de pe orice IP-uri, de la ultima intrare reușită / ultima pornire),
+     contul de recenzie se **oprește** (opțiunea `ah_spa_recenzie['oprit']` = momentul), echipa primește **un** email
+     („Aplicația: contul de recenzie a fost oprit”, la Emailul echipei, implicit `contact@adelaharu.ro`, fără cod), iar
+     adresa de recenzie trece pe drumul obișnuit din 235 (cod pe email, cu paza din secțiunea 11). Se pornește din nou
+     din **Setări › Aplicația mobilă › Contul de recenzie**: bifa „Pornește din nou contul de recenzie” sau un cod nou
+     (dacă nu era nicio recenzie în curs, cineva a încercat să ghicească: puneți un cod nou);
+   - o intrare reușită golește ambele contoare;
    - codul: `preg_replace('/\D/', '', cod)`, 6 cifre, `wp_check_password( $cod, $hash )` (timp constant);
    - greșit ⇒ `403 {"ok":false,"mesaj":"Codul nu se potrivește. Verifică cifrele."}` (textul din 235);
    - bun ⇒ `ah_sp_seteaza_cookie( $e )` (păzit cu `function_exists`; dacă lipsește 235, filtrul nu face nimic),
@@ -68,7 +76,8 @@ Orice altă adresă trece neatinsă (filtrul întoarce `$rez` primit). Corpul vi
    push-ul, dispozitivele, cookie-urile. Comenzile rămân, deci recenzorul poate intra din nou. Emailul către echipă
    pleacă și el, cu mențiunea „(contul de recenzie)” în subiect, ca să nu sperie pe nimeni.
 7. **Push pe adresa de recenzie:** primește notificările ca oricine (Apple vrea să le vadă). Fără excepții.
-8. **Jurnal** (`ah_spa_jurnal`): „recenzie: cod cerut”, „recenzie: intrare”, „recenzie: cod greșit”, cu IP-ul
+8. **Jurnal** (`ah_spa_jurnal`): „recenzie: cod cerut”, „recenzie: intrare”, „recenzie: cod greșit” (cu „n din 20”),
+   „recenzie: OPRIT după … coduri greșite”, cu IP-ul
    trunchiat (/24 pentru IPv4, /48 pentru IPv6). Nu se scrie niciodată codul.
 9. **Teste** (`server/tests/`), cu stuburi pentru `WP_REST_Request` / `rest_pre_dispatch`:
    - opțiunea goală ⇒ filtrul întoarce `null` pentru orice cerere (235 rulează neschimbat);
@@ -76,7 +85,9 @@ Orice altă adresă trece neatinsă (filtrul întoarce `$rez` primit). Corpul vi
    - adresa de recenzie cu majuscule și spații ⇒ recunoscută;
    - `/cod` ⇒ `200 ok`, niciun apel la `ah_mail_trimite`, contoarele 235 neatinse;
    - `/intra` cu codul bun ⇒ `ah_sp_seteaza_cookie` chemat o dată cu adresa normalizată; cu cod greșit ⇒ 403;
-     a 6-a încercare ⇒ 429; după 15 minute ⇒ din nou acceptă;
+     a 6-a încercare de pe același IP ⇒ 429; alt IP mai are încercări; după 15 minute ⇒ din nou acceptă; o rafală de 30
+     de cereri de pe un IP ⇒ exact 5 comparații; 20 de coduri greșite de pe IP-uri diferite ⇒ oprit + un email, apoi
+     codul bun merge la 235; „Pornește din nou” / cod nou ⇒ merge din nou;
    - `recenzie_doar_app` bifat și UA de browser ⇒ `null` (merge pe ruta normală din 235);
    - metodă GET sau altă rută (`/ah-sp/v1/iesi`, `/ah-sp/v1/ciclu-date`) ⇒ `null`;
    - validarea codului la salvare (refuzate `123456`, `000000`, `5 cifre`, litere); hash-ul, nu codul, în opțiune;

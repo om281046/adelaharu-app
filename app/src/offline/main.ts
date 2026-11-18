@@ -9,7 +9,7 @@
 import './fonturi.css';
 import './stil.css';
 
-import { adresaFisier, ascunde_splash, bara_stare, existaFisier, mediaOpreste, platforma, preferinta, uriNativ } from './cap';
+import { adresaFisier, ascunde_splash, bara_stare, existaFisier, laInapoi, mediaOpreste, platforma, preferinta, uriNativ } from './cap';
 import { F, SIT, azi0, citesteJson, data, situatie, ziua, type ZiCiclu } from './ciclu';
 import { ceas, citesteDescarcate, dosarImplicit, durataScurta, type Descarcata } from './descarcate';
 import { Player, SALT, type Piesa } from './player';
@@ -245,6 +245,14 @@ export async function porneste(): Promise<void> {
   window.addEventListener('pagehide', () => mediaOpreste());
 
   legaPlayer(randuri);
+  // Android, Înapoi: întâi închide playerul deschis, altfel aplicația trece în fundal (fără bucla spre site)
+  void laInapoi(() => {
+    if (player?.stare.piesa) {
+      player.opreste();
+      return true;
+    }
+    return false;
+  });
   ascunde_splash();
 }
 

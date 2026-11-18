@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 12+: nimic din aplicație nu pleacă în copia din cloud și nici la mutarea pe alt telefon (device-transfer;
+     allowBackup="false" NU o oprește pe aceasta). Datele ciclului (Preferences = sharedprefs CapacitorStorage, localStorage
+     din WebView), cookie-urile contului și meditațiile descărcate rămân doar pe acest telefon. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="sharedpref" path="." />
+        <exclude domain="database" path="." />
+        <exclude domain="file" path="." />
+        <exclude domain="root" path="." />
+        <exclude domain="external" path="." />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" path="." />
+        <exclude domain="database" path="." />
+        <exclude domain="file" path="." />
+        <exclude domain="root" path="." />
+        <exclude domain="external" path="." />
+    </device-transfer>
+</data-extraction-rules>

@@ -71,6 +71,7 @@ function esc_url_raw( $s ) { $s = trim( (string) $s ); return preg_match( '~^htt
 function wp_json_encode( $d, $f = 0 ) { return json_encode( $d, $f ); }
 function wp_parse_url( $u, $c = -1 ) { return parse_url( (string) $u, $c ); }
 function home_url( $p = '/' ) { return 'https://www.adelaharu.ro' . $p; }
+function content_url( $p = '' ) { return 'https://www.adelaharu.ro/wp-content' . $p; }
 function rest_url( $p = '' ) { return 'https://www.adelaharu.ro/wp-json/' . ltrim( $p, '/' ); }
 function admin_url( $p = '' ) { return 'https://www.adelaharu.ro/wp-admin/' . $p; }
 function add_query_arg( $args, $url, $url3 = null ) {
@@ -95,9 +96,10 @@ class WP_Error { public $code; public $message; public function __construct( $c 
 function wp_hash_password( $p ) { return password_hash( (string) $p, PASSWORD_BCRYPT, array( 'cost' => 4 ) ); }
 function wp_check_password( $p, $h, $id = '' ) { $GLOBALS['ah_test_check_pw'] = ( $GLOBALS['ah_test_check_pw'] ?? 0 ) + 1; return '' !== (string) $h && password_verify( (string) $p, (string) $h ); }
 /* coada de scripturi și stiluri (doar ce folosește scoaterea urmăririi) */
-class Ah_Test_Deps { public $queue = array(); public $registered = array(); public $scoase = array();
-	public function adauga( $h, $src ) { $this->queue[] = $h; $this->registered[ $h ] = (object) array( 'src' => $src ); } }
+class Ah_Test_Deps { public $queue = array(); public $registered = array(); public $scoase = array(); public $sterse = array();
+	public function adauga( $h, $src, $deps = array() ) { $this->queue[] = $h; $this->registered[ $h ] = (object) array( 'src' => $src, 'deps' => $deps ); } }
 function wp_dequeue_script( $h ) { $o = $GLOBALS['wp_scripts']; $o->queue = array_values( array_diff( $o->queue, array( $h ) ) ); $o->scoase[] = $h; }
+function wp_deregister_style( $h ) { $o = $GLOBALS['wp_styles']; unset( $o->registered[ $h ] ); $o->sterse[] = $h; }
 function wp_dequeue_style( $h ) { $o = $GLOBALS['wp_styles']; $o->queue = array_values( array_diff( $o->queue, array( $h ) ) ); $o->scoase[] = $h; }
 
 /* Redirecționarea: o excepție, ca testul să vadă unde ar fi plecat. */
@@ -179,6 +181,7 @@ class Ah_Test_Wpdb {
 		$this->pdo->exec( 'CREATE TABLE wp_ah_spa_push ( id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT NOT NULL, token TEXT NOT NULL, token_h TEXT NOT NULL UNIQUE, platforma TEXT DEFAULT \'\', versiune TEXT DEFAULT \'\', disp TEXT DEFAULT \'\', creat TEXT, vazut TEXT )' );
 		$this->pdo->exec( 'CREATE TABLE wp_ah_sp_ciclu ( id INTEGER PRIMARY KEY AUTOINCREMENT, cheie TEXT UNIQUE, date TEXT, acord TEXT, actualizat TEXT )' );
 		$this->pdo->exec( 'CREATE TABLE wp_ah_ciclu ( id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT UNIQUE, token TEXT, start TEXT )' );
+		$this->pdo->exec( 'CREATE TABLE wp_ah_spa_incercari ( cheie TEXT PRIMARY KEY, n INTEGER NOT NULL DEFAULT 0, expira INTEGER NOT NULL DEFAULT 0 )' );
 	}
 	public function get_charset_collate() { return ''; }
 	public function prepare( $q, ...$a ) {
@@ -187,12 +190,14 @@ class Ah_Test_Wpdb {
 	}
 	public function get_row( $q, $o = null ) { $r = $this->pdo->query( $q )->fetch( PDO::FETCH_ASSOC ); return $r ? $r : null; }
 	public function get_results( $q, $o = null ) { return $this->pdo->query( $q )->fetchAll( PDO::FETCH_ASSOC ); }
+	public function get_col_test( $q ) { return array_map( 'strval', $this->pdo->query( $q )->fetchAll( PDO::FETCH_COLUMN ) ); }
 	public function get_var( $q ) { $r = $this->pdo->query( $q )->fetch( PDO::FETCH_NUM ); return $r ? $r[0] : null; }
 	private function where( $w ) { return implode( ' AND ', array_map( function ( $k, $v ) { return $k . ' = ' . $this->pdo->quote( (string) $v ); }, array_keys( $w ), $w ) ); }
 	public function insert( $t, $d ) { return $this->pdo->exec( 'INSERT INTO ' . $t . ' (' . implode( ',', array_keys( $d ) ) . ') VALUES (' . implode( ',', array_map( array( $this->pdo, 'quote' ), array_map( 'strval', $d ) ) ) . ')' ); }
 	public function update( $t, $d, $w ) { return $this->pdo->exec( 'UPDATE ' . $t . ' SET ' . implode( ', ', array_map( function ( $k, $v ) { return $k . ' = ' . $this->pdo->quote( (string) $v ); }, array_keys( $d ), $d ) ) . ' WHERE ' . $this->where( $w ) ); }
 	public function delete( $t, $w ) { return $this->pdo->exec( 'DELETE FROM ' . $t . ' WHERE ' . $this->where( $w ) ); }
-	public function query( $q ) { return $this->pdo->exec( $q ); }
+	/* MySQL → SQLite: doar „INSERT IGNORE” (contoarele atomice); restul e SQL comun amândurora */
+	public function query( $q ) { $GLOBALS['ah_test_sql'][] = $q; return $this->pdo->exec( preg_replace( '/^INSERT IGNORE\b/i', 'INSERT OR IGNORE', $q ) ); }
 }
 $GLOBALS['wpdb'] = new Ah_Test_Wpdb();
 

@@ -26,7 +26,25 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
             FirebaseApp.configure()
         }
         #endif
+        AppDelegate.faraBackup()
         return true
+    }
+
+    /// Ce ține de contul ei rămâne doar pe acest telefon, nu în copia iCloud / din computer: meditațiile descărcate
+    /// (Library/NoCloud, deja „notSyncedLibrary”, dar îl marcăm oricum), datele WKWebView (localStorage-ul Ciclului meu,
+    /// IndexedDB, cache) și cookie-urile contului. Preferences (UserDefaults: ah_ciclu, ah_descarcate…) nu se pot exclude
+    /// cheie cu cheie: rămân în copia telefonului (criptată dacă ea a ales copia criptată); vezi docs/release.md.
+    /// Se reaplică la fiecare pornire (WebKit poate recrea folderele).
+    static func faraBackup() {
+        let fm = FileManager.default
+        guard let lib = fm.urls(for: .libraryDirectory, in: .userDomainMask).first else { return }
+        for sub in ["NoCloud", "WebKit", "Cookies", "Caches/WebKit"] {
+            var u = lib.appendingPathComponent(sub, isDirectory: true)
+            guard fm.fileExists(atPath: u.path) else { continue }
+            var v = URLResourceValues()
+            v.isExcludedFromBackup = true
+            try? u.setResourceValues(v)
+        }
     }
 
     // Notificările push (@capacitor/push-notifications). Serverul trimite prin FCM HTTP v1, deci Capacitor trebuie să

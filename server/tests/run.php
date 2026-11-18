@@ -28,7 +28,7 @@ function redirect_spre( $uri, $devreme = true ) {
 }
 
 /* ---------- 0. fragmentul se încarcă o singură dată, fără efecte ---------- */
-egal( AH_SPA, '2.1.0', 'versiunea fragmentului' );
+egal( AH_SPA, '2.2.0', 'versiunea fragmentului' );
 verifica( isset( $GLOBALS['ah_test_hooks']['template_redirect'] ), 'cârligul de redirecționare e legat' );
 $n_hooks = count( $GLOBALS['ah_test_hooks'], COUNT_RECURSIVE );
 require __DIR__ . '/../ah-sp-aplicatie.php'; // a doua oară: gărzile AH_SPA și function_exists
@@ -179,8 +179,15 @@ egal( ah_test_actiune( 'wp_head' ), '', 'browser: nimic în <head>' );
 egal( ah_test_filtru( 'body_class', array( 'ahsp-pagina' ) ), array( 'ahsp-pagina' ), 'browser: clasele corpului neatinse' );
 ca_aplicatie();
 $cap = ah_test_actiune( 'wp_head' );
-verifica( false !== strpos( $cap, '<style id="ahspa-css">' ) && false !== strpos( $cap, 'window.AH_SPA=' ) && false !== strpos( $cap, 'window.AHApp=' ), 'aplicație: stilul și puntea în <head>' );
+verifica( false !== strpos( $cap, '<link rel="stylesheet" id="ahspa-css" href="https://www.adelaharu.ro/wp-json/ah-spa/v1/punte?f=css&amp;v=' . ah_spa_punte_ver() . '">' ), 'aplicație: stilul punții dintr-un fișier cu versiune' );
+verifica( false !== strpos( $cap, '<script id="ahspa-js" src="https://www.adelaharu.ro/wp-json/ah-spa/v1/punte?f=js&amp;v=' . ah_spa_punte_ver() . '" defer></script>' ), 'aplicație: puntea dintr-un fișier cu versiune, defer' );
+verifica( false !== strpos( $cap, '<script id="ahspa-cfg">window.AH_SPA=' ) && false === strpos( $cap, 'window.AHApp=' ), 'aplicație: în pagină doar configurația și partea devreme (fără puntea întreagă)' );
+verifica( strlen( $cap ) < 6000, 'aplicație: <head>-ul punții e mic (' . strlen( $cap ) . ' octeți)' );
+egal( substr_count( $cap, 'rel="preload"' ), 4, 'aplicație: fonturile primului ecran preîncărcate (Figtree, Gilda; latin și latin-ext)' );
+verifica( false !== strpos( $cap, '/wp-content/uploads/elementor/google-fonts/fonts/figtree-xms-huzqdcfdgfmm4s9dq.woff2" as="font" type="font/woff2" crossorigin>' ), 'aplicație: preload Figtree latin, crossorigin' );
 verifica( false === strpos( $cap, 'ana@exemplu.ro' ), 'puntea nu tipărește adresa de email' );
+verifica( 0 === strpos( ah_spa_punte_ver(), '2.2.0-' ) && false === strpos( ah_spa_js() . ah_spa_css_tot(), 'ana@exemplu.ro' ), 'fișierele punții: aceleași pentru toate (fără date personale)' );
+verifica( false !== strpos( ah_spa_css_tot(), '#ahsp a[href="https://www.adelaharu.ro/"]' ), 'aplicație: „Înapoi pe site” ascuns din stil' );
 preg_match( '~window\.AH_SPA=(\{.*?\});\(function~s', $cap, $m );
 $cfg = json_decode( $m[1] ?? 'null', true );
 egal( $cfg['zona'] ?? '', 'sp', 'zona Spațiul meu' );
@@ -191,12 +198,12 @@ verifica( in_array( 'ahspa-app', ah_test_filtru( 'body_class', array() ), true )
 $GLOBALS['ah_test_e_pagina'] = false;
 $_SERVER['REQUEST_URI']      = '/sala-de-curs/?comanda=1&cheie=x';
 verifica( false !== strpos( ah_test_actiune( 'wp_head' ), '"zona":"sala"' ), 'aplicație: puntea și în sala de curs' );
-verifica( false !== strpos( ah_test_actiune( 'wp_head' ), '#ahsp a[href="https://www.adelaharu.ro/"]' ), 'aplicație: „Înapoi pe site” ascuns din stil' );
+
 foreach ( array( '/politica-de-confidentialitate/', '/termeni-si-conditii/', '/politica-de-cookie-uri/?x=1' ) as $pol ) {
 	$_SERVER['REQUEST_URI'] = $pol;
 	egal( ah_spa_zona(), 'politici', 'zona politici: ' . $pol );
 	$cap = ah_test_actiune( 'wp_head' );
-	verifica( false !== strpos( $cap, '"zona":"politici"' ) && false !== strpos( $cap, 'html.ahspa-z-politici .elementor-location-header' ) && false !== strpos( $cap, '#ah-bf-banda' ), 'aplicație: pe ' . $pol . ' stilul ascunde antetul, subsolul și Black Friday' );
+	verifica( false !== strpos( $cap, '"zona":"politici"' ) && false !== strpos( $cap, 'id="ahspa-css"' ) && false !== strpos( ah_spa_css(), 'html.ahspa-z-politici .elementor-location-header' ) && false !== strpos( ah_spa_css(), '#ah-bf-banda' ), 'aplicație: pe ' . $pol . ' stilul ascunde antetul, subsolul și Black Friday' );
 	verifica( in_array( 'ahspa-politici', ah_test_filtru( 'body_class', array() ), true ), 'aplicație: clasa ahspa-politici pe ' . $pol );
 }
 ca_browser();
@@ -301,9 +308,13 @@ egal( (int) $wpdb->get_var( 'SELECT COUNT(*) FROM wp_ah_spa_push' ), 1, 'acelaș
 $GLOBALS['ah_test_email'] = 'maria@exemplu.ro';
 ah_spa_r_push( new WP_REST_Request( $H, array( 'token' => $fcm, 'platforma' => 'ios', 'disp' => 'tel-1' ) ) );
 egal( $wpdb->get_var( 'SELECT email FROM wp_ah_spa_push' ), 'maria@exemplu.ro', 'alt cont pe același telefon: tokenul trece la noul cont' );
-$GLOBALS['ah_test_email'] = 'ana@exemplu.ro';
 ah_spa_r_push( new WP_REST_Request( $H, array( 'token' => $fcm . 'NOU', 'platforma' => 'ios', 'disp' => 'tel-1' ) ) );
 egal( (int) $wpdb->get_var( "SELECT COUNT(*) FROM wp_ah_spa_push WHERE disp = 'tel-1'" ), 1, 'același telefon, token nou: cel vechi pleacă' );
+// „disp” vine de la telefon: o altă adresă care trimite același disp NU scoate tokenurile Mariei
+$GLOBALS['ah_test_email'] = 'ana@exemplu.ro';
+ah_spa_r_push( new WP_REST_Request( $H, array( 'token' => $fcm . 'ANA', 'platforma' => 'ios', 'disp' => 'tel-1' ) ) );
+egal( $wpdb->get_col_test( "SELECT email FROM wp_ah_spa_push WHERE disp = 'tel-1' ORDER BY email" ), array( 'ana@exemplu.ro', 'maria@exemplu.ro' ), 'același disp de la altă adresă: rândul Mariei rămâne (AND email)' );
+$wpdb->query( "DELETE FROM wp_ah_spa_push WHERE disp = 'tel-1'" );
 for ( $i = 0; $i < 12; $i++ ) {
 	ah_spa_push_salveaza( 'ana@exemplu.ro', array( 'token' => $fcm . 'T' . $i, 'platforma' => 'android', 'versiune' => '', 'disp' => 'tel-x' . $i ) );
 }
@@ -524,7 +535,7 @@ $cere = function ( $ruta, $corp, $metoda = 'POST' ) {
 $tr235 = function () { return array_values( array_filter( array_keys( $GLOBALS['ah_test_transients'] ), function ( $k ) { return 0 === strpos( $k, 'ah_sp_ip_' ) || 0 === strpos( $k, 'ah_sp_em_' ) || 0 === strpos( $k, 'ah_sp_cod_' ); } ) ); };
 ca_aplicatie();
 delete_option( 'ah_spa_recenzie' );
-egal( ah_spa_recenzie(), array( 'email' => '', 'hash' => '', 'doar_app' => 1 ), 'recenzie: implicit oprit, „doar în aplicație” bifat' );
+egal( ah_spa_recenzie(), array( 'email' => '', 'hash' => '', 'doar_app' => 1, 'oprit' => 0 ), 'recenzie: implicit oprit, „doar în aplicație” bifat' );
 foreach ( array( '/ah-sp/v1/cod' => array( 'email' => $REC ), '/ah-sp/v1/intra' => array( 'email' => $REC, 'cod' => $COD ) ) as $ruta => $corp ) {
 	egal( $cere( $ruta, $corp ), null, 'recenzie: opțiunea goală ⇒ ' . $ruta . ' merge la 235' );
 }
@@ -605,9 +616,13 @@ foreach ( array( '135790', '24680', '975310' ) as $g ) { $cere( '/ah-sp/v1/intra
 $r = $cere( '/ah-sp/v1/intra', array( 'email' => $REC, 'cod' => $COD ) );
 verifica( 429 === $r->get_status() && 'Prea multe încercări. Cere un cod nou.' === $r->get_data()['mesaj'], 'recenzie: a 6-a încercare după 5 greșite ⇒ 429, chiar cu codul bun' );
 egal( $GLOBALS['ah_test_cookie_sp'], array(), 'recenzie: niciun cookie cât e blocat' );
-$GLOBALS['ah_test_transients']['ah_spa_rec_n'][1] = time() - 1; // au trecut 15 minute
+$_SERVER['REMOTE_ADDR'] = '198.51.100.9';
+egal( $cere( '/ah-sp/v1/intra', array( 'email' => $REC, 'cod' => '000002' ) )->get_status(), 403, 'recenzie: limita e pe IP (alt IP mai are încercări)' );
+$_SERVER['REMOTE_ADDR'] = '203.0.113.77';
+$wpdb->query( 'UPDATE wp_ah_spa_incercari SET expira = ' . ( time() - 1 ) ); // au trecut 15 minute
 egal( $cere( '/ah-sp/v1/intra', array( 'email' => $REC, 'cod' => $COD ) )->get_status(), 200, 'recenzie: după 15 minute acceptă din nou' );
-egal( get_transient( 'ah_spa_rec_n' ), false, 'recenzie: contorul la zero după o intrare reușită' );
+egal( (int) $wpdb->get_var( "SELECT COUNT(*) FROM wp_ah_spa_incercari WHERE cheie IN ('" . ah_spa_contor_cheie( 'rec_tot' ) . "','" . ah_spa_contor_cheie( 'rec_ip|203.0.113.77' ) . "')" ), 0, 'recenzie: contoarele (IP și total) la zero după o intrare reușită' );
+egal( get_transient( 'ah_spa_rec_n' ), false, 'recenzie: fără vechiul contor neatomic (transient)' );
 $n0 = $GLOBALS['ah_test_check_pw'] ?? 0;
 $cere( '/ah-sp/v1/intra', array( 'email' => $REC, 'cod' => $COD ) );
 egal( ( $GLOBALS['ah_test_check_pw'] ?? 0 ) - $n0, 1, 'recenzie: codul se compară cu wp_check_password (timp constant)' );
@@ -617,6 +632,32 @@ ca_browser();
 egal( $cere( '/ah-sp/v1/intra', array( 'email' => $REC, 'cod' => $COD ) )->get_status(), 200, 'recenzie: doar_app debifat ⇒ merge și pe web' );
 update_option( 'ah_spa_recenzie', $o );
 ca_aplicatie();
+// rafală în paralel: toate cererile își rezervă încercarea înainte de comparare ⇒ cel mult 5 comparații pe IP
+$n0 = $GLOBALS['ah_test_check_pw'] ?? 0;
+$GLOBALS['ah_test_cookie_sp'] = array();
+$coduri = array();
+for ( $i = 0; $i < 30; $i++ ) { $coduri[] = $cere( '/ah-sp/v1/intra', array( 'email' => $REC, 'cod' => sprintf( '%06d', 100000 + $i * 7 ) ) )->get_status(); }
+egal( array( ( $GLOBALS['ah_test_check_pw'] ?? 0 ) - $n0, count( array_keys( $coduri, 429 ) ) ), array( 5, 25 ), 'recenzie, rafală de 30 de pe un IP: 5 comparații, 25 × 429' );
+$wpdb->query( 'DELETE FROM wp_ah_spa_incercari' );
+// plafonul total: 20 de coduri greșite (de pe IP-uri diferite) ⇒ contul de recenzie se oprește, echipa primește email
+$GLOBALS['ah_test_mail'] = array();
+for ( $i = 0; $i < 20; $i++ ) { $_SERVER['REMOTE_ADDR'] = '192.0.2.' . ( $i + 1 ); $cere( '/ah-sp/v1/intra', array( 'email' => $REC, 'cod' => '000003' ) ); }
+verifica( ah_spa_recenzie()['oprit'] > 0, 'recenzie: după 20 de coduri greșite contul de recenzie e oprit' );
+egal( array( count( $GLOBALS['ah_test_mail'] ), $GLOBALS['ah_test_mail'][0][0] ?? '', $GLOBALS['ah_test_mail'][0][1] ?? '' ), array( 1, 'contact@adelaharu.ro', 'Aplicația: contul de recenzie a fost oprit' ), 'recenzie: un singur email către echipă' );
+verifica( false === strpos( wp_json_encode( $GLOBALS['ah_test_mail'] ), $COD ), 'recenzie: emailul nu are codul' );
+$_SERVER['REMOTE_ADDR'] = '192.0.2.200';
+egal( $cere( '/ah-sp/v1/intra', array( 'email' => $REC, 'cod' => $COD ) ), null, 'recenzie oprită: chiar și codul bun merge la 235 (drumul obișnuit, cu email)' );
+egal( $cere( '/ah-sp/v1/cod', array( 'email' => $REC ) ), null, 'recenzie oprită: /cod merge la 235 (codul vine pe email)' );
+list( $o6 ) = ah_spa_curata_recenzie( array( 'recenzie_email' => $REC, 'recenzie_doar_app' => '1', 'recenzie_porneste' => '1' ), ah_spa_recenzie() + array( 'hash' => $o['hash'] ) );
+egal( array( $o6['oprit'], $o6['hash'] ), array( 0, $o['hash'] ), 'recenzie: „Pornește din nou” (Setări › Aplicația mobilă) păstrează codul' );
+list( $o7 ) = ah_spa_curata_recenzie( array( 'recenzie_email' => $REC, 'recenzie_doar_app' => '1', 'recenzie_cod' => '590247' ), ah_spa_recenzie() );
+egal( $o7['oprit'], 0, 'recenzie: un cod nou o pornește din nou' );
+list( $o8 ) = ah_spa_curata_recenzie( array( 'recenzie_email' => $REC, 'recenzie_doar_app' => '1' ), ah_spa_recenzie() );
+verifica( $o8['oprit'] > 0, 'recenzie: o salvare fără bifă o lasă oprită' );
+update_option( 'ah_spa_recenzie', $o6 );
+$wpdb->query( 'DELETE FROM wp_ah_spa_incercari' );
+egal( $cere( '/ah-sp/v1/intra', array( 'email' => $REC, 'cod' => $COD ) )->get_status(), 200, 'recenzie pornită din nou: codul fix merge' );
+$_SERVER['REMOTE_ADDR'] = '203.0.113.77';
 // jurnalul: fără cod, fără adresă, IP trunchiat
 $jur = implode( "\n", array_column( (array) get_option( 'ah_spa_jurnal' ), 1 ) );
 foreach ( array( 'recenzie: cod cerut', 'recenzie: intrare', 'recenzie: cod greșit', 'recenzie: prea multe încercări' ) as $x ) {
@@ -728,7 +769,10 @@ egal( array( ah_spa_porneste_filtru_html(), ob_get_level() ), array( true, $n0 +
 echo $pub;
 ob_end_flush(); // WordPress, la final (wp_ob_end_flush_all)
 $iesit = ob_get_clean();
-egal( $iesit, ah_spa_vimeo_dnt_html( ah_spa_fara_urmarire( $pub ) ), 'urmărire: ieșirea paginii e cea curățată' );
+egal( $iesit, ah_spa_fara_elementor( ah_spa_viewport_cover( ah_spa_vimeo_dnt_html( ah_spa_fara_urmarire( $pub ) ) ) ), 'urmărire: ieșirea paginii e cea curățată' );
+verifica( false !== strpos( $iesit, 'viewport-fit=cover' ) && 1 === preg_match_all( '~<meta[^>]*name=["\']viewport~i', $iesit ), 'aplicație: o singură meta viewport, cu viewport-fit=cover' );
+verifica( false === strpos( $iesit, 'data-elementor-type="header"' ) && false === strpos( $iesit, 'data-elementor-type="footer"' ) && false === strpos( $iesit, 'data-elementor-type="popup"' ), 'Spațiul meu în aplicație: fără marcajul antetului, subsolului și popup-urilor Elementor' );
+egal( substr_count( $iesit, '<div' ) - substr_count( $iesit, '</div' ), substr_count( $pub, '<div' ) - substr_count( $pub, '</div' ), 'Elementor scos: <div>-urile rămân echilibrate' );
 $GLOBALS['ah_test_e_pagina'] = false;
 $_SERVER['REQUEST_URI']      = '/?ah_med_api=audio&id=5';
 egal( ah_spa_porneste_filtru_html(), false, 'urmărire: sunetul meditațiilor (/?ah_med_api) nu trece prin filtru' );
@@ -748,6 +792,98 @@ verifica( false !== strpos( ah_spa_css(), 'html.ahspa-refac #ahsp{visibility:hid
 foreach ( array( 'googletagmanager', 'connect.facebook', 'clarity.ms', 'gtag(' ) as $nu ) {
 	verifica( false === strpos( $js, $nu ), 'puntea nu conține „' . $nu . '” (nu ar trece de propriul filtru)' );
 }
+
+/* ---------- 15. codul de intrare din 235: contor atomic pe adresă (secțiunea 11) ---------- */
+$wpdb->query( 'DELETE FROM wp_ah_spa_incercari' );
+delete_option( 'ah_spa_recenzie' );
+$GLOBALS['ah_test_transients'] = array();
+$EM = 'ioana@exemplu.ro';
+$intra = function ( $e, $cod = '111111' ) { return ah_test_filtru( 'rest_pre_dispatch', null, null, new WP_REST_Request( array(), array( 'email' => $e, 'cod' => $cod ), array(), '/ah-sp/v1/intra', 'POST' ) ); };
+$dupa = function ( $ruta, $e, $st, $d ) { return ah_test_filtru( 'rest_post_dispatch', new WP_REST_Response( $d, $st ), null, new WP_REST_Request( array(), array( 'email' => $e ), array(), $ruta, 'POST' ) ); };
+verifica( in_array( 'ah_spa_cod_paza', array_column( array_filter( $GLOBALS['ah_test_hooks']['rest_pre_dispatch'], function ( $x ) { return 6 === $x[1]; } ), 0 ), true ), 'paza codului: rest_pre_dispatch, prioritatea 6 (după contul de recenzie, 4)' );
+ca_browser(); // apără intrarea și în browser
+// rafala: 40 de cereri pornite deodată ajung toate la paza înainte ca 235 să compare vreun cod (235 citește n=0 pentru toate)
+$trec = 0;
+for ( $i = 0; $i < 40; $i++ ) { if ( null === $intra( $EM, sprintf( '%06d', $i ) ) ) { $trec++; } }
+egal( $trec, AH_SPA_COD_MAX, 'rafală de 40 de cereri /intra în paralel: doar 5 ajung la 235' );
+$r = $intra( $EM );
+verifica( $r instanceof WP_REST_Response && 429 === $r->get_status() && array( 'ok' => false, 'mesaj' => 'Prea multe încercări. Cere un cod nou.' ) === $r->get_data() && 'no-store, private, max-age=0' === ( $r->headers['Cache-Control'] ?? '' ), 'peste limită: 429 cu răspunsul lui 235, fără cache' );
+set_transient( 'ah_sp_cod_' . md5( $EM ), array( 'h' => 'x', 'n' => 0 ), 900 );
+$intra( $EM );
+egal( get_transient( 'ah_sp_cod_' . md5( $EM ) ), false, 'peste limită: codul de acum din 235 nu mai e bun (cere altul)' );
+egal( $intra( '  IOANA@Exemplu.ro ' )->get_status(), 429, 'adresa normalizată ca în 235 (majuscule, spații): același contor' );
+egal( $intra( 'alta@exemplu.ro' ), null, 'altă adresă: contorul ei' );
+// un cod nou (/cod 200 din 235) golește fereastra
+$wpdb->query( 'DELETE FROM wp_ah_spa_incercari' );
+for ( $i = 0; $i < 5; $i++ ) { $intra( $EM ); }
+egal( $intra( $EM )->get_status(), 429, 'a 6-a încercare pe același cod: 429' );
+$dupa( '/ah-sp/v1/cod', $EM, 200, array( 'ok' => true ) );
+egal( $intra( $EM ), null, 'după un cod nou: din nou încercări' );
+$dupa( '/ah-sp/v1/cod', $EM, 429, array( 'ok' => false ) );
+$dupa( '/ah-sp/v1/intra', $EM, 403, array( 'ok' => false ) );
+for ( $i = 0; $i < 4; $i++ ) { $intra( $EM ); }
+egal( $intra( $EM )->get_status(), 429, '/cod refuzat sau /intra greșit nu golesc fereastra' );
+// intrare reușită: fereastra la zero
+$dupa( '/ah-sp/v1/intra', $EM, 200, array( 'ok' => true ) );
+egal( $intra( $EM ), null, 'după o intrare reușită: fereastra la zero' );
+// plafonul pe zi: 15 greșeli, chiar cu coduri noi
+$wpdb->query( 'DELETE FROM wp_ah_spa_incercari' );
+$trec = 0;
+for ( $c = 0; $c < 5; $c++ ) { $dupa( '/ah-sp/v1/cod', $EM, 200, array( 'ok' => true ) ); for ( $i = 0; $i < 5; $i++ ) { if ( null === $intra( $EM ) ) { $trec++; } } }
+egal( $trec, AH_SPA_COD_ZI, 'cu coduri noi mereu: cel mult 15 încercări pe zi' );
+$wpdb->query( 'UPDATE wp_ah_spa_incercari SET expira = ' . ( time() - 1 ) );
+egal( $intra( $EM ), null, 'a doua zi: din nou încercări' );
+// contorul e atomic: un singur UPDATE (rândul blocat), apoi citirea
+$GLOBALS['ah_test_sql'] = array();
+ah_spa_contor( 'proba', 60 );
+verifica( 2 === count( $GLOBALS['ah_test_sql'] ) && 0 === strpos( $GLOBALS['ah_test_sql'][0], 'INSERT IGNORE INTO wp_ah_spa_incercari' ) && false !== strpos( $GLOBALS['ah_test_sql'][1], 'SET n = CASE WHEN expira <' ), 'contorul: INSERT IGNORE + un UPDATE atomic (n = n + 1 în baza de date, nu în PHP)' );
+verifica( false === strpos( implode( ' ', $GLOBALS['ah_test_sql'] ), $EM ), 'contorul: în baza de date doar amprenta, fără adresa de email' );
+// fără tabel (fragmentul abia pornit): rezerva cu transient, fără eroare
+$wpdb->pdo->exec( 'ALTER TABLE wp_ah_spa_incercari RENAME TO x_incercari' );
+egal( array( ah_spa_contor( 'fara-tabel', 60 ), ah_spa_contor( 'fara-tabel', 60 ) ), array( 1, 2 ), 'fără tabel: contorul merge prin transient' );
+$wpdb->pdo->exec( 'ALTER TABLE x_incercari RENAME TO wp_ah_spa_incercari' );
+// contul de recenzie nu trece prin paza de aici (are contoarele lui)
+ca_aplicatie();
+$wpdb->query( 'DELETE FROM wp_ah_spa_incercari' );
+update_option( 'ah_spa_recenzie', array( 'email' => $REC, 'hash' => wp_hash_password( $COD ), 'doar_app' => 1 ) );
+$_SERVER['REMOTE_ADDR'] = '203.0.113.5';
+for ( $i = 0; $i < 3; $i++ ) { $intra( $REC, $COD ); }
+egal( (int) $wpdb->get_var( "SELECT COUNT(*) FROM wp_ah_spa_incercari WHERE cheie = '" . ah_spa_contor_cheie( 'cod|' . $REC ) . "'" ), 0, 'recenzie: codul fix nu atinge contorul pe adresă' );
+egal( $intra( $REC, $COD )->get_status(), 200, 'recenzie: intrarea cu codul fix merge în continuare' );
+delete_option( 'ah_spa_recenzie' );
+egal( $intra( 'x@y.ro' ) === null && ah_spa_cod_paza( 'deja', null, new WP_REST_Request( array(), array( 'email' => $EM ), array(), '/ah-sp/v1/intra', 'POST' ) ) === 'deja', true, 'un răspuns dat deja rămâne' );
+egal( ah_spa_cod_paza( null, null, new WP_REST_Request( array(), array( 'email' => $EM ), array(), '/ah-sp/v1/intra', 'GET' ) ), null, 'GET: neatins' );
+egal( array( ah_spa_ip_cheie( '2001:db8:1:2:3:4:5:6' ), ah_spa_ip_cheie( '2001:db8:1:2:ffff::1' ), ah_spa_ip_cheie( '203.0.113.9' ) ), array( '20010db800010002/64', '20010db800010002/64', '203.0.113.9' ), 'IP: IPv6 pe /64, IPv4 întreg' );
+
+/* ---------- 16. pagina din aplicație: zone sigure, stilurile temei, notificările ---------- */
+egal( ah_spa_viewport_cover( '<head><meta name="viewport" content="width=device-width, initial-scale=1"></head>' ), '<head><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"></head>', 'viewport: + viewport-fit=cover' );
+egal( ah_spa_viewport_cover( "<meta name='viewport' content='width=device-width,viewport-fit=cover'>" ), "<meta name='viewport' content='width=device-width,viewport-fit=cover'>", 'viewport: deja cover, neschimbat' );
+egal( ah_spa_viewport_cover( '<html><head><title>x</title></head>' ), '<html><head><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>x</title></head>', 'viewport: lipsă, adăugat' );
+$GLOBALS['wp_styles'] = new Ah_Test_Deps();
+foreach ( array( 'astra-theme-css' => array(), 'chld_thm_cfg_child' => array( 'astra-theme-css' ), 'woocommerce-general' => array(), 'wp-block-library' => array(), 'global-styles' => array(), 'elementor-frontend' => array(), 'elementor-post-18' => array( 'elementor-frontend' ), 'elementor-gf-local-figtree' => array(), 'ahspx-css' => array() ) as $h => $dp ) { $GLOBALS['wp_styles']->adauga( $h, '/x/' . $h . '.css', $dp ); }
+$GLOBALS['ah_test_e_pagina'] = true;
+$_SERVER['REQUEST_URI'] = '/spatiul-meu/';
+ca_browser();
+ah_spa_scoate_tema();
+egal( $GLOBALS['wp_styles']->scoase, array(), 'stilurile temei: în browser neatinse' );
+ca_aplicatie();
+ah_spa_scoate_tema();
+$sc = $GLOBALS['wp_styles']->scoase;
+sort( $sc );
+egal( $sc, array( 'elementor-frontend', 'elementor-post-18', 'global-styles', 'woocommerce-general', 'wp-block-library' ), 'Spațiul meu în aplicație: scoase WooCommerce, blocurile, stilurile globale, Elementor; Astra rămâne fiindcă tema-copil depinde de ea' );
+egal( count( $GLOBALS['wp_styles']->sterse ), 5, 'scoase și din înregistrare (cu stilurile lor inline)' );
+verifica( in_array( 'elementor-gf-local-figtree', $GLOBALS['wp_styles']->queue, true ) && in_array( 'ahspx-css', $GLOBALS['wp_styles']->queue, true ), 'fonturile și stilul lui 266 rămân' );
+egal( ah_spa_stiluri_de_scos( array( 'astra-theme-css', 'x' ), array(), ah_spa_stiluri_tema( 'sp' ) ), array( 'astra-theme-css' ), 'fără dependențe: Astra pleacă pe Spațiul meu' );
+verifica( ! in_array( 'astra-theme-css', ah_spa_stiluri_tema( 'sala' ), true ) && ! in_array( 'elementor-frontend', ah_spa_stiluri_tema( 'carti' ), true ) && array() === ah_spa_stiluri_tema( 'politici' ), 'sala, cărțile: tema rămâne (le folosesc 44, 231); politicile: neatinse' );
+$GLOBALS['ah_test_e_pagina'] = false;
+egal( ah_spa_fcm_mesaj( 't', 'T', 'x', array() )['message']['android']['notification']['icon'], 'ic_stat_lotus', 'push Android: pictograma albă a aplicației' );
+$js = ah_spa_js();
+foreach ( array( "'backButton'", "'minimizeApp'", 'function inCoada(', 'AHSPA_ALT_CONT', "'createChannel'", 'visibility:0', "title:FT.t", "'ah_ciclu_notif',1", 'mementouriPornite', "cheama('Filesystem','stat'", "cheama('SplashScreen','hide'", 'function intra(', 'Ascultă pe Spotify', 'function confirma(', 'aria-labelledby', 'Tot de la tine:', 'Cursurile, cărțile și meditațiile de pe această adresă apar aici.' ) as $x ) {
+	verifica( false !== strpos( $js, $x ), 'puntea conține ' . $x );
+}
+verifica( false === strpos( $js, 'window.confirm' ) && false === strpos( $js, 'Menstruația ta ar putea' ), 'puntea: fără window.confirm și fără „menstruație” pe ecranul blocat' );
+$dev = ah_spa_js_devreme();
+verifica( false !== strpos( $dev, "'ahspa_cine'" ) && false !== strpos( $dev, '/^(ahsp_|ahspx_|ahct_|ah_ciclu_v1$)/' ) && strlen( $dev ) < 1200, 'partea devreme: amprenta contului și curățarea cheilor, mică' );
 
 echo "\n" . $GLOBALS['ok'] . ' teste trecute, ' . $GLOBALS['rau'] . " picate.\n";
 exit( $GLOBALS['rau'] ? 1 : 0 );

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- accentul Spațiului meu (sn235): culoarea pictogramei notificărilor push -->
+    <color name="ah_accent">#964E46</color>
+</resources>

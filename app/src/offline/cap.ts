@@ -77,6 +77,25 @@ export async function existaFisier(cale: string, dir = 'LIBRARY'): Promise<boole
   }
 }
 
+/**
+ * Butonul Înapoi de pe Android. Cu un listener înregistrat, Capacitor nu mai face nimic singur; fără el, la rădăcină
+ * Înapoi nu face nimic, iar istoricul ar duce înapoi spre Spațiul meu care nu se încarcă (și iar aici). `cb` întoarce
+ * true dacă a închis ceva; altfel aplicația trece în fundal (App.minimizeApp), fără history.back().
+ */
+export async function laInapoi(cb: () => boolean): Promise<void> {
+  if (platforma() !== 'android') return;
+  const p = plugin('App');
+  const add = p?.addListener as ((ev: string, cb: (d: unknown) => void) => Promise<Ascultare> | Ascultare) | undefined;
+  if (typeof add !== 'function') return;
+  try {
+    await add.call(p, 'backButton', () => {
+      if (!cb()) void apel('App', 'minimizeApp');
+    });
+  } catch {
+    /* fără plugin: comportamentul implicit */
+  }
+}
+
 export function ascunde_splash(): void {
   void apel('SplashScreen', 'hide', { fadeOutDuration: 200 });
 }

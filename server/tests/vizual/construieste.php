@@ -168,4 +168,11 @@ foreach ( array( 'browser' => 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac 
 	$pag_t = pagina( 'Termeni și condiții', $urm_cap . $cap_t, $clase_t, $bf . $antet . $termeni . $subsol . $urm_corp );
 	file_put_contents( $dir . '/termeni-' . $var . '.html', 'aplicatie' === $var ? prin_filtru( $pag_t ) : $pag_t );
 }
+/* puntea și stilul ei, ca le servește /wp-json/ah-spa/v1/punte (în pagină doar configurația și partea „devreme”) */
+file_put_contents( $dir . '/punte.js', ah_spa_js() );
+file_put_contents( $dir . '/punte.css', ah_spa_css_tot() );
+/* Spațiul meu în aplicație CU stilurile temei de acum (server/tests/date/tema/site.css: Astra, WooCommerce, Elementor, blocuri), ca
+   harnașul să compare: fără ele (cum le scoate ah_spa_scoate_tema) pagina trebuie să arate la fel. */
+$sp_a = file_get_contents( $dir . '/sp-aplicatie.html' );
+file_put_contents( $dir . '/sp-aplicatie-tema.html', preg_replace( '~<link rel="stylesheet" href="/fonts/fonts.css">~', '<link rel="stylesheet" href="/tema/site.css">$0', $sp_a, 1 ) );
 echo "gata\n";

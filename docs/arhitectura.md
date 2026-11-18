@@ -30,8 +30,9 @@ Nu se urcă nimic pe site fără OK-ul lui Mircea (se urcă inactiv, cu copie de
 ## Shell-ul (app/)
 
 - `server.url` = `https://www.adelaharu.ro/spatiul-meu/`, `server.errorPath` = pagina locală `offline.html`
-  (deschisă când site-ul nu răspunde). `allowNavigation`: `www.adelaharu.ro`, `adelaharu.ro`,
-  `player.vimeo.com`, `*.vimeocdn.com`, `embed.podcasts.apple.com`, `js.stripe.com` NU (nu e nevoie).
+  (deschisă când site-ul nu răspunde). `allowNavigation`: doar `www.adelaharu.ro`, `adelaharu.ro` (2.2.0; iframe-urile
+  Vimeo se încarcă oricum; pe iOS puntea primește mesaje doar din cadrul principal de pe `https://www.adelaharu.ro` și
+  din pagina offline, `AhPuntePazita`).
   Orice altă adresă se deschide în browserul sistemului (Spotify, Apple Podcasts, Zoom, WhatsApp, email).
 - Pluginuri (accesibile din pagina site-ului prin `window.Capacitor.Plugins.*`): `App`, `PushNotifications`,
   `LocalNotifications`, `Preferences`, `Filesystem`, `FileTransfer` (`@capacitor/file-transfer`), `Browser`,
@@ -65,6 +66,12 @@ Nu se urcă nimic pe site fără OK-ul lui Mircea (se urcă inactiv, cu copie de
      păstrează mementourile. `ah_ciclu` și mementourile se șterg DOAR la acțiuni explicite: „Șterge datele de pe
      acest telefon” din Ciclul meu (`removeItem('ahsp_ciclu')` când cheia exista), ieșirea din cont, „Șterge contul”.
      Cu test.
+   - **contul de pe telefon** (2.2.0): `localStorage.ahspa_cine` ține amprenta contului care a scris datele paginii; alt
+     cont pe același telefon ⇒ înainte ca 235 să citească ceva, pleacă `ahsp_*`, `ahspx_*`, `ahct_*`, `ah_ciclu_v1`, apoi
+     `Preferences` ale ei (`ah_ciclu`, `ah_ciclu_notif`, `ah_push_on`, `ah_push_intrebat`, `ah_deschideri`), mementourile
+     și descărcările. Tot ce citește/anulează/programează mementourile trece printr-o singură coadă.
+   - mementourile pornesc doar dacă ea a spus da (`ah_ciclu_notif` = 1; pe Android ≤ 12 permisiunea e dată fără
+     întrebare, deci nu ajunge); textul de pe ecranul blocat e neutru („Ciclul meu · Începe o fază nouă.”).
 4. **Meditații offline:** buton „Descarcă” lângă fiecare meditație Inner Temple pe care o poate asculta →
    `GET /wp-json/ah-spa/v1/descarca?id=<id>` → `{url, expira, titlu, durata, imagine}` (URL semnat, 15 min) →
    `FileTransfer.downloadFile` în `Directory.LibraryNoCloud` pe iOS (`LIBRARY_NO_CLOUD`: fără copie în iCloud;
@@ -119,6 +126,9 @@ Nu se urcă nimic pe site fără OK-ul lui Mircea (se urcă inactiv, cu copie de
 - **Contul de recenzie** (Apple / Google): cod fix pentru o singură adresă, setat în Setări › Aplicația mobilă, prin
   `rest_pre_dispatch` pe `POST /ah-sp/v1/cod` și `/ah-sp/v1/intra` (235 neschimbat). Cerința completă și testele:
   `docs/review-account.md`. Fără el nu se trimite la recenzie.
+- **Codul de intrare din 235, și în browser** (2.2.0): un contor atomic pe adresă (tabelul `wp_ah_spa_incercari`), mărit
+  înaintea lui 235 prin `rest_pre_dispatch` pe `POST /ah-sp/v1/intra`: cel mult 5 încercări pe codul trimis, 15 greșeli
+  pe zi, apoi `429` cu textul lui 235 (235 neschimbat; contorul lui nu e atomic).
 
 ## Pagina offline (app/, locală)
 
@@ -153,16 +163,19 @@ cel vechi se anulează când îl folosește pe cel nou (review 18 nov.). Ea vede
 
 **Ce primește el (sincronizat, minim):** `GET /wp-json/ah-spp/v1/azi` (cookie `ah_spp` sau `?t=`) calculează pe server,
 din datele ei criptate (`ah_sp_ciclu`: `ciclu.starturi`, `lung`, `men`, `sit`), cu EXACT regula `CI.faze`/`CI.lung` din 235:
-`{nume_ea, nume, stare:'ok'|'pauza'|'oprit', faza, pana_la, urmatoarea:{faza, de_la, sprijin, arhetip}, inceputuri:[{faza,data}… ~5 săptămâni],
+`{nume_ea, nume, stare:'ok'|'pauza'|'oprit', faza, pana_la, urmatoarea:{faza, de_la, pana_la, sprijin, arhetip}, inceputuri:[{faza,data,pana}… până la iarna următoare, cel mult 35 de zile],
 texte:{ce, sprijin[], citate[], arhetip, luna}, setari}` — doar ce arată pagina (fără `zi`, `lungime`, `harta`: pagina lui nu are
 inel și nici „Ziua N din L”, decizia lui Mircea, 18 nov.). NICIODATĂ notițele ei, simptomele, situația (`sit`) sau zilele exacte notate.
-Dacă `sit` nu e `natural`/`alaptare`/`perimenopauza` sau ea a șters ciclul → `stare:'pauza'` cu un text neutru
-(„Pentru moment, aici nu e nicio estimare.”, fără motiv). La fel (decizie de confirmat, `docs/partener.md`): prima zi în viitor și
-menstruația întârziată, oricât de puțin (review 18 nov.: el nu vede întârzierea, nici ziua din ciclu peste lungime); `sit` lipsă
-= `natural`, ca pe ecranul ei. Accesul oprit → `stare:'oprit'`.
+Ea a șters ciclul, date nevalide, prima zi în viitor → `stare:'pauza'` cu un text neutru („Pentru moment, aici nu e nicio
+estimare.”, fără motiv). **Ziua estimată a menstruației nu se vede (1.3.0, Mircea):** iarna următoare apare ca fereastră (±2 zile),
+toamna ține „până la următoarea menstruație” fără dată, iar răspunsul e identic în ziua dinainte, în ziua estimată și după ea;
+după capătul ferestrei, întârzierea arată ca toamna fără date, la fel până la 10 zile după ziua estimată, apoi pauza. `sit` care nu e
+`natural`/`alaptare`/`perimenopauza` → pauza, dar nu pe loc: la următoarea graniță de fază sau după 1–3 zile (alese pe server,
+pentru fiecare partener, păstrate în `pauza_de_la`). `sit` lipsă = `natural`, ca pe ecranul ei. Accesul oprit → `stare:'oprit'`.
 
-**Notificări pentru el:** în aplicație, push (FCM) din cron-ul zilnic, la începutul fiecărei faze, doar dacă s-a schimbat faza
-(la fel și când ea notează o menstruație nouă care mută faza). Fără aplicație: email la începutul fiecărei faze, doar dacă
+**Notificări pentru el:** în aplicație, push (FCM) din cron-ul zilnic (8:10 ora site-ului, lanț de evenimente unice, deci și
+după schimbarea orei), la începutul fiecărei faze, doar dacă s-a schimbat faza (la fel și când ea notează o menstruație nouă care
+mută faza). Faza e notată ca trimisă doar după o trimitere reușită (altfel se reîncearcă). Fără aplicație: email la începutul fiecărei faze, doar dacă
 bifează asta pe pagina lui (oprire din orice email). Tokenurile push ale lui sunt separate de ale ei.
 
 **Un telefon = un cont, pentru push** (integrare, 18 nov.): tokenul FCM e al telefonului, nu al contului, deci stă într-un
@@ -180,7 +193,10 @@ el (`AH_SPA.el`); pe o pagină fără niciun cont, un token rămas al lui pleac�
 `www.adelaharu.ro`, App Links / AASA); fără analiză, fără Google Fonts, fără cărți. Pe ecranul de intrare apare „Sunt partenerul ei” → „Deschide linkul primit pe email” (cu un câmp pentru
 linkul copiat, care îl deschide în aplicație) sau „Trimite-mi din nou linkul”. Apple: același cont simplu (fără parolă, fără cumpărături).
 
-**Datele lui:** prenume, email (criptat; hash pentru căutare), token (hash), tokenuri push, ultima vizită. El își poate șterge
+**Datele lui:** prenume, email (criptat; hash pentru căutare), token (hash), tokenuri push, ultima vizită. Cheia modulului nu
+stă în baza de date (constanta `AH_SPP_CHEIE` din `wp-config.php` sau derivată din sărurile WordPress; din 1.3.0, cu migrarea
+o dată a cheii vechi din opțiuni). Cheia ciclului din 235 (`ah_sp_ciclu_secret`) e încă în opțiuni: recomandare în
+`docs/partener.md`. Rutele care schimbă ceva cer antetul `X-AH-SPP: 1` (apărare CSRF în plus față de SameSite=Lax). El își poate șterge
 accesul din pagina lui; când ea își șterge contul (`sterge-cont`, cu numărul în emailul echipei: `pentru_el`) sau ciclul,
 rândurile lui și tokenurile lui push se șterg pe loc. Paragraf nou în Politica de confidențialitate.
 

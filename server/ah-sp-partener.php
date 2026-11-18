@@ -1887,6 +1887,8 @@ if(CAP){var APB=plugin('App');if(APB&&typeof APB.addListener==='function'){try{A
  if(h.indexOf('invata/')===0){location.hash='#invata';return;}
  if(h==='setari'||h==='invata'){mergiAzi();return;}
  chem('App','minimizeApp').catch(function(){});});}catch(e){}}}
+/* ecranul de pornire: pagina lui nu încarcă puntea Spațiului meu, așa că îl ascunde singură */
+if(CAP){try{chem('SplashScreen','hide').catch(function(){});}catch(e){}}
 document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible'&&A&&A.ok&&(!hash()||hash()==='azi'))reincarca();});
 arata();
 })();

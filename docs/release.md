@@ -289,7 +289,7 @@ Pagina de setări apare doar când fragmentul e activ, deci le completați imedi
 | Ce anunțăm | bifele: meditație nouă, înregistrare „Respiră-te acasă”, întâlnire în 15 minute | ce notificări pleacă |
 | Emailul echipei | implicit `contact@adelaharu.ro` | aici vine anunțul când o clientă își șterge contul din aplicație |
 | Probă | adresa voastră | trimite o notificare de probă telefoanelor acelei adrese (trebuie să fi intrat în aplicație și să fi permis notificările) |
-| Contul de recenzie (în fragment din 18 nov., seara: `ah-sp-aplicatie.php` 2.1.0, secțiunea 9, cu teste; de verificat pe build-ul din TestFlight / testul intern) | adresa și codul fix (`docs/review-account.md`) | ca Apple și Google să poată intra fără email |
+| Contul de recenzie (în fragment din 18 nov., seara: `ah-sp-aplicatie.php` 2.1.0, secțiunea 9, cu teste; de verificat pe build-ul din TestFlight / testul intern) | adresa și codul fix (`docs/review-account.md`) | ca Apple și Google să poată intra fără email. Din 2.2.0: după 20 de coduri greșite se **oprește singur** și vine un email la Emailul echipei; îl porniți din nou de aici (bifa „Pornește din nou contul de recenzie” sau un cod nou) |
 
 Sub formular sunt linkurile de verificat (`apple-app-site-association`, `assetlinks.json`, `/app/intra`, `config`):
 fiecare trebuie să se deschidă fără eroare. Tot acolo e jurnalul (ultimele rânduri).
@@ -307,6 +307,19 @@ fiecare trebuie să se deschidă fără eroare. Tot acolo e jurnalul (ultimele r
   `assetlinks.json` trebuie să ajungă la WordPress. Verificare: `https://www.adelaharu.ro/.well-known/assetlinks.json`
   se deschide (cod 200, JSON) **fără redirect** (Apple nu urmează redirecturi).
 - Pluginurile de securitate care blochează REST API-ul pentru vizitatori trebuie să lase liber `ah-spa/v1` și `ah-sp/v1`.
+  Din 2.2.0 **și puntea aplicației vine de acolo**: `GET /wp-json/ah-spa/v1/punte?f=js|css&v=<versiune>` (același fișier
+  pentru toate, fără date personale; `Cache-Control: public, max-age=31536000, immutable`). Dacă e blocată, aplicația
+  arată Spațiul meu ca în browser, fără funcțiile de telefon. Verificare: adresa din `<script id="ahspa-js" src=…>` se
+  deschide în browser (cod 200, JavaScript). Excluderea `/wp-json/ah-spa/` din LiteSpeed (mai sus) poate rămâne: fișierul
+  se ține în cache-ul WebView-ului (un an, adresa se schimbă la fiecare versiune), nu în LiteSpeed.
+- **Copia de siguranță (backup) a site-ului**: 2.2.0 creează la activare un tabel mic nou, `wp_ah_spa_incercari`
+  (contoarele încercărilor de cod; doar amprente, fără adrese). Nu trebuie păstrat într-o restaurare; poate fi gol.
+- **Copia telefonului**: pe Android nimic din aplicație nu intră în copia Google și nici la mutarea pe alt telefon
+  (`allowBackup=false` + `data_extraction_rules.xml` / `backup_rules.xml`). Pe iPhone, meditațiile descărcate, datele
+  WebView (localStorage-ul Ciclului meu) și cookie-urile sunt marcate „fără backup” (`AppDelegate.faraBackup()`);
+  **Preferences** (UserDefaults: copia `ah_ciclu` a ciclului și lista descărcărilor) rămân în copia iCloud / din computer a
+  telefonului (criptată dacă ea a ales așa) — iOS nu permite excluderea pe chei. De spus în politica de confidențialitate
+  dacă e nevoie (`docs/juridic.md`).
 
 ## 9. Proba pe telefon (înainte de orice trimitere)
 
@@ -355,6 +368,31 @@ scrie pe site altceva decât ar scrie o clientă (intrare, ciclu, notificări).
     („Pe server, o dată”): User Agents `AdelaHaruApp`, Cookies `ah_app` / `ah_spp`.
 11. În browserul calculatorului și al telefonului, Spațiul meu arată **exact ca înainte** (fragmentul nu atinge
     browserele). Aceasta e cea mai importantă verificare a site-ului.
+
+**De verificat pe telefon, în plus, de la 2.2.0** (harnașul le probează pe imitații, nu pe telefoane reale):
+12. **Două conturi pe același telefon**: A intră, notează ciclul, pornește mementourile, descarcă o meditație, iese
+    („Ieși din cont pe acest telefon”); B intră: Ciclul meu e gol, nicio notificare a lui A, nicio meditație a lui A,
+    iar contul lui B (cu salvarea în cont pornită) nu primește datele lui A. Apoi la fel **fără** ieșire (A rămâne
+    cu cookie-ul expirat, B intră prin linkul ei din email).
+13. **Android 7–10** (de ex. un telefon vechi sau emulatorul API 29): „Descarcă” o meditație (cere permisiunea de
+    stocare o dată; dacă refuzați, mesajul e în română și nu rămâne niciun fișier pe jumătate).
+14. **Android ≤ 12**: la prima deschidere nu pornesc nici push, nici mementourile; de la a doua apare explicația;
+    după „Da”, pornesc amândouă. **Android 13+ / iPhone**: la fel, cu întrebarea sistemului după „Da”.
+15. **Butonul Înapoi pe Android**: cu o foaie deschisă (player, podcast, ștergerea contului) o închide; în Spațiul meu
+    merge înapoi prin secțiuni; la început aplicația trece în fundal; pe pagina offline nu revine la site în buclă.
+16. **Pictograma notificărilor pe Android**: push-ul de probă și un memento au lotusul alb (nu un pătrat alb).
+17. **Ecranul blocat**: mementoul ciclului arată doar „Ciclul meu / Începe o fază nouă…”; pe Android, cu „ascunde
+    conținutul sensibil”, nici atât.
+18. **Zonele sigure (iPhone cu notch / Dynamic Island, Android cu decupaj, și în landscape)**: antetul, bara de jos,
+    bara „Înapoi în Spațiul meu” din sala de curs și politici nu intră sub ceas / bara de gesturi; nicio margine albă.
+19. **Pornirea**: ecranul de pornire rămâne până apare Spațiul meu (fără ecran alb); dintr-un link `/app/intra?cont=…`
+    aplicația deschide direct contul. Pe pagina lui `/pentru-el/` splash-ul se ascunde cel târziu după 4 s.
+20. **iPhone, puntea**: în Web Inspector, dintr-un iframe Vimeo, `window.webkit.messageHandlers.bridge.postMessage(…)`
+    nu are efect (consola Xcode: „AhPuntePazita: mesaj ignorat”); din pagina principală totul merge (inclusiv pagina
+    offline, `capacitor://www.adelaharu.ro`). Vimeo, Spotify, Apple Podcasts: video-ul pornește în pagină, linkurile se
+    deschid în aplicațiile lor.
+21. **Rafala de coduri**: pe un cont de probă, 6 coduri greșite trimise repede (de ex. din consolă, `Promise.all`) ⇒ cel
+    mult 5 ajung la 235, apoi „Prea multe încercări. Cere un cod nou.”; un cod nou cerut ⇒ din nou 5.
 
 ## 10. Lansarea, în ordine
 

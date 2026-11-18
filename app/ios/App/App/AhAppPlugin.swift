@@ -58,10 +58,56 @@ class AhBridgeViewController: CAPBridgeViewController {
         bridge?.registerPluginInstance(AhAppPlugin())
         // capacitorDidLoad vine din loadView, înainte de loadWebView (viewDidLoad): prima încărcare trece deja prin filtru
         if let wv = webView, let capacitor = wv.navigationDelegate {
+            // puntea JS → nativ („bridge”, WebViewDelegationHandler) doar pentru pagina principală a site-ului (AhPuntePazita)
+            if let handler = capacitor as? WKScriptMessageHandler {
+                let cc = (capacitor as? WebViewDelegationHandler)?.contentController ?? wv.configuration.userContentController
+                cc.removeScriptMessageHandler(forName: AhPuntePazita.nume)
+                cc.add(AhPuntePazita(handler, schemaLocala: bridge?.config.localURL.scheme ?? "capacitor"), name: AhPuntePazita.nume)
+            }
             let n = AhNavigare(capacitor)
             navigare = n
             wv.navigationDelegate = n
         }
+    }
+}
+
+/// Capacitor (WebViewDelegationHandler) primește mesajele punții („bridge”) din ORICE cadru și de pe orice origine:
+/// un iframe (Vimeo, un embed) sau o pagină de pe altă gazdă ajunsă în WebView ar putea chema pluginurile (Preferences cu
+/// datele ciclului, Filesystem, push). Aici le dăm mai departe doar dacă vin din cadrul principal, de pe
+/// https://www.adelaharu.ro (Spațiul meu) sau de pe pagina offline locală (capacitor://www.adelaharu.ro/offline.html).
+/// Restul se ignoră (apelul din pagină nu primește răspuns). Se pune în capacitorDidLoad, înainte de prima încărcare.
+final class AhPuntePazita: NSObject, WKScriptMessageHandler {
+    static let nume = "bridge"     // WebViewDelegationHandler.handlerName (Capacitor 8)
+    static let gazda = "www.adelaharu.ro"
+    /// WKUserContentController ține handlerul tare; pe cel al lui Capacitor îl ține bridge-ul.
+    private weak var capacitor: (NSObject & WKScriptMessageHandler)?
+    private let capacitorTare: WKScriptMessageHandler?
+    private let schemaLocala: String
+
+    init(_ capacitor: WKScriptMessageHandler, schemaLocala: String) {
+        if let o = capacitor as? (NSObject & WKScriptMessageHandler) {
+            self.capacitor = o
+            self.capacitorTare = nil
+        } else {
+            self.capacitorTare = capacitor
+        }
+        self.schemaLocala = schemaLocala.lowercased()
+        super.init()
+    }
+
+    static func permis(mainFrame: Bool, protocol p: String, host: String, schemaLocala: String) -> Bool {
+        guard mainFrame, host.lowercased() == gazda else { return false }
+        let p = p.lowercased()
+        return p == "https" || p == schemaLocala
+    }
+
+    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+        let o = message.frameInfo.securityOrigin
+        guard AhPuntePazita.permis(mainFrame: message.frameInfo.isMainFrame, protocol: o.protocol, host: o.host, schemaLocala: schemaLocala) else {
+            CAPLog.print("⚡️  AhPuntePazita: mesaj ignorat de pe", o.protocol, o.host, message.frameInfo.isMainFrame ? "(cadrul principal)" : "(iframe)")
+            return
+        }
+        (capacitor ?? capacitorTare)?.userContentController(userContentController, didReceive: message)
     }
 }
 
