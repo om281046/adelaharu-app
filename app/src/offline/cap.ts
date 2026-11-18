@@ -96,6 +96,12 @@ export async function laInapoi(cb: () => boolean): Promise<void> {
   }
 }
 
+/** AhApp.info() (pluginul nativ al aplicației): aici doar eroarea HTTP care a deschis pagina offline (cod, la = ms). */
+export async function eroareNativa(): Promise<{ cod?: number; la?: number } | null> {
+  const r = await apel<{ eroare?: { cod?: number; la?: number } }>('AhApp', 'info');
+  return r && r.eroare && typeof r.eroare === 'object' ? r.eroare : null;
+}
+
 export function ascunde_splash(): void {
   void apel('SplashScreen', 'hide', { fadeOutDuration: 200 });
 }

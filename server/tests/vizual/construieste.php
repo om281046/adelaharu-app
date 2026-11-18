@@ -168,6 +168,18 @@ foreach ( array( 'browser' => 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac 
 	$pag_t = pagina( 'Termeni și condiții', $urm_cap . $cap_t, $clase_t, $bf . $antet . $termeni . $subsol . $urm_corp );
 	file_put_contents( $dir . '/termeni-' . $var . '.html', 'aplicatie' === $var ? prin_filtru( $pag_t ) : $pag_t );
 }
+/* ecranul de intrare din aplicație (fără cont): 235 desenează emailul și codul (2.3.0: harnașul codului de intrare) */
+$_SERVER['HTTP_USER_AGENT']  = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 AdelaHaruApp/1.0.0 (ios)';
+$_SERVER['REQUEST_URI']      = '/spatiul-meu/';
+$GLOBALS['ah_test_e_pagina'] = true;
+$GLOBALS['ah_test_email']    = '';
+$Di    = array( 'stare' => 'intrare', 'api' => 'https://www.adelaharu.ro/wp-json/ah-sp/v1/' );
+$sc_i  = '<style id="ahsp-css">' . $ascunde . $css235 . '</style><div id="ahsp"></div><script>window.AH_SP=' . wp_json_encode( $Di ) . ';</script><script>' . $js235 . '</script>';
+$cap_i = ah_test_actiune( 'wp_head' );
+$sc_i  = ah_test_filtru( 'do_shortcode_tag', $sc_i, 'ah_spatiul_meu' );
+$cl_i  = implode( ' ', ah_test_filtru( 'body_class', array( 'page', 'ahsp-pagina' ) ) );
+file_put_contents( $dir . '/sp-intrare-aplicatie.html', prin_filtru( pagina( 'Spațiul meu', $cap_i, $cl_i, '<div class="site-content"><article><div class="entry-content">' . $sc_i . '</div></article></div>' ) ) );
+
 /* puntea și stilul ei, ca le servește /wp-json/ah-spa/v1/punte (în pagină doar configurația și partea „devreme”) */
 file_put_contents( $dir . '/punte.js', ah_spa_js() );
 file_put_contents( $dir . '/punte.css', ah_spa_css_tot() );

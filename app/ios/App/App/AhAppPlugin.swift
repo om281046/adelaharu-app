@@ -43,7 +43,9 @@ public class AhAppPlugin: CAPPlugin, CAPBridgedPlugin {
             "versiune": v?["CFBundleShortVersionString"] as? String ?? "",
             "build": v?["CFBundleVersion"] as? String ?? "",
             // ecranul blocat: pe iOS îl face WebKit (navigator.mediaSession), fără plugin nativ
-            "mediaNativ": false
+            "mediaNativ": false,
+            // eroarea HTTP (≥ 500) care a deschis pagina offline: cod + momentul (ms), ca ea să spună „site-ul e în lucru”
+            "eroare": ["cod": AhNavigare.ultimaEroare.cod, "la": AhNavigare.ultimaEroare.la]
         ])
     }
 }
@@ -64,7 +66,7 @@ class AhBridgeViewController: CAPBridgeViewController {
                 cc.removeScriptMessageHandler(forName: AhPuntePazita.nume)
                 cc.add(AhPuntePazita(handler, schemaLocala: bridge?.config.localURL.scheme ?? "capacitor"), name: AhPuntePazita.nume)
             }
-            let n = AhNavigare(capacitor)
+            let n = AhNavigare(capacitor, paginaOffline: bridge?.config.errorPathURL)
             navigare = n
             wv.navigationDelegate = n
         }
@@ -119,13 +121,45 @@ final class AhPuntePazita: NSObject, WKScriptMessageHandler {
 ///    care WebView-ul nu-l afișează, adresă trimisă de Capacitor în afara aplicației).
 /// Pe acestea le înghițim (altfel cine are internet ar vedea „Nu avem internet acum”, iar încărcarea paginii offline
 /// ar anula chiar navigarea dorită). Tot restul merge neschimbat la Capacitor.
+///
+/// Răspunsurile 5xx ale site-ului (2.3.0): WKWebView ar desena pagina de eroare a serverului (sau una albă) și nimic nu
+/// ar duce la pagina offline. Pentru cadrul principal de pe site, un răspuns cu cod ≥ 500 se anulează și se deschide
+/// pagina offline cu ?cod=<cod> (plus AhNavigare.ultimaEroare, citită prin AhApp.info()), ca ea să arate „Site-ul e în
+/// lucru” în loc de „Nu avem internet”. Anularea dă WebKitErrorDomain 102, pe care filtrul de mai jos îl înghite.
 final class AhNavigare: NSObject, WKNavigationDelegate {
     /// Handlerul Capacitor e ținut de bridge; aici doar îl folosim.
     private weak var capacitor: WKNavigationDelegate?
+    private let paginaOffline: URL?
+    static let gazde: Set<String> = ["www.adelaharu.ro", "adelaharu.ro"]
+    /// Ultima eroare HTTP a cadrului principal (cod, ms de la 1970); 0 = niciuna.
+    static var ultimaEroare: (cod: Int, la: Double) = (0, 0)
 
-    init(_ capacitor: WKNavigationDelegate) {
+    init(_ capacitor: WKNavigationDelegate, paginaOffline: URL? = nil) {
         self.capacitor = capacitor
+        self.paginaOffline = paginaOffline
         super.init()
+    }
+
+    /// Pagina offline cu motivul: capacitor://www.adelaharu.ro/offline.html?cod=503 (serverul local ia doar calea).
+    static func adresaEroare(_ baza: URL, cod: Int) -> URL {
+        var c = URLComponents(url: baza, resolvingAgainstBaseURL: false)
+        c?.queryItems = [URLQueryItem(name: "cod", value: String(cod))]
+        return c?.url ?? baza
+    }
+
+    func webView(_ webView: WKWebView, decidePolicyFor navigationResponse: WKNavigationResponse, decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void) {
+        if navigationResponse.isForMainFrame,
+           let h = navigationResponse.response as? HTTPURLResponse, h.statusCode >= 500,
+           let gazda = h.url?.host?.lowercased(), AhNavigare.gazde.contains(gazda),
+           let offline = paginaOffline {
+            AhNavigare.ultimaEroare = (h.statusCode, Date().timeIntervalSince1970 * 1000)
+            decisionHandler(.cancel)
+            webView.load(URLRequest(url: AhNavigare.adresaEroare(offline, cod: h.statusCode)))
+            return
+        }
+        // Capacitor 8 (WebViewDelegationHandler) nu implementează decidePolicyFor navigationResponse: restul trece neschimbat.
+        // La o actualizare a lui Capacitor: grep „navigationResponse” în WebViewDelegationHandler.swift (vezi app/README.md).
+        decisionHandler(.allow)
     }
 
     static func nuEOffline(_ error: Error) -> Bool {

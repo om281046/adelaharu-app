@@ -159,7 +159,10 @@ El primește un email (cadrul comun al emailurilor) cu un link personal permanen
 (32 de octeți aleatori; pe server doar sha256). Linkul deschide aplicația (universal link) sau pagina din browser și
 îl ține conectat (cookie semnat `ah_spp`, 1 an). Link pierdut: „Trimite-mi din nou linkul” cu emailul lui → token nou,
 cel vechi se anulează când îl folosește pe cel nou (review 18 nov.). Ea vede în „Ciclul meu”: cine e invitat, dacă a intrat, ultima vizită; „Oprește accesul” (pe loc)
-și „Trimite din nou invitația” (token și sesiune noi: deconectează orice telefon sau browser al lui). Cel mult 2 parteneri activi.
+și „Trimite din nou invitația” („Trimite-i din nou linkul” dacă a intrat deja; token și sesiune noi: deconectează orice telefon sau
+browser al lui, dar doar dacă emailul a plecat, 1.4.0). Cel mult 2 parteneri activi (verificat sub `GET_LOCK`, ca două cereri
+deodată să nu treacă amândouă). Adresa lui se verifică strict (1.4.0): diacriticele, spațiile sau orice caracter non-ASCII sunt
+refuzate cu un mesaj clar, nu „curățate” de `sanitize_email` spre adresa altcuiva.
 
 **Ce primește el (sincronizat, minim):** `GET /wp-json/ah-spp/v1/azi` (cookie `ah_spp` sau `?t=`) calculează pe server,
 din datele ei criptate (`ah_sp_ciclu`: `ciclu.starturi`, `lung`, `men`, `sit`), cu EXACT regula `CI.faze`/`CI.lung` din 235:
@@ -176,7 +179,11 @@ pentru fiecare partener, păstrate în `pauza_de_la`). `sit` lipsă = `natural`,
 **Notificări pentru el:** în aplicație, push (FCM) din cron-ul zilnic (8:10 ora site-ului, lanț de evenimente unice, deci și
 după schimbarea orei), la începutul fiecărei faze, doar dacă s-a schimbat faza (la fel și când ea notează o menstruație nouă care
 mută faza). Faza e notată ca trimisă doar după o trimitere reușită (altfel se reîncearcă). Fără aplicație: email la începutul fiecărei faze, doar dacă
-bifează asta pe pagina lui (oprire din orice email). Tokenurile push ale lui sunt separate de ale ei.
+bifează asta pe pagina lui (oprire din orice email). Tokenurile push ale lui sunt separate de ale ei. **Notificarea nu spune faza
+(1.4.0)**, pentru că se vede pe ecranul blocat: „Ciclul ei” / „Începe o fază nouă. Vezi cum o poți sprijini.”, iar pe Android
+vizibilitatea e `PRIVATE`; subiectul emailului e „Ciclul ei: o fază nouă” (corpul păstrează faza și sprijinul). Invitat de două
+femei, telefonul lui stă lângă amândouă invitațiile (unic pe partener + token) și primește de la amândouă. Fiecare rulare a
+cronului notează `ah_spp_ultima_rulare` (avizul din admin al modulului aplicație).
 
 **Un telefon = un cont, pentru push** (integrare, 18 nov.): tokenul FCM e al telefonului, nu al contului, deci stă într-un
 singur tabel o dată. Serverul îl mută: `POST /ah-spa/v1/push` (ea) îl scoate din `wp_ah_spp_push`, `POST /ah-spp/v1/push`
@@ -187,15 +194,21 @@ Pe un telefon cu ea intrată, telefonul e al ei: pagina lui nu oferă notificăr
 întoarce 409 `cont_ea`. Puntea ei (`AHApp`) se tipărește doar pe paginile ei, deci nu poate lega telefonul lui de contul
 ei; pagina lui are scriptul ei, care scrie doar la `ah-spp/v1`. „Ieși”/„Șterge accesul meu” la el scot doar tokenul lui
 (`unregister()` doar dacă `ah_push.cont` e `el`); ieșirea ei scoate doar tokenul ei și nu atinge tokenul lui cât e intrat
-el (`AH_SPA.el`); pe o pagină fără niciun cont, un token rămas al lui pleacă prin `DELETE /ah-spp/v1/push`.
+el (`AH_SPA.el`); pe o pagină fără niciun cont, un token rămas al lui pleacă prin `POST /ah-spp/v1/push/sterge` (1.4.0, pentru
+firewallurile care blochează DELETE; `DELETE /push` rămâne pentru compatibilitate).
+
+**Interfețele cu modulul aplicație (1.4.0):** `ah_spa_cont_mutat($vechi, $nou)` — ea și-a schimbat adresa: rândurile ei trec pe
+`ah_sp_ciclu_cheie($nou)`; `ah_spa_are_acces_el` — adevărat doar cu un cookie `ah_spp` valid al unui acces activ (aplicația ei arată
+atunci rândul „Ciclul ei” spre `/pentru-el/`); `ah_spp_ultima_rulare` (opțiune, unix time).
 
 **În aplicație:** `/pentru-el/` e pe lista permisă (filtrul `ah_spa_permise`), deschisă în aplicație (`allowNavigation`
 `www.adelaharu.ro`, App Links / AASA); fără analiză, fără Google Fonts, fără cărți. Pe ecranul de intrare apare „Sunt partenerul ei” → „Deschide linkul primit pe email” (cu un câmp pentru
 linkul copiat, care îl deschide în aplicație) sau „Trimite-mi din nou linkul”. Apple: același cont simplu (fără parolă, fără cumpărături).
 
 **Datele lui:** prenume, email (criptat; hash pentru căutare), token (hash), tokenuri push, ultima vizită. Cheia modulului nu
-stă în baza de date (constanta `AH_SPP_CHEIE` din `wp-config.php` sau derivată din sărurile WordPress; din 1.3.0, cu migrarea
-o dată a cheii vechi din opțiuni). Cheia ciclului din 235 (`ah_sp_ciclu_secret`) e încă în opțiuni: recomandare în
+stă în baza de date (constanta `AH_SPP_CHEIE` din `wp-config.php` sau derivată din sărurile WordPress). Cheia veche din opțiuni
+(până la 1.2.0) rămâne 30 de zile după urcare (1.4.0): rândurile vechi se citesc cu ea și se recriptează abia la capăt, așa că o
+întoarcere sub 1.3 e sigură doar în aceste 30 de zile (apoi copia veche a fragmentului se șterge). Cheia ciclului din 235 (`ah_sp_ciclu_secret`) e încă în opțiuni: recomandare în
 `docs/partener.md`. Rutele care schimbă ceva cer antetul `X-AH-SPP: 1` (apărare CSRF în plus față de SameSite=Lax). El își poate șterge
 accesul din pagina lui; când ea își șterge contul (`sterge-cont`, cu numărul în emailul echipei: `pentru_el`) sau ciclul,
 rândurile lui și tokenurile lui push se șterg pe loc. Paragraf nou în Politica de confidențialitate.
@@ -203,7 +216,7 @@ rândurile lui și tokenurile lui push se șterg pe loc. Paragraf nou în Politi
 **Textele (Mircea, 18 nov.): niciun text nou.** Azi și Învață (6 pagini) se fac doar din ce e deja pe site: Harta ciclului 41
 (`pe_scurt`, `simti`, `ajuta`, `practica`, arhetip, luna, „Nota” din *Spre feminitate*), 235 (`sprijin`, citatele din „Magia Ciclului
 Feminin”, episoadele 2–6 ale podcastului, frazele paginii `?ciclul-ei`), cu nota „Fazele sunt o estimare: nu sunt o metodă de
-contracepție.” (41). Notificarea fazei: „Începe {Iarna ei interioară…}” + primul rând din `sprijin`. Emailurile lui numesc operatorul
+contracepție.” (41). Notificarea fazei: neutră (vezi mai sus); emailul fazei: „Începe {Iarna ei interioară…}” + sprijinul. Emailurile lui numesc operatorul
 (HARU TRAINING SRL) și politica de confidențialitate; versiunea textului acordului ei (`acord_v`) stă lângă `acord`. Puținele rânduri
 funcționale fără sursă pe site: lista din `docs/partener.md`.
 Linkul vechi „Pentru el” (`?ciclul-ei` cu datele după #) continuă să meargă; în „Ciclul meu” generatorul vechi e înlocuit

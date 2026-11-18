@@ -53,6 +53,10 @@ const config: CapacitorConfig = {
     backgroundColor: FUNDAL,
     allowMixedContent: false,
     captureInput: false,
+    // la fel ca ținta din vite.config.ts (chrome90). Sub ea, Capacitor (Bridge.isMinimumWebViewInstalled) nu deschide
+    // site-ul: încarcă direct pagina offline, care vede versiunea din User-Agent și cere actualizarea „Android System
+    // WebView” / „Chrome” (legatura.ts, motivul „webview”). Android 7–9 fără actualizări din Magazin Play rămân acolo.
+    minWebViewVersion: 90,
   },
   plugins: {
     // Site-ul își face singur cererile (cookie-ul ah_sp): fără interceptarea fetch/XHR și a cookie-urilor.

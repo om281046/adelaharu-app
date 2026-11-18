@@ -47,7 +47,11 @@ function ah_test_actiune( $h, ...$a ) {
 }
 
 /* ---------- opțiuni, tranzitorii ---------- */
-function wp_salt( $s = 'auth' ) { return 'sare-de-test-' . $s; }
+function wp_salt( $s = 'auth' ) { return ( $GLOBALS['ah_test_sare'] ?? 'sare-de-test-' ) . $s; } // testele pot „roti” sărurile
+function get_current_user_id() { return 1; }
+function wp_nonce_field( $a ) { echo '<input type="hidden" name="_wpnonce" value="n">'; }
+function submit_button( $t = '', $c = '' ) { echo '<button type="submit">' . $t . '</button>'; }
+function dbDelta( $q ) { $GLOBALS['ah_test_dbdelta'][] = $q; return array(); } // tabelele există deja în SQLite (mai jos)
 function get_option( $k, $d = false ) { return array_key_exists( $k, $GLOBALS['ah_test_options'] ) ? $GLOBALS['ah_test_options'][ $k ] : $d; }
 function update_option( $k, $v, $a = null ) { $GLOBALS['ah_test_options'][ $k ] = $v; return true; }
 function add_option( $k, $v, $d = '', $a = null ) { if ( ! array_key_exists( $k, $GLOBALS['ah_test_options'] ) ) { $GLOBALS['ah_test_options'][ $k ] = $v; } return true; }
@@ -189,15 +193,28 @@ class Ah_Test_Wpdb {
 		return preg_replace_callback( '/%[sd]/', function ( $m ) use ( &$i, $a, $pdo ) { $v = $a[ $i++ ]; return '%d' === $m[0] ? (string) (int) $v : $pdo->quote( (string) $v ); }, $q );
 	}
 	public function get_row( $q, $o = null ) { $r = $this->pdo->query( $q )->fetch( PDO::FETCH_ASSOC ); return $r ? $r : null; }
-	public function get_results( $q, $o = null ) { return $this->pdo->query( $q )->fetchAll( PDO::FETCH_ASSOC ); }
+	public function get_results( $q, $o = null ) { $q = $this->mysql( $q ); return is_array( $q ) ? $q : $this->pdo->query( $q )->fetchAll( PDO::FETCH_ASSOC ); }
 	public function get_col_test( $q ) { return array_map( 'strval', $this->pdo->query( $q )->fetchAll( PDO::FETCH_COLUMN ) ); }
-	public function get_var( $q ) { $r = $this->pdo->query( $q )->fetch( PDO::FETCH_NUM ); return $r ? $r[0] : null; }
+	public function get_var( $q ) { $q = $this->mysql( $q ); if ( is_array( $q ) ) { return $q ? ( array_values( $q[0] )[0] ?? null ) : null; } $r = $this->pdo->query( $q )->fetch( PDO::FETCH_NUM ); return $r ? $r[0] : null; }
+	public function get_col( $q ) { return array_map( function ( $r ) { return $r[0]; }, $this->pdo->query( $q )->fetchAll( PDO::FETCH_NUM ) ); }
+	/* SHOW TABLES LIKE / SHOW COLUMNS FROM (MySQL) → rezultatul lor, din SQLite; altfel interogarea neschimbată */
+	private function mysql( $q ) {
+		if ( preg_match( "/^SHOW TABLES LIKE '([^']*)'/i", $q, $m ) ) {
+			$r = $this->pdo->query( 'SELECT name FROM sqlite_master WHERE type = ' . $this->pdo->quote( 'table' ) . ' AND name = ' . $this->pdo->quote( $m[1] ) )->fetchAll( PDO::FETCH_ASSOC );
+			return $r;
+		}
+		if ( preg_match( '/^SHOW COLUMNS FROM (\w+)/i', $q, $m ) ) {
+			if ( ! empty( $GLOBALS['ah_test_fara_coloane'] ) ) { return array(); } // un dbDelta care n-a mers
+			return array_map( function ( $r ) { return array( 'Field' => $r['name'] ); }, $this->pdo->query( 'PRAGMA table_info(' . $m[1] . ')' )->fetchAll( PDO::FETCH_ASSOC ) );
+		}
+		return $q;
+	}
 	private function where( $w ) { return implode( ' AND ', array_map( function ( $k, $v ) { return $k . ' = ' . $this->pdo->quote( (string) $v ); }, array_keys( $w ), $w ) ); }
 	public function insert( $t, $d ) { return $this->pdo->exec( 'INSERT INTO ' . $t . ' (' . implode( ',', array_keys( $d ) ) . ') VALUES (' . implode( ',', array_map( array( $this->pdo, 'quote' ), array_map( 'strval', $d ) ) ) . ')' ); }
 	public function update( $t, $d, $w ) { return $this->pdo->exec( 'UPDATE ' . $t . ' SET ' . implode( ', ', array_map( function ( $k, $v ) { return $k . ' = ' . $this->pdo->quote( (string) $v ); }, array_keys( $d ), $d ) ) . ' WHERE ' . $this->where( $w ) ); }
 	public function delete( $t, $w ) { return $this->pdo->exec( 'DELETE FROM ' . $t . ' WHERE ' . $this->where( $w ) ); }
 	/* MySQL → SQLite: doar „INSERT IGNORE” (contoarele atomice); restul e SQL comun amândurora */
-	public function query( $q ) { $GLOBALS['ah_test_sql'][] = $q; return $this->pdo->exec( preg_replace( '/^INSERT IGNORE\b/i', 'INSERT OR IGNORE', $q ) ); }
+	public function query( $q ) { $GLOBALS['ah_test_sql'][] = $q; $q = preg_replace( '/^INSERT IGNORE\b/i', 'INSERT OR IGNORE', $q ); if ( preg_match( '/^DELETE\b/i', $q ) ) { $q = preg_replace( '/\s+LIMIT\s+\d+\s*$/i', '', $q ); } return $this->pdo->exec( $q ); } // SQLite: DELETE fără LIMIT
 }
 $GLOBALS['wpdb'] = new Ah_Test_Wpdb();
 
