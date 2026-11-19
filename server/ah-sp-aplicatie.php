@@ -44,6 +44,9 @@
  *      telefon (POST /preferinte), aplicate în loturi (categorie, ore de liniște, text ascuns, canal, insignă); statisticile
  *      proprii, fără Google/Meta (POST /stat, contoare pe zi, utilizatoare unice prin HMAC lunar ținut ≤ 35 de zile,
  *      Setări › Aplicația mobilă › Statistici, CSV); Vimeo cu allow="autoplay; fullscreen; picture-in-picture".
+ *      Runda 3: notificările ținute o singură dată (arendă + cheie de înlocuire FCM), liniștea în fusul telefonului, soarele
+ *      Bucureștiului pe ceasul telefonului, statisticile în loturi (keepalive, coada golită la oprire), CSV fără formule,
+ *      indexurile panoului (tabelele 4), temporizatorul oprit la închiderea playerului, lacătul ciclului și în fundal.
  *
  * În browser nu se schimbă nimic: fiecare cârlig de pagină întreabă întâi ah_spa_e_aplicatie().
  * Oprire: dezactivezi fragmentul. Site-ul rămâne exact ca înainte; aplicația arată Spațiul meu ca în browser.
@@ -61,7 +64,7 @@ define( 'AH_SPA_PACHET', 'ro.adelaharu.app' );
 define( 'AH_SPA_LINK_MIN', 15 );        // cât ține linkul semnat al unei descărcări
 define( 'AH_SPA_LOT', 100 );            // telefoane pe lot de notificări
 define( 'AH_SPA_TOKENURI_MAX', 10 );    // telefoane cu notificări pe o adresă
-define( 'AH_SPA_TABEL_VER', '3' );      // 2: contoarele atomice (secțiunea 11); 3: prefs + necitite pe push, amânate, statistici (2.4.0)
+define( 'AH_SPA_TABEL_VER', '4' );      // 2: contoarele atomice (secțiunea 11); 3: prefs + necitite pe push, amânate, statistici (2.4.0); 4: indexurile panoului (ev, zi) și ale amprentelor (h)
 define( 'AH_SPA_NOTIF_ID', 41000 );     // id-urile notificărilor locale ale ciclului: 41000–41099 (aceleași în puntea JS)
 define( 'AH_SPA_COD_MAX', 5 );         // încercări pe un cod trimis de 235 (POST /ah-sp/v1/intra), secțiunea 11
 define( 'AH_SPA_COD_ZI', 15 );         // coduri greșite pe o adresă într-o zi
@@ -72,6 +75,8 @@ define( 'AH_SPA_NOTIF_ZI', 41100 );    // id-ul mementoului zilnic de meditație
 define( 'AH_SPA_STAT_ZILE', 400 );     // zile păstrate în contoarele statisticilor (13 luni + o marjă), apoi șterse
 define( 'AH_SPA_UNICE_ZILE', 35 );     // zile păstrate în tabelul utilizatoarelor unice (amprente HMAC lunare)
 define( 'AH_SPA_STAT_ORA', 300 );      // evenimente de statistică pe oră, pe cont
+define( 'AH_SPA_STAT_LOT', 30 );       // evenimente într-un singur POST /stat (puntea le adună și le trimite la 30 s)
+define( 'AH_SPA_AMANATE_ARENDA', 600 ); // secunde: o notificare ținută, luată de un tick, nu mai e văzută de altul (runda 3)
 
 if ( ! function_exists( 'ah_spa_e_aplicatie' ) ) :
 
@@ -564,7 +569,8 @@ function ah_spa_js_devreme() {
 	return <<<'AHSPAJS0'
 (function(){var S=window.AH_SPA||{},H=document.documentElement,L;if(S.zona)H.classList.add('ahspa-z-'+S.zona);
 try{L=window.localStorage;var v=L.getItem('ahspa_cine');if(S.cont&&S.cine){if(v&&v!==S.cine&&(S.cine_vechi||[]).indexOf(v)<0){Object.keys(L).forEach(function(k){if(/^(ahsp_|ahspx_|ahct_|ah_ciclu_v1$)/.test(k))L.removeItem(k);});window.AHSPA_ALT_CONT=1;}if(v!==S.cine)L.setItem('ahspa_cine',S.cine);}}catch(e){}
-window.AHSPA_SOARE=function(t){var R=Math.PI/180,sn=function(x){return Math.sin(x*R);},cs=function(x){return Math.cos(x*R);},la=44.43,lo=26.10,z=Date.UTC(t.getFullYear(),t.getMonth(),t.getDate()),T=(z/864e5+2440588-lo/360-2451545)/36525,L0=(280.46646+T*(36000.76983+T*0.0003032))%360,M=357.52911+T*(35999.05029-0.0001537*T),e=0.016708634-T*(0.000042037+0.0000001267*T),C=sn(M)*(1.914602-T*(0.004817+0.000014*T))+sn(2*M)*(0.019993-0.000101*T)+sn(3*M)*0.000289,om=125.04-1934.136*T,lam=L0+C-0.00569-0.00478*sn(om),ep=23+(26+(21.448-T*(46.815+T*(0.00059-T*0.001813)))/60)/60+0.00256*cs(om),dc=Math.asin(sn(ep)*sn(lam))/R,y=Math.pow(Math.tan(ep/2*R),2),eq=4/R*(y*sn(2*L0)-2*e*sn(M)+4*e*y*sn(M)*cs(2*L0)-0.5*y*y*sn(4*L0)-1.25*e*e*sn(2*M)),ha=Math.acos(cs(90.833)/(cs(la)*cs(dc))-Math.tan(la*R)*Math.tan(dc*R))/R,n=720-4*lo-eq;return {r:z+(n-4*ha)*6e4,a:z+(n+4*ha)*6e4};};
+window.AHSPA_SOARE=function(t){var R=Math.PI/180,sn=function(x){return Math.sin(x*R);},cs=function(x){return Math.cos(x*R);},la=44.43,lo=26.10,Y=t.getFullYear(),M=t.getMonth(),D=t.getDate(),z=Date.UTC(Y,M,D),T=(z/864e5+2440588-lo/360-2451545)/36525,L0=(280.46646+T*(36000.76983+T*0.0003032))%360,M0=357.52911+T*(35999.05029-0.0001537*T),e=0.016708634-T*(0.000042037+0.0000001267*T),C=sn(M0)*(1.914602-T*(0.004817+0.000014*T))+sn(2*M0)*(0.019993-0.000101*T)+sn(3*M0)*0.000289,om=125.04-1934.136*T,lam=L0+C-0.00569-0.00478*sn(om),ep=23+(26+(21.448-T*(46.815+T*(0.00059-T*0.001813)))/60)/60+0.00256*cs(om),dc=Math.asin(sn(ep)*sn(lam))/R,y=Math.pow(Math.tan(ep/2*R),2),eq=4/R*(y*sn(2*L0)-2*e*sn(M0)+4*e*y*sn(M0)*cs(2*L0)-0.5*y*y*sn(4*L0)-1.25*e*e*sn(2*M0)),ha=Math.acos(cs(90.833)/(cs(la)*cs(dc))-Math.tan(la*R)*Math.tan(dc*R))/R,n=720-4*lo-eq,
+du=function(l){var x=new Date(Date.UTC(Y,l+1,0));return Date.UTC(Y,l,x.getUTCDate()-x.getUTCDay());},of=z>=du(2)&&z<du(9)?180:120,ora=function(m){return new Date(Y,M,D,0,0,Math.round((m+of)*60)).getTime();};return {r:ora(n-4*ha),a:ora(n+4*ha)};};
 try{if(S.zona==='sp'&&L){var a=L.getItem('ahspa_aspect'),x=L.getItem('ahspx_seara'),n=null,k=Date.now(),so;if(a==='soare'){so=window.AHSPA_SOARE(new Date());n=k<so.r||k>=so.a;}else if(a==='zi')n=false;else if(a==='seara')n=true;else if(x===null)n=!!(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches);
 if(n!==null){H.classList.toggle('ahsp-seara',n);var tc=document.querySelector('meta[name="theme-color"]');if(tc)tc.setAttribute('content',n?'#221922':'#FBF6F3');}}}catch(e){}
 try{if(S.zona==='sp'&&S.cont&&L&&L.getItem('ahspa_bio')==='1'&&/^#ciclu($|_)/.test(location.hash))H.classList.add('ahspa-blocat');}catch(e){}
@@ -740,6 +746,7 @@ html.ahsp-seara .ahspa-foaie select{background:#3A2C36;color:#F6ECE6;border-colo
 #ahsp .player .spa-somn:focus-visible{outline:3px solid #EDB7A4;outline-offset:1px}
 /* Ciclul meu blocat (Face ID / amprenta): conținutul secțiunii stă ascuns, în locul lui o stare liniștită */
 html.ahspa-blocat #ahsp-main .ecran>*:not(.spa-lacat){display:none!important}
+html.ahspa-blocat #ahsp .foaie{visibility:hidden!important} /* și o foaie a lui 235 deschisă peste Ciclul meu (notițele zilei) */
 #ahsp .spa-lacat{display:grid;justify-items:center;text-align:center;gap:12px;padding:48px 20px 40px}
 #ahsp .spa-lacat svg{width:46px;height:46px;fill:none;stroke:var(--acc,#964E46);stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
 #ahsp .spa-lacat h2{font-size:26px!important}
@@ -1112,11 +1119,13 @@ var PUSH={
    /* contul activ pe telefon e al ei (aplicația deschide contul ei când e intrată): un token al lui trece la ea (serverul îl scoate din tabelul lui) */
    return Promise.all([SET.incarca(),NATIV2]).then(function(r){
     return api('push',{metoda:'POST',corp:{token:tok,platforma:PUSH.platforma(),versiune:S.versiune,disp:DISP,prefs:prefsServer(r[0],r[1])}});})
-    .then(function(j){if(j&&j.ok)return PREF.pune('ah_push',{token:tok,cont:'ea',cine:S.cine,la:acum});});});},
+    .then(function(j){if(j&&j.ok)return PREF.pune('ah_push',{token:tok,cont:'ea',cine:S.cine,la:acum,fus:fusTel()});});});},
  /* Setări › Notificări s-au schimbat: preferințele merg pe rândul tokenului ei (categoriile, sunetul, orele de liniște, ecranul
     blocat, insigna). Fără token încă: pleacă odată cu înregistrarea (POST /push). Un token necunoscut serverului: îl retrimitem. */
  prefs:function(){if(!S.cont)return Promise.resolve();return Promise.all([PREF.ia('ah_push'),SET.incarca(),NATIV2]).then(function(r){var v=r[0];if(!v||!v.token||PUSH.al(v)!=='ea')return;
-  return api('preferinte',{metoda:'POST',corp:{token:v.token,prefs:prefsServer(r[1],r[2])}}).then(function(j){if(j&&j._cod===404){v.la=0;return PREF.pune('ah_push',v).then(function(){return PUSH.trimite(v.token);});}});}).catch(function(){});},
+  return api('preferinte',{metoda:'POST',corp:{token:v.token,prefs:prefsServer(r[1],r[2])}}).then(function(j){if(j&&j._cod===404){v.la=0;return PREF.pune('ah_push',v).then(function(){return PUSH.trimite(v.token);});}if(j&&j.ok){v.fus=fusTel();return PREF.pune('ah_push',v);}});}).catch(function(){});},
+ /* la pornire și la revenire: alt fus orar decât cel știut de server (o călătorie) ⇒ preferințele pleacă din nou */
+ fus:function(){if(!S.cont)return Promise.resolve();return PREF.ia('ah_push').then(function(v){if(v&&v.token&&PUSH.al(v)==='ea'&&v.fus!==fusTel())return PUSH.prefs();}).catch(function(){});},
  /* la deschidere: numărul de pe iconiță se golește și pe server (necitite = 0 pe tokenul ei) */
  insigna:function(){return PREF.ia('ah_push').then(function(v){if(v&&v.token&&PUSH.al(v)==='ea')return api('insigna',{metoda:'POST',corp:{token:v.token}});}).catch(function(){});},
  /* Al cui e tokenul telefonului (Preferences.ah_push.cont): 'ea' (puntea aceasta) sau 'el' (pagina /pentru-el/ a partenerului,
@@ -1256,11 +1265,13 @@ d.addEventListener('click',function(e){
  DL.descarca(id).then(function(){arataDl(id);STAT.ev('descarcare',id);},function(er){arataDl(id,{err:(er&&er.ro&&er.message?er.message:'N-a mers descărcarea. Verifică internetul și încearcă din nou.')});});
  });
 });
-/* Wi-Fi sau nu: @capacitor/network (Network.getStatus().connectionType). Fără plugin (aplicație veche) sau tip necunoscut:
-   descarcă. Doar „cellular” cu „doar pe Wi-Fi” pornit întreabă. CIORNĂ pentru texte. */
+/* Wi-Fi sau nu: @capacitor/network (Network.getStatus().connectionType). Fără plugin (aplicație veche) sau tip necunoscut
+   ('unknown', o eroare): descarcă. Doar „cellular” cu „doar pe Wi-Fi” pornit întreabă. Fără internet (connected: false,
+   oricare ar fi alegerea): spunem asta, în loc de o descărcare care pică după câteva secunde. CIORNĂ pentru texte. */
+var OFFLINE=['Nu ești conectată la internet','Meditația se poate descărca doar cu internet. Încearcă din nou când ai Wi-Fi sau date mobile.'];
 function wifiOk(){
- return SET.incarca().then(function(v){if(!v.wifi||!are('Network','getStatus'))return true;
-  return cheama('Network','getStatus').then(function(r){if(!r||r.connectionType!=='cellular')return true;
+ return SET.incarca().then(function(v){if(!are('Network','getStatus'))return true;
+  return cheama('Network','getStatus').then(function(r){if(r&&r.connected===false){msg(OFFLINE);return false;}if(!v.wifi||!r||r.connectionType!=='cellular')return true;
    return confirma('Nu ești pe Wi-Fi','Ai ales să descarci meditațiile doar pe Wi-Fi. Le descarci acum, pe datele mobile?','Descarcă acum');},function(){return true;});});
 }
 /* Spațiul ocupat de meditațiile descărcate (sunetul și poza), din Filesystem.stat. */
@@ -1376,7 +1387,9 @@ var SET={v:null,p:null,
  schimba:function(f){return SET.incarca().then(function(v){v=JSON.parse(JSON.stringify(v));f(v);SET.v=curataSet(v);SET.p=Promise.resolve(SET.v);ls('ahspa_setari',SET.v);try{localStorage.setItem('ahspa_bio',SET.v.bio?'1':'0');}catch(e){}return PREF.pune('ah_setari',SET.v).then(function(){return SET.v;});});},
  uita:function(){SET.v=null;SET.p=null;try{['ahspa_setari','ahspa_bio'].forEach(function(k){localStorage.removeItem(k);});}catch(e){}return PREF.scoate('ah_setari');}};
 /* ce află serverul (rândul tokenului ei, POST /push și /preferinte): doar ce privește notificările push */
-function prefsServer(v,nou){return {cat:{meditatii:!!v.cat.meditatii,intalniri:!!v.cat.intalniri,inreg:!!v.cat.inreg},sunet:sunetEf(v,nou),liniste:{on:!!v.liniste.on,de:v.liniste.de,pana:v.liniste.pana},ecran:v.ecran,insigna:!!v.insigna};}
+/* fusul orar al telefonului (runda 3): orele de liniște sunt ale ceasului ei, și când e în altă țară */
+function fusTel(){try{var f=Intl.DateTimeFormat().resolvedOptions().timeZone;return typeof f==='string'&&f.length<=64?f:'';}catch(e){return '';}}
+function prefsServer(v,nou){var o={cat:{meditatii:!!v.cat.meditatii,intalniri:!!v.cat.intalniri,inreg:!!v.cat.inreg},sunet:sunetEf(v,nou),liniste:{on:!!v.liniste.on,de:v.liniste.de,pana:v.liniste.pana},ecran:v.ecran,insigna:!!v.insigna},f=fusTel();if(f)o.fus=f;return o;}
 var SUNETE={clopotel:'Clopoțel',implicit:'Sunetul telefonului',fara:'Fără sunet'},
  ASPECTE={telefon:'Ca telefonul',soare:'După apus și răsărit',zi:'Mereu zi',seara:'Mereu seară'},
  ECRAN={tot:'Arată ce scrie',ascuns:'Doar „Adela Haru”'},
@@ -1385,9 +1398,25 @@ var SUNETE={clopotel:'Clopoțel',implicit:'Sunetul telefonului',fara:'Fără sun
  CAT_TIP={meditatie:'meditatii',inreg:'inreg',intalnire:'intalniri',proba:'proba'};
 
 /* ---------- statisticile proprii (fără Google, fără Meta): POST /ah-spa/v1/stat, doar cu „Statistici anonime” pornit ---------- */
-var STAT={ev:function(ev,ob){if(!S.cont||!S.api)return Promise.resolve();return SET.incarca().then(function(v){if(!v.stat)return;
- var b={ev:ev,platforma:platf()||'',versiune:S.versiune||''};if(ob!=null&&ob!=='')b.obiect=String(ob);
- try{return fetch(S.api+'stat',{method:'POST',credentials:'same-origin',cache:'no-store',keepalive:true,headers:{'X-AH-App':'1','Content-Type':'application/json'},body:JSON.stringify(b)}).then(function(){},function(){});}catch(e){}}).catch(function(){});}};
+/* Runda 3: evenimentele stau în memorie (cel mult 30; același eveniment de mai multe ori în 2 s = o dată) și pleacă împreună,
+   într-un singur POST: la 30 s după primul, la trecerea în fundal (App.pause, pagina ascunsă) și la plecarea de pe pagină
+   (fetch keepalive, care se termină și după ce pagina pleacă). Oprirea „Statistici anonime” golește și coada, pe loc. */
+var STAT={q:[],t:0,ult:{},MAX:30,PAUZA:30000,
+ ev:function(ev,ob){if(!S.cont||!S.api)return Promise.resolve();return SET.incarca().then(function(v){if(!v.stat)return;
+  var o={ev:String(ev)};if(ob!=null&&ob!=='')o.obiect=String(ob);var k=o.ev+'|'+(o.obiect||''),acum=Date.now();
+  if(STAT.ult[k]&&acum-STAT.ult[k]<2000)return;STAT.ult[k]=acum; /* rafale (aceeași secțiune atinsă de trei ori): una */
+  if(STAT.q.length>=STAT.MAX)return;STAT.q.push(o);
+  if(STAT.q.length>=STAT.MAX)return STAT.trimite();
+  if(!STAT.t)STAT.t=setTimeout(STAT.trimite,STAT.PAUZA);}).catch(function(){});},
+ trimite:function(){clearTimeout(STAT.t);STAT.t=0;if(!STAT.q.length)return Promise.resolve();var l=STAT.q.splice(0,STAT.MAX);
+  var du=function(v){if(!v.stat||!S.cont)return; /* oprită între timp: nimic nu pleacă */
+   try{return fetch(S.api+'stat',{method:'POST',credentials:'same-origin',cache:'no-store',keepalive:true,headers:{'X-AH-App':'1','Content-Type':'application/json'},body:JSON.stringify({platforma:platf()||'',versiune:S.versiune||'',evenimente:l})}).then(function(){},function(){});}catch(e){}};
+  /* la plecarea de pe pagină cererea trebuie pornită acum, nu după o promisiune: Setările sunt deja citite (SET.v) */
+  if(SET.v){try{return Promise.resolve(du(SET.v));}catch(e){return Promise.resolve();}}
+  return SET.incarca().then(du).catch(function(){});},
+ goleste:function(){clearTimeout(STAT.t);STAT.t=0;STAT.q=[];}};
+d.addEventListener('visibilitychange',function(){if(d.hidden)STAT.trimite();});
+window.addEventListener('pagehide',function(){STAT.trimite();});
 var TABURI=['acasa','ciclu','cursuri','meditatii','carti','abonamente','podcast','mai'];
 function statSectiune(){if(S.zona!=='sp'||!S.cont)return;var h=(location.hash||'#acasa').slice(1);if(TABURI.indexOf(h)<0)return;STAT.ev('sectiune',h);if(h==='ciclu')STAT.ev('ciclu_deschis');}
 
@@ -1396,13 +1425,15 @@ var ASP={ultim:null,
  mod:function(){var a=null;try{a=localStorage.getItem('ahspa_aspect');}catch(e){}if(['telefon','soare','zi','seara'].indexOf(a)>-1)return a;var x=ls('ahspx_seara');return x===1?'seara':(x===0?'zi':'telefon');},
  noapte:function(t){var f=window.AHSPA_SOARE;if(typeof f!=='function')return false;var s=f(t),k=t.getTime();return k<s.r||k>=s.a;},
  seara:function(m){m=m||ASP.mod();if(m==='zi')return false;if(m==='seara')return true;if(m==='soare')return ASP.noapte(new Date());return !!(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches);},
- aplica:function(){if(S.zona!=='sp')return;var on=ASP.seara();H.classList.toggle('ahsp-seara',on);var tc=d.querySelector('meta[name="theme-color"]');if(tc)tc.setAttribute('content',on?'#221922':'#FBF6F3');searaSync();
+ t:0,
+ /* „După apus și răsărit”: o verificare pe minut, doar cât e aleasă (altfel niciun ceas) */
+ ceas:function(m){var vrea=S.zona==='sp'&&m==='soare';if(vrea&&!ASP.t)ASP.t=setInterval(ASP.aplica,60000);else if(!vrea&&ASP.t){clearInterval(ASP.t);ASP.t=0;}},
+ aplica:function(){if(S.zona!=='sp')return;var m=ASP.mod();ASP.ceas(m);var on=ASP.seara(m);H.classList.toggle('ahsp-seara',on);var tc=d.querySelector('meta[name="theme-color"]');if(tc)tc.setAttribute('content',on?'#221922':'#FBF6F3');searaSync();
   if(on!==ASP.ultim){ASP.ultim=on;if(NATIV)cheama('AhApp','tema',{seara:on}).catch(function(){});}},
  /* „Mereu zi/seară” se scriu și în ahspx_seara (cheia lui 266); „Ca telefonul” și „După soare” o scot (266 nu mai alege) */
  alege:function(m){try{localStorage.setItem('ahspa_aspect',m);if(m==='zi'||m==='seara')localStorage.setItem('ahspx_seara',m==='seara'?'1':'0');else localStorage.removeItem('ahspx_seara');}catch(e){}ASP.aplica();}};
 if(S.zona==='sp'){
  try{if(window.matchMedia){var mq=matchMedia('(prefers-color-scheme: dark)');if(mq.addEventListener)mq.addEventListener('change',ASP.aplica);else if(mq.addListener)mq.addListener(ASP.aplica);}}catch(e){}
- setInterval(ASP.aplica,60000); /* „După apus și răsărit”: la fiecare minut */
  d.addEventListener('visibilitychange',function(){if(!d.hidden)ASP.aplica();});
 }
 
@@ -1428,14 +1459,16 @@ var WID={sem:'',
 /* ---------- Ciclul meu cu Face ID / amprenta: AhApp.biometrie() și AhApp.autentifica({motiv}) ---------- */
 var BIO={p:null,ok:false,cerut:false,fundal:0,sync:false,
  info:function(){if(!BIO.p)BIO.p=NATIV?cheama('AhApp','biometrie').then(function(r){return r&&r.disponibil===true?{disponibil:true,tip:String(r.tip||'')}:{disponibil:false,tip:''};},function(){return {disponibil:false,tip:''};}):Promise.resolve({disponibil:false,tip:''});return BIO.p;},
- auth:function(){return cheama('AhApp','autentifica',{motiv:'Deschide Ciclul meu'}).then(function(r){return !!(r&&r.ok===true);},function(){return false;});},
+ /* inCurs: fereastra sistemului e deschisă (pe Android, codul telefonului e altă activitate: pause/resume nu înseamnă „a plecat”) */
+ inCurs:null,
+ auth:function(){if(BIO.inCurs)return BIO.inCurs;BIO.inCurs=cheama('AhApp','autentifica',{motiv:'Deschide Ciclul meu'}).then(function(r){return !!(r&&r.ok===true);},function(){return false;}).then(function(ok){BIO.inCurs=null;return ok;});return BIO.inCurs;},
  pe:function(){return S.zona==='sp'&&/^#ciclu($|_)/.test(location.hash||'');},
  /* după fiecare desenare și schimbare de secțiune: acoperă Ciclul meu cât timp e blocat; la prima deschidere cere singur deblocarea */
  verifica:function(){return Promise.all([SET.incarca(),BIO.info()]).then(function(r){BIO.sync=!!(r[0].bio&&r[1].disponibil&&S.cont);
   if(!BIO.pe())BIO.cerut=false;
   if(!BIO.sync||BIO.ok||!BIO.pe()){BIO.arata(false);return;}
   BIO.arata(true);if(!BIO.cerut){BIO.cerut=true;BIO.deschide();}}).catch(function(){});},
- deschide:function(){return BIO.auth().then(function(ok){if(!ok){var b=d.getElementById('spa-deblocheaza');if(b)try{b.focus();}catch(e){}return;}BIO.ok=true;BIO.arata(false);var t=d.getElementById('ahsp-tit');if(t)try{t.focus({preventScroll:true});}catch(e){}anunta('Ciclul meu e deschis.');});},
+ deschide:function(){if(BIO.inCurs)return BIO.inCurs;return BIO.auth().then(function(ok){if(!ok){var b=d.getElementById('spa-deblocheaza');if(b)try{b.focus();}catch(e){}return;}BIO.ok=true;BIO.arata(false);var t=d.getElementById('ahsp-tit');if(t)try{t.focus({preventScroll:true});}catch(e){}anunta('Ciclul meu e deschis.');});},
  arata:function(da){H.classList.toggle('ahspa-blocat',!!da);var c=d.getElementById('spa-lacat');
   if(da&&!c){var m=d.querySelector('#ahsp-main .ecran')||d.getElementById('ahsp-main');if(!m)return;c=d.createElement('div');c.id='spa-lacat';c.className='spa-lacat ahspa-ui';c.setAttribute('data-spa','1');
    c.innerHTML=ic('lacat')+'<h2>Ciclul meu e închis</h2><p>L-ai păstrat doar pentru tine. Îl deschizi cu un gest.</p><button type="button" class="btn" id="spa-deblocheaza">Deblochează</button>';m.insertBefore(c,m.firstChild);} /* CIORNĂ */
@@ -1445,16 +1478,24 @@ d.addEventListener('click',function(e){if(e.target.closest&&e.target.closest('#s
 window.addEventListener('hashchange',function(){if(BIO.sync&&!BIO.ok&&BIO.pe())H.classList.add('ahspa-blocat');});
 
 /* ---------- temporizatorul de somn, în playerul lui 235: Oprit / 10–60 de minute; sunetul se stinge în ultimele 10 s ---------- */
-var SOMN={min:0,la:0,t:0,a:null,v0:1,
- porneste:function(min){SOMN.opreste();min=+min||0;if(!min)return;SOMN.min=min;SOMN.a=AUD.ultim;SOMN.v0=SOMN.a&&SOMN.a.volume!=null?SOMN.a.volume:1;SOMN.la=Date.now()+min*60000;SOMN.t=setInterval(SOMN.pas,250);SOMN.eticheta();},
- pas:function(){var a=SOMN.a||AUD.ultim,r=SOMN.la-Date.now();if(!a){SOMN.opreste();return;}SOMN.a=a;
-  if(r<=0){try{a.pause();}catch(e){}a.volume=SOMN.v0;SOMN.opreste();anunta('Temporizatorul de somn a oprit meditația.');return;}
-  if(r<=10000){try{a.volume=Math.max(0,Math.min(1,SOMN.v0*r/10000));}catch(e){}}
+/* Runda 3: temporizatorul urmează sunetul care cântă acum (o piesă nouă în alt <audio>: volumul celui vechi revine, numărătoarea
+   continuă pe cel nou) și se oprește când playerul se închide. Un ceas pe secundă (4 pe secundă doar în ultimele 10 s), plus
+   „timeupdate” de la sunet (WebView-ul poate încetini ceasurile în fundal, sunetul nu). */
+var SOMN={min:0,la:0,t:0,a:null,v0:1,f:false,
+ porneste:function(min){SOMN.opreste();min=+min||0;if(!min)return;SOMN.min=min;SOMN.leaga(AUD.ultim);SOMN.la=Date.now()+min*60000;SOMN.ceas(1000);SOMN.eticheta();},
+ ceas:function(ms){if(SOMN.t)clearInterval(SOMN.t);SOMN.t=setInterval(SOMN.pas,ms);SOMN.f=ms<1000;},
+ leaga:function(a){if(SOMN.a===a)return;if(SOMN.a){try{SOMN.a.volume=SOMN.v0;}catch(e){}SOMN.a.removeEventListener('timeupdate',SOMN.pas);}
+  SOMN.a=a||null;SOMN.v0=a&&a.volume!=null?a.volume:1;if(a)a.addEventListener('timeupdate',SOMN.pas);},
+ deschis:function(){var pl=d.querySelector('#ahsp .player');return !!(pl&&pl.classList.contains('arata'));},
+ pas:function(){if(!SOMN.la)return;var r=SOMN.la-Date.now();if(AUD.ultim&&AUD.ultim!==SOMN.a)SOMN.leaga(AUD.ultim);var a=SOMN.a;
+  if(!a||!SOMN.deschis()){SOMN.opreste();return;} /* playerul s-a închis: nimic de oprit, temporizatorul pleacă */
+  if(r<=0){try{a.pause();}catch(e){}SOMN.opreste();anunta('Temporizatorul de somn a oprit meditația.');return;}
+  if(r<=10000){if(!SOMN.f)SOMN.ceas(250);try{a.volume=Math.max(0,Math.min(1,SOMN.v0*r/10000));}catch(e){}}
   SOMN.eticheta();},
- opreste:function(){if(SOMN.t)clearInterval(SOMN.t);if(SOMN.a&&SOMN.la){try{SOMN.a.volume=SOMN.v0;}catch(e){}}SOMN.t=0;SOMN.min=0;SOMN.la=0;SOMN.eticheta();},
+ opreste:function(){if(SOMN.t)clearInterval(SOMN.t);if(SOMN.a){try{SOMN.a.volume=SOMN.v0;}catch(e){}SOMN.a.removeEventListener('timeupdate',SOMN.pas);}SOMN.a=null;SOMN.t=0;SOMN.f=false;SOMN.min=0;SOMN.la=0;SOMN.eticheta();},
  ramas:function(){return SOMN.la?Math.max(0,Math.ceil((SOMN.la-Date.now())/60000)):0;},
- eticheta:function(){var b=d.querySelector('#ahsp .player .spa-somn');if(!b)return;var m=SOMN.ramas(),sp=b.querySelector('span');if(sp)sp.textContent=m?m+' min':'';
-  if(m)b.setAttribute('data-on','1');else b.removeAttribute('data-on');b.setAttribute('aria-label',m?'Temporizator de somn: încă '+m+(m===1?' minut':' minute'):'Temporizator de somn: oprit');}};
+ eticheta:function(){var b=d.querySelector('#ahsp .player .spa-somn');if(!b)return;var m=SOMN.ramas(),sp=b.querySelector('span'),t=m?m+' min':'';if(sp&&sp.textContent!==t)sp.textContent=t;
+  if(m)b.setAttribute('data-on','1');else b.removeAttribute('data-on');var l=m?'Temporizator de somn: încă '+m+(m===1?' minut':(m>=20?' de minute':' minute')):'Temporizator de somn: oprit';if(b.getAttribute('aria-label')!==l)b.setAttribute('aria-label',l);}};
 function somnBtn(){var pl=d.querySelector('#ahsp .player');if(!pl||pl.querySelector('.spa-somn'))return;var x=pl.querySelector('.pl-x'),b=d.createElement('button');b.type='button';b.className='spa-somn';b.setAttribute('data-spa','1');b.setAttribute('aria-haspopup','dialog');b.innerHTML=ic('luna')+'<span></span>';pl.insertBefore(b,x||null);pl.classList.add('spa-cu-somn');SOMN.eticheta();}
 d.addEventListener('click',function(e){var b=e.target.closest&&e.target.closest('#ahsp .player .spa-somn');if(!b)return;e.preventDefault();
  alege({titlu:'Temporizator de somn',text:'Meditația se oprește singură, cu sunetul stins încet în ultimele secunde.',opt:[['0','Oprit'],['10','10 minute'],['20','20 de minute'],['30','30 de minute'],['45','45 de minute'],['60','60 de minute']],val:String(SOMN.min)}).then(function(v){if(v!=null)SOMN.porneste(+v);}); /* CIORNĂ */
@@ -1467,9 +1508,12 @@ function alege(o){return new Promise(function(gata){
 function hh(m){return (m<600?'0':'')+Math.floor(m/60)+':'+(m%60?'30':'00');}
 function oreLista(a,b){var o=[];for(var m=a;m<=b;m+=30)o.push(hh(m));return o;}
 function sel(id,et,val,lista){return '<label for="'+id+'">'+esc(et)+'<select id="'+id+'">'+lista.map(function(x){return '<option'+(x===val?' selected':'')+'>'+x+'</option>';}).join('')+'</select></label>';}
+/* o.verifica(r) → textul unei greșeli (foaia rămâne deschisă, greșeala anunțată, focusul pe primul câmp) sau '' */
 function alegeOre(o){return new Promise(function(gata){
- var f=foaie('<h2>'+esc(o.titlu)+'</h2>'+(o.text?'<p>'+esc(o.text)+'</p>':'')+'<div class="spa-ore">'+o.campuri.map(function(c){return sel(c[0],c[1],c[2],c[3]);}).join('')+'</div><div class="b"><button type="button" data-a="da">Gata</button><button type="button" class="lite" data-a="nu">Renunț</button></div>');
- f.addEventListener('click',function(e){var b=e.target.closest('[data-a]');if(!b)return;var r=o.campuri.map(function(c){var s=f.querySelector('#'+c[0]);return s?s.value:c[2];});scoate(f);gata(b.getAttribute('data-a')==='da'?r:null);});});}
+ var f=foaie('<h2>'+esc(o.titlu)+'</h2>'+(o.text?'<p>'+esc(o.text)+'</p>':'')+'<div class="spa-ore">'+o.campuri.map(function(c){return sel(c[0],c[1],c[2],c[3]);}).join('')+'</div><p class="m" id="spa-ore-m" role="alert"></p><div class="b"><button type="button" data-a="da">Gata</button><button type="button" class="lite" data-a="nu">Renunț</button></div>');
+ f.addEventListener('click',function(e){var b=e.target.closest('[data-a]');if(!b)return;var r=o.campuri.map(function(c){var s=f.querySelector('#'+c[0]);return s?s.value:c[2];}),da=b.getAttribute('data-a')==='da',er=da&&o.verifica?o.verifica(r):'';
+  if(er){var m=f.querySelector('#spa-ore-m'),s0=f.querySelector('#'+o.campuri[0][0]);m.textContent=er;o.campuri.forEach(function(c){var x=f.querySelector('#'+c[0]);if(x){x.setAttribute('aria-invalid','true');x.setAttribute('aria-describedby','spa-ore-m');}});if(s0)s0.focus();return;}
+  scoate(f);gata(da?r:null);});});}
 
 /* ---------- „Mai mult”: grupurile ---------- */
 function mai(){
@@ -1481,7 +1525,7 @@ function mai(){
 }
 var maiN=0;
 function maiUmple(loc){var n=++maiN;
- return Promise.all([PUSH.stare(),PREF.ia('ah_push_on'),PREF.ia('ah_ciclu_notif'),spatiu(),PUSH.disponibil(),SET.incarca(),NATIV2,BIO.info()]).then(function(r){
+ return Promise.all([PUSH.stare(),PREF.ia('ah_push_on'),PREF.ia('ah_ciclu_notif'),spatiu(),PUSH.disponibil(),SET.incarca(),NATIV2,BIO.info(),cheama('LocalNotifications','checkPermissions').catch(function(){return {};})]).then(function(r){
   if(n!==maiN||!d.contains(loc))return;
   var pOn=!!(NATIV&&r[4])&&r[0]==='granted'&&+r[1]===1,cOn=mementouriPornite(r[2],r[1])&&r[0]==='granted',sp=r[3],push=NATIV&&r[4],v=r[5],nou=r[6],bio=r[7],pl=platf();
   /* CIORNĂ: toate textele de mai jos (lista lor: server/README.md, „Texte noi”) */
@@ -1490,7 +1534,7 @@ function maiUmple(loc){var n=++maiN;
    if(push){no+=sw('spa-push','clopot','Notificări','De la noi, pe telefonul tău',pOn);
     if(pOn)no+=sw('spa-c-meditatii','meditatii','Meditații noi','Când apare o meditație nouă în Inner Temple',v.cat.meditatii)+sw('spa-c-intalniri','calendar','Întâlniri','Cu 15 minute înainte să înceapă',v.cat.intalniri)+sw('spa-c-inreg','video','Înregistrări gata','Când te așteaptă înregistrarea unei întâlniri',v.cat.inreg);}
    no+=sw('spa-ciclu','ciclu','Mementourile ciclului','O notificare la începutul fiecărei faze',cOn);
-   no+=sw('spa-zilnic','ceas','Mementoul zilnic de meditație','Un semn blând, la ora aleasă de tine',v.zilnic.on&&r[0]==='granted');
+   no+=sw('spa-zilnic','ceas','Mementoul zilnic de meditație','Un semn blând, la ora aleasă de tine',v.zilnic.on&&((r[8]&&r[8].display)||r[0])==='granted'); /* notificare locală: permisiunea notificărilor locale (pe telefonul fără Firebase, push nu răspunde) */
    if(v.zilnic.on)no+=rv('spa-zilnic-ora','ceas','Ora mementoului',v.zilnic.ora);
    no+=rv('spa-sunet','sunet','Sunet',SUNETE[sunetEf(v,nou)]);
    if(pOn){no+=sw('spa-liniste','luna','Ore de liniște','Noaptea, fără sunet; ce nu grăbește vine dimineața',v.liniste.on);if(v.liniste.on)no+=rv('spa-liniste-ore','ceas','Liniștea ține','De la '+v.liniste.de+' până la '+v.liniste.pana);}
@@ -1550,7 +1594,7 @@ d.addEventListener('click',function(e){
  if(id==='spa-sunet'){Promise.all([SET.incarca(),NATIV2]).then(function(r){var o=(r[1]?[['clopotel','Clopoțel','Un clopoțel blând, al nostru']]:[]).concat([['implicit','Sunetul telefonului',''],['fara','Fără sunet','Notificarea vine în liniște']]);
    return alege({titlu:'Sunet',opt:o,val:sunetEf(r[0],r[1])}).then(function(x){if(!x)return;return SET.schimba(function(v){v.sunet=x;}).then(function(v){valoare(a,SUNETE[sunetEf(v,r[1])]);dupaNotif();});});});return;}
  if(id==='spa-liniste'){var on5=a.getAttribute('aria-checked')!=='true';SET.schimba(function(v){v.liniste.on=on5?1:0;}).then(function(){PUSH.prefs();redeseneaza(id);});return;}
- if(id==='spa-liniste-ore'){SET.incarca().then(function(v){var t=oreLista(0,1410);return alegeOre({titlu:'Ore de liniște',text:'Meditațiile noi și înregistrările vin după ce se termină liniștea. Anunțul unei întâlniri vine la timp, dar fără sunet.',campuri:[['spa-ora-de','De la',v.liniste.de,t],['spa-ora-pana','Până la',v.liniste.pana,t]]});})
+ if(id==='spa-liniste-ore'){SET.incarca().then(function(v){var t=oreLista(0,1410);return alegeOre({titlu:'Ore de liniște',text:'Meditațiile noi și înregistrările vin după ce se termină liniștea. Anunțul unei întâlniri vine la timp, dar fără sunet.',campuri:[['spa-ora-de','De la',v.liniste.de,t],['spa-ora-pana','Până la',v.liniste.pana,t]],verifica:function(r){return r[0]===r[1]?'Alege două ore diferite: începutul și sfârșitul liniștii.':'';}});})
    .then(function(r){if(!r)return;return SET.schimba(function(v){v.liniste.de=r[0];v.liniste.pana=r[1];}).then(function(v){valoare(a,'De la '+v.liniste.de+' până la '+v.liniste.pana);PUSH.prefs();});});return;}
  if(id==='spa-ecran'){SET.incarca().then(function(v){return alege({titlu:'Pe ecranul blocat',opt:[['tot','Arată ce scrie','Titlul și câteva cuvinte'],['ascuns','Doar „Adela Haru”','Și textul „Ai un mesaj nou.”; restul îl vezi în aplicație']],val:v.ecran});})
    .then(function(x){if(!x)return;return SET.schimba(function(v){v.ecran=x;}).then(function(v){valoare(a,ECRAN[v.ecran]);dupaNotif();});});return;}
@@ -1561,7 +1605,7 @@ d.addEventListener('click',function(e){
    return alege({titlu:'Widgetul arată',opt:o,val:v.widget});}).then(function(x){if(!x)return;return SET.schimba(function(v){v.widget=x;}).then(function(v){valoare(a,WIDG[v.widget]);WID.trimite(true);});});return;}
  if(id==='spa-wifi'){var on7=a.getAttribute('aria-checked')!=='true';SET.schimba(function(v){v.wifi=on7?1:0;}).then(function(){bifa(a,on7);});return;}
  if(id==='spa-bio'){var on8=a.getAttribute('aria-checked')!=='true';BIO.auth().then(function(ok){if(!ok)return;BIO.ok=true;return SET.schimba(function(v){v.bio=on8?1:0;}).then(function(){bifa(a,on8);BIO.verifica();anunta(on8?'Ciclul meu se deschide de acum doar cu deblocare.':'Ciclul meu se deschide fără deblocare.');});});return;}
- if(id==='spa-stat'){var on9=a.getAttribute('aria-checked')!=='true';SET.schimba(function(v){v.stat=on9?1:0;}).then(function(){bifa(a,on9);});return;}
+ if(id==='spa-stat'){var on9=a.getAttribute('aria-checked')!=='true';if(!on9)STAT.goleste();SET.schimba(function(v){v.stat=on9?1:0;}).then(function(){if(!on9)STAT.goleste();bifa(a,on9);});return;}
  if(id==='spa-dl-tot'){confirma('Ștergi meditațiile descărcate?','Pleacă de pe acest telefon toate meditațiile descărcate. Le poți descărca din nou oricând.','Șterge').then(function(da){if(da)DL.stergeTot().then(function(){DL.verificat=null;return redeseneaza('spa-wifi');});});return;} /* CIORNĂ */
  if(id==='spa-sterge')stergeCont();
 });
@@ -1589,6 +1633,7 @@ function stergeCont(){
 function curataLocal(tot,dinCoada){
  var p=[PUSH.opreste(),DL.stergeTot(),(dinCoada?anuleazaCiclu():inCoada(anuleazaCiclu)).catch(function(){}),anuleazaZilnic(),PREF.scoate('ah_ciclu')];
  if(tot){
+  STAT.goleste();SOMN.opreste();
   p.push(SET.uita(),WID.goleste(),cheama('AhApp','insigna',{n:0}).catch(function(){}));
   ['ah_push_intrebat','ah_push_on','ah_ciclu_notif','ah_deschideri'].forEach(function(k){p.push(PREF.scoate(k));});
   try{Object.keys(localStorage).forEach(function(k){if(/^(ahsp_|ahspx_|ahct_|ah_ciclu_v1$|ahspa_cine$)/.test(k))localStorage.removeItem(k);});}catch(e){}
@@ -1731,14 +1776,18 @@ function pornesteNativ(){
  else setTimeout(function(){ciclu(false);zilnic(false);},800);
  /* 2.4.0: canalele Android, insigna golită și pe server, widgetul (la fiecare deschidere), statistica deschiderii */
  canale();
- if(S.cont){PUSH.insigna();setTimeout(function(){WID.trimite(true);},1200);if(prima&&S.zona==='sp')STAT.ev('deschidere');}
+ if(S.cont){PUSH.insigna();setTimeout(function(){WID.trimite(true);PUSH.fus();},1200);if(prima&&S.zona==='sp')STAT.ev('deschidere');}
  var pauza=0;
- asculta('App','pause',function(){pauza=Date.now();BIO.fundal=pauza;});
+ asculta('App','pause',function(){STAT.trimite();if(BIO.inCurs)return; /* fereastra de deblocare (Android: codul telefonului) nu e o plecare */
+  pauza=Date.now();BIO.fundal=pauza;
+  /* Ciclul meu blocat și deschis acum: acoperit înainte de poza din lista aplicațiilor recente; la o revenire scurtă se descoperă */
+  if(BIO.sync&&BIO.pe())H.classList.add('ahspa-blocat');});
  /* revenirea în aplicație (alt fus orar, o zi nouă): mementourile se verifică din nou, prin aceeași coadă; după mai mult de un
     minut în fundal Ciclul meu se blochează din nou; după 30 de minute e o „deschidere” nouă */
- asculta('App','resume',function(){var acum=Date.now(),lung=pauza&&acum-pauza;ciclu(false);zilnic(false);ASP.ultim=null;ASP.aplica();
-  if(!S.cont)return;cheama('AhApp','insigna',{n:0}).catch(function(){});PUSH.insigna();WID.trimite(true);
-  if(lung>60000){BIO.ok=false;BIO.cerut=false;BIO.verifica();}
+ asculta('App','resume',function(){var acum=Date.now(),lung=pauza&&acum-pauza;pauza=0;ciclu(false);zilnic(false);ASP.ultim=null;ASP.aplica();
+  if(!S.cont)return;cheama('AhApp','insigna',{n:0}).catch(function(){});PUSH.insigna();PUSH.fus();WID.trimite(true);
+  if(lung>60000&&!BIO.inCurs){BIO.ok=false;BIO.cerut=false;}
+  if(BIO.sync||H.classList.contains('ahspa-blocat'))BIO.verifica();
   if(lung>=30*60000&&S.zona==='sp')STAT.ev('deschidere');});
 }
 pornesteNativ();
@@ -1990,9 +2039,10 @@ add_action( 'init', function () {
 	dbDelta( "CREATE TABLE {$t} (\n id bigint(20) unsigned NOT NULL AUTO_INCREMENT,\n email varchar(190) NOT NULL,\n token text NOT NULL,\n token_h char(64) NOT NULL,\n platforma varchar(10) NOT NULL DEFAULT '',\n versiune varchar(20) NOT NULL DEFAULT '',\n disp varchar(64) NOT NULL DEFAULT '',\n prefs text NULL,\n necitite int(10) unsigned NOT NULL DEFAULT 0,\n creat datetime NOT NULL,\n vazut datetime NOT NULL,\n PRIMARY KEY  (id),\n UNIQUE KEY token_h (token_h),\n KEY email (email)\n) " . $wpdb->get_charset_collate() . ';' );
 	// notificările ținute peste orele de liniște (fără adresă: doar amprenta tokenului)
 	dbDelta( "CREATE TABLE " . ah_spa_tabel_amanate() . " (\n id bigint(20) unsigned NOT NULL AUTO_INCREMENT,\n token_h char(64) NOT NULL,\n trimite int(10) unsigned NOT NULL DEFAULT 0,\n tip varchar(32) NOT NULL DEFAULT '',\n titlu varchar(190) NOT NULL DEFAULT '',\n text text NOT NULL,\n url varchar(255) NOT NULL DEFAULT '',\n creat int(10) unsigned NOT NULL DEFAULT 0,\n PRIMARY KEY  (id),\n KEY token_h (token_h),\n KEY trimite (trimite)\n) " . $wpdb->get_charset_collate() . ';' );
-	// statisticile: contoare pe zi (fără nicio dată personală) și utilizatoarele unice (HMAC lunar, cel mult 35 de zile)
-	dbDelta( "CREATE TABLE " . ah_spa_tabel_stat() . " (\n zi date NOT NULL,\n ev varchar(32) NOT NULL,\n platforma varchar(10) NOT NULL DEFAULT '',\n versiune varchar(20) NOT NULL DEFAULT '',\n obiect varchar(64) NOT NULL DEFAULT '',\n n int(10) unsigned NOT NULL DEFAULT 0,\n PRIMARY KEY  (zi,ev,platforma,versiune,obiect)\n) " . $wpdb->get_charset_collate() . ';' );
-	dbDelta( "CREATE TABLE " . ah_spa_tabel_unice() . " (\n zi date NOT NULL,\n h char(32) NOT NULL,\n luna char(7) NOT NULL,\n PRIMARY KEY  (zi,h),\n KEY luna (luna)\n) " . $wpdb->get_charset_collate() . ';' );
+	// statisticile: contoare pe zi (fără nicio dată personală) și utilizatoarele unice (HMAC lunar, cel mult 35 de zile).
+	// 4: KEY ev_zi — panoul și raportul întreabă „ev = … AND zi >= …” (cheia primară începe cu zi); KEY h — reamprentarea lunii trecute
+	dbDelta( "CREATE TABLE " . ah_spa_tabel_stat() . " (\n zi date NOT NULL,\n ev varchar(32) NOT NULL,\n platforma varchar(10) NOT NULL DEFAULT '',\n versiune varchar(20) NOT NULL DEFAULT '',\n obiect varchar(64) NOT NULL DEFAULT '',\n n int(10) unsigned NOT NULL DEFAULT 0,\n PRIMARY KEY  (zi,ev,platforma,versiune,obiect),\n KEY ev_zi (ev,zi)\n) " . $wpdb->get_charset_collate() . ';' );
+	dbDelta( "CREATE TABLE " . ah_spa_tabel_unice() . " (\n zi date NOT NULL,\n h char(32) NOT NULL,\n luna char(7) NOT NULL,\n PRIMARY KEY  (zi,h),\n KEY luna (luna),\n KEY h (h)\n) " . $wpdb->get_charset_collate() . ';' );
 	// versiunea se notează doar dacă tabelele chiar au coloanele (un dbDelta eșuat — drepturi, disc plin — se reîncearcă)
 	if ( ! ah_spa_schema_ok() ) {
 		ah_spa_jurnal( 'tabelele aplicației nu s-au putut crea sau actualiza; se reîncearcă la cererea următoare' );
@@ -2069,9 +2119,17 @@ function ah_spa_push_salveaza( $email, $x ) {
 	$t    = ah_spa_tabel();
 	$h    = hash( 'sha256', $x['token'] );
 	$acum = current_time( 'mysql' );
-	$r    = $wpdb->get_row( $wpdb->prepare( "SELECT id FROM {$t} WHERE token_h = %s", $h ), ARRAY_A );
+	$r    = $wpdb->get_row( $wpdb->prepare( "SELECT id, email FROM {$t} WHERE token_h = %s", $h ), ARRAY_A );
 	$pr   = isset( $x['prefs'] ) && is_array( $x['prefs'] ) ? array( 'prefs' => wp_json_encode( $x['prefs'] ) ) : array();
+	$scos = array(); // amprentele tokenurilor scoase mai jos: și notificările lor ținute pleacă
 	if ( $r ) {
+		if ( strtolower( (string) $r['email'] ) !== strtolower( (string) $email ) ) {
+			// telefonul trece la alt cont: ce era ținut peste orele de liniște pentru contul de dinainte nu ajunge la ea (runda 3);
+			// la fel insigna (numărul celei dinainte) și Setările celei dinainte (vin ale ei, cu tokenul)
+			$scos[] = $h;
+			$pr    += array( 'prefs' => null );
+			$pr['necitite'] = 0;
+		}
 		$wpdb->update( $t, array( 'email' => $email, 'platforma' => $x['platforma'], 'versiune' => $x['versiune'], 'disp' => $x['disp'], 'vazut' => $acum ) + $pr, array( 'id' => (int) $r['id'] ) );
 	} else {
 		$wpdb->insert( $t, array( 'email' => $email, 'token' => $x['token'], 'token_h' => $h, 'platforma' => $x['platforma'], 'versiune' => $x['versiune'], 'disp' => $x['disp'], 'creat' => $acum, 'vazut' => $acum ) + $pr );
@@ -2086,15 +2144,20 @@ function ah_spa_push_salveaza( $email, $x ) {
 		foreach ( (array) $wpdb->get_results( $wpdb->prepare( "SELECT id, token_h FROM {$t} WHERE disp = %s AND email = %s", $x['disp'], $email ), ARRAY_A ) as $v ) {
 			if ( $v['token_h'] !== $h ) {
 				$wpdb->delete( $t, array( 'id' => (int) $v['id'] ) );
+				$scos[] = (string) $v['token_h'];
 			}
 		}
 	}
-	$toate = (array) $wpdb->get_results( $wpdb->prepare( "SELECT id, vazut FROM {$t} WHERE email = %s", $email ), ARRAY_A );
+	$toate = (array) $wpdb->get_results( $wpdb->prepare( "SELECT id, token_h, vazut FROM {$t} WHERE email = %s", $email ), ARRAY_A );
 	if ( count( $toate ) > AH_SPA_TOKENURI_MAX ) {
 		usort( $toate, function ( $a, $b ) { return strcmp( (string) $a['vazut'], (string) $b['vazut'] ) ?: ( (int) $a['id'] - (int) $b['id'] ); } );
 		foreach ( array_slice( $toate, 0, count( $toate ) - AH_SPA_TOKENURI_MAX ) as $v ) {
 			$wpdb->delete( $t, array( 'id' => (int) $v['id'] ) );
+			$scos[] = (string) $v['token_h'];
 		}
+	}
+	if ( $scos ) {
+		ah_spa_amanate_sterge( $scos );
 	}
 	return true;
 }
@@ -2496,7 +2559,10 @@ function ah_spa_fcm_acces( $sa ) {
  *   canal   — id-ul canalului Android (ah_clopotel | ah_implicit | ah_liniste), creat de punte la pornire;
  *   sunet   — clopotel (clopotel.caf / res/raw/clopotel) | implicit (sunetul telefonului) | fara (fără sunet);
  *   insigna — numărul de pe iconiță (aps.badge, notification_count pe Android); null = neatins;
- *   ascuns  — pe ecranul blocat doar „Adela Haru” / „Ai un mesaj nou.” (textul adevărat nu pleacă deloc).
+ *   ascuns  — pe ecranul blocat doar „Adela Haru” / „Ai un mesaj nou.” (textul adevărat nu pleacă deloc);
+ *   cheie   — (runda 3) cheia de înlocuire: android.notification.tag + collapse_key, apns-collapse-id. Aceeași cheie trimisă
+ *             de două ori (o notificare ținută, retrimisă după o oprire între trimitere și ștergere) ÎNLOCUIEȘTE notificarea
+ *             de pe telefon, nu apare a doua oară. Doar [A-Za-z0-9_-], cel mult 64.
  */
 function ah_spa_fcm_mesaj( $token, $titlu, $text, $date, $opt = array() ) {
 	$opt = is_array( $opt ) ? $opt : array();
@@ -2522,7 +2588,7 @@ function ah_spa_fcm_mesaj( $token, $titlu, $text, $date, $opt = array() ) {
 		$aps['badge']               = max( 0, (int) $opt['insigna'] );
 		$an['notification_count']   = max( 0, (int) $opt['insigna'] );
 	}
-	return array(
+	$m = array(
 		'message' => array(
 			'token'        => (string) $token,
 			'notification' => array( 'title' => (string) $titlu, 'body' => (string) $text ),
@@ -2531,6 +2597,13 @@ function ah_spa_fcm_mesaj( $token, $titlu, $text, $date, $opt = array() ) {
 			'apns'         => array( 'payload' => array( 'aps' => $aps ? $aps : new stdClass() ) ), // fără sunet și insignă: {} (APNs cere un obiect)
 		),
 	);
+	$ch = isset( $opt['cheie'] ) ? (string) $opt['cheie'] : '';
+	if ( '' !== $ch && preg_match( '/^[A-Za-z0-9_\-]{1,64}$/', $ch ) ) {
+		$m['message']['android']['collapse_key']        = $ch;
+		$m['message']['android']['notification']['tag'] = $ch;
+		$m['message']['apns']['headers']                = array( 'apns-collapse-id' => $ch );
+	}
+	return $m;
 }
 
 /**
@@ -3999,7 +4072,7 @@ add_action( 'admin_notices', function () {
 /* ==================================================================
    13. SETĂRILE APLICAȚIEI ȘI STATISTICILE (2.4.0)
    Setările ei pentru notificări stau pe rândul fiecărui telefon (wp_ah_spa_push.prefs) și se aplică în loturi: categoria,
-   orele de liniște (Europe/Bucharest; ce nu grăbește se ține până la capătul lor, întâlnirea care începe pleacă fără sunet),
+   orele de liniște (ceasul telefonului, prefs.fus; implicit Europe/Bucharest; ce nu grăbește se ține până la capătul lor, întâlnirea care începe pleacă fără sunet),
    textul ascuns pe ecranul blocat, canalul / sunetul, insigna. Statisticile sunt ale noastre (fără Google, fără Meta): contoare
    pe zi, fără date personale, și utilizatoarele unice printr-o amprentă HMAC cu un secret lunar, ținută cel mult 35 de zile.
    ================================================================== */
@@ -4027,7 +4100,20 @@ function ah_spa_prefs_implicite() {
 		'liniste' => array( 'on' => false, 'de' => '22:00', 'pana' => '08:00' ),
 		'ecran'   => 'tot',
 		'insigna' => false,
+		'fus'     => 'Europe/Bucharest', // fusul orar al telefonului (runda 3): orele de liniște sunt ale ceasului ei
 	);
+}
+
+/** Fusul orar trimis de telefon (Intl…timeZone), dacă PHP îl cunoaște; altfel ''. Pură. */
+function ah_spa_fus_ok( $f ) {
+	if ( ! is_string( $f ) || strlen( $f ) > 64 || ! preg_match( '~^[A-Za-z][A-Za-z0-9_+\-]*(/[A-Za-z0-9_+\-]+){0,2}$~', $f ) ) {
+		return '';
+	}
+	try {
+		return ( new DateTimeZone( $f ) )->getName();
+	} catch ( Throwable $e ) {
+		return '';
+	}
 }
 
 /** O oră din Setări: HH:00 sau HH:30. */
@@ -4083,6 +4169,10 @@ function ah_spa_valideaza_prefs( $p ) {
 		}
 		$o['insigna'] = (bool) $p['insigna'];
 	}
+	// un fus pe care PHP nu-l știe (o bază tz mai veche decât a telefonului) nu strică restul: rămâne ora României
+	if ( isset( $p['fus'] ) && '' !== ah_spa_fus_ok( $p['fus'] ) ) {
+		$o['fus'] = ah_spa_fus_ok( $p['fus'] );
+	}
 	return array( 'ok' => true, 'prefs' => $o );
 }
 
@@ -4099,13 +4189,20 @@ function ah_spa_prefs( $json ) {
 /** Categoria din Setări a unei lucrări push: meditatii | inreg | intalniri | '' (proba și tipurile altor module: fără categorie). */
 function ah_spa_push_categorie( $tip ) {
 	$m = array( 'meditatie' => 'meditatii', 'inreg' => 'inreg', 'intalnire' => 'intalniri' );
-	return $m[ (string) $tip ] ?? '';
+	$c = $m[ (string) $tip ] ?? '';
+	if ( '' === $c && 'proba' !== (string) $tip ) {
+		// un tip nou (o întâlnire adăugată prin ah_spa_intalniri cu alt „tip”, alt modul): categoria îi dă filtrul, ca
+		// „Întâlniri” oprit să le oprească și pe ele; fără filtru, fără categorie (pleacă, ca înainte)
+		$c = (string) apply_filters( 'ah_spa_push_categorie', '', (string) $tip );
+		$c = in_array( $c, array( 'meditatii', 'inreg', 'intalniri' ), true ) ? $c : '';
+	}
+	return $c;
 }
 
 /**
- * Capătul orelor de liniște în care cade $acum (timestamp), sau 0 dacă nu e liniște. Ora României (Europe/Bucharest), cu
- * schimbarea orei (capătul e ora locală aleasă, oricât de lungă e noaptea aceea). Fereastra poate trece peste miezul nopții
- * (22:00–08:00). Pură.
+ * Capătul orelor de liniște în care cade $acum (timestamp), sau 0 dacă nu e liniște. Ora telefonului ei (prefs.fus, trimis de
+ * punte; implicit Europe/Bucharest), cu schimbarea orei (capătul e ora locală aleasă, oricât de lungă e noaptea aceea).
+ * Fereastra poate trece peste miezul nopții (22:00–08:00). Pură.
  */
 function ah_spa_liniste_pana( $prefs, $acum ) {
 	$p = is_array( $prefs ) ? $prefs : ah_spa_prefs( $prefs );
@@ -4117,7 +4214,7 @@ function ah_spa_liniste_pana( $prefs, $acum ) {
 	if ( ! ah_spa_ora_ok( $de ) || ! ah_spa_ora_ok( $pana ) || $de === $pana ) {
 		return 0;
 	}
-	$tz  = new DateTimeZone( 'Europe/Bucharest' );
+	$tz  = new DateTimeZone( '' !== ah_spa_fus_ok( $p['fus'] ?? '' ) ? $p['fus'] : 'Europe/Bucharest' );
 	$t   = ( new DateTimeImmutable( '@' . (int) $acum ) )->setTimezone( $tz );
 	$m   = (int) $t->format( 'G' ) * 60 + (int) $t->format( 'i' );
 	$md  = (int) substr( $de, 0, 2 ) * 60 + (int) substr( $de, 3, 2 );
@@ -4253,6 +4350,12 @@ function ah_spa_amanate_sterge( $hashuri ) {
  * Trimite ce a ajuns la capătul liniștii (din ah_spa_tick, la 5 minute). Setările se citesc din nou: o categorie oprită între
  * timp = nimic, o liniște mutată = mai așteaptă. Fără rândul telefonului (token scos, cont șters): pleacă din listă.
  * Întoarce câte au plecat.
+ *
+ * O singură dată (runda 3): fiecare rând se ia întâi printr-un UPDATE condiționat („trimite” mutat cu AH_SPA_AMANATE_ARENDA
+ * în viitor, doar dacă n-a fost mutat de altcineva), deci două tick-uri suprapuse nu trimit același rând de două ori. Se
+ * șterge după trimitere. O oprire între trimitere și ștergere (timpul PHP, serverul) ⇒ rândul revine după arendă și pleacă
+ * din nou, dar cu aceeași cheie de înlocuire (ah-am-<id>): telefonul înlocuiește notificarea, n-o arată de două ori.
+ * O oprire între arendă și trimitere ⇒ pleacă după arendă (10 minute), nu se pierde.
  */
 function ah_spa_amanate_trimite( $acum = null, $max = 50 ) {
 	global $wpdb;
@@ -4264,6 +4367,10 @@ function ah_spa_amanate_trimite( $acum = null, $max = 50 ) {
 	$l  = (array) $wpdb->get_results( $wpdb->prepare( "SELECT * FROM {$t} WHERE trimite <= %d ORDER BY trimite ASC, id ASC LIMIT %d", $acum, (int) $max ), ARRAY_A );
 	$ok = 0;
 	foreach ( $l as $a ) {
+		// arenda: doar cine mută „trimite” de la valoarea citită îl trimite (rânduri afectate = 1)
+		if ( 1 !== (int) $wpdb->query( $wpdb->prepare( "UPDATE {$t} SET trimite = %d WHERE id = %d AND trimite = %d", $acum + AH_SPA_AMANATE_ARENDA, (int) $a['id'], (int) $a['trimite'] ) ) ) {
+			continue;
+		}
 		$r = $wpdb->get_row( $wpdb->prepare( 'SELECT id, email, token, token_h, platforma, versiune, prefs, necitite FROM ' . ah_spa_tabel() . ' WHERE token_h = %s', (string) $a['token_h'] ), ARRAY_A );
 		if ( ! $r ) {
 			$wpdb->delete( $t, array( 'id' => (int) $a['id'] ) );
@@ -4275,10 +4382,11 @@ function ah_spa_amanate_trimite( $acum = null, $max = 50 ) {
 			continue;
 		}
 		if ( 'trimite' === $dz['fel'] ) {
-			$r['_opt'] = ah_spa_push_optiuni( $r['prefs'], $dz['liniste'], (int) $r['necitite'] );
-			$rez       = ah_spa_trimite_push( array( $r ), (string) $a['titlu'], (string) $a['text'], array( 'url' => (string) $a['url'], 'tip' => (string) $a['tip'] ), false );
+			$r['_opt']          = ah_spa_push_optiuni( $r['prefs'], $dz['liniste'], (int) $r['necitite'] );
+			$r['_opt']['cheie'] = 'ah-am-' . (int) $a['id'];
+			$rez                = ah_spa_trimite_push( array( $r ), (string) $a['titlu'], (string) $a['text'], array( 'url' => (string) $a['url'], 'tip' => (string) $a['tip'] ), false );
 			if ( null === $rez ) {
-				break; // Google n-a dat tokenul: rămân pentru data viitoare
+				break; // Google n-a dat tokenul: rândul acesta (arendat) și restul rămân pentru data viitoare
 			}
 			$ok += (int) $rez;
 		}
@@ -4432,9 +4540,12 @@ function ah_spa_stat_curata( $acum = null, $forteaza = false ) {
 }
 
 /**
- * POST /ah-spa/v1/stat {ev, platforma, versiune, obiect?}: un eveniment din aplicație. Puntea trimite doar cu „Statistici anonime”
- * pornit (implicit da). Cere contul (cookie ah_sp) doar pentru limită (AH_SPA_STAT_ORA pe oră) și amprenta zilei; nu se păstrează
- * nici adresa, nici IP-ul, nici un id de telefon.
+ * POST /ah-spa/v1/stat: evenimente din aplicație. Puntea le adună în memorie și le trimite în loturi (runda 3: la 30 s, la
+ * trecerea în fundal, la plecarea de pe pagină), doar cu „Statistici anonime” pornit (implicit da):
+ *   {platforma, versiune, evenimente: [{ev, obiect?}, …]} — cel mult AH_SPA_STAT_LOT; sau, ca la început, {ev, platforma, versiune, obiect?}.
+ * Un eveniment greșit dintr-un lot se sare (restul se numără); un singur eveniment greșit = 400. Cere contul (cookie ah_sp)
+ * doar pentru limită (AH_SPA_STAT_ORA pe oră, fiecare eveniment din lot numărat) și amprenta zilei (o dată pe zi); nu se
+ * păstrează nici adresa, nici IP-ul, nici un id de telefon.
  */
 function ah_spa_r_stat( WP_REST_Request $r ) {
 	$e = function_exists( 'ah_sp_email' ) ? strtolower( trim( (string) ah_sp_email() ) ) : '';
@@ -4444,23 +4555,45 @@ function ah_spa_r_stat( WP_REST_Request $r ) {
 	if ( ! ah_spa_antet_ok( $r ) ) {
 		return ah_spa_raspuns( array( 'ok' => false, 'motiv' => 'antet' ), 403 );
 	}
-	$p  = (array) $r->get_json_params();
-	$ev = isset( $p['ev'] ) && is_string( $p['ev'] ) ? $p['ev'] : '';
-	if ( ! in_array( $ev, ah_spa_stat_evenimente(), true ) || in_array( $ev, array( 'el_deschidere', 'notificare_trimisa' ), true ) ) {
-		return ah_spa_raspuns( array( 'ok' => false, 'motiv' => 'ev' ), 400 );
+	$p   = (array) $r->get_json_params();
+	$lot = array_key_exists( 'evenimente', $p );
+	if ( $lot && ( ! is_array( $p['evenimente'] ) || ! $p['evenimente'] || count( $p['evenimente'] ) > AH_SPA_STAT_LOT || array_values( $p['evenimente'] ) !== $p['evenimente'] ) ) {
+		return ah_spa_raspuns( array( 'ok' => false, 'motiv' => 'evenimente' ), 400 );
 	}
-	$ob = isset( $p['obiect'] ) && ( is_string( $p['obiect'] ) || is_int( $p['obiect'] ) ) ? (string) $p['obiect'] : '';
-	if ( false === ah_spa_stat_obiect( $ev, $ob ) ) {
-		return ah_spa_raspuns( array( 'ok' => false, 'motiv' => 'obiect' ), 400 );
-	}
-	if ( ! ah_spa_limita( 'stat|' . $e, AH_SPA_STAT_ORA ) ) {
-		return ah_spa_raspuns( array( 'ok' => false, 'motiv' => 'prea des' ), 429 );
+	$bune = array();
+	foreach ( $lot ? $p['evenimente'] : array( $p ) as $x ) {
+		$x  = is_array( $x ) ? $x : array();
+		$ev = isset( $x['ev'] ) && is_string( $x['ev'] ) ? $x['ev'] : '';
+		if ( ! in_array( $ev, ah_spa_stat_evenimente(), true ) || in_array( $ev, array( 'el_deschidere', 'notificare_trimisa' ), true ) ) {
+			if ( ! $lot ) {
+				return ah_spa_raspuns( array( 'ok' => false, 'motiv' => 'ev' ), 400 );
+			}
+			continue;
+		}
+		$ob = isset( $x['obiect'] ) && ( is_string( $x['obiect'] ) || is_int( $x['obiect'] ) ) ? (string) $x['obiect'] : '';
+		if ( false === ah_spa_stat_obiect( $ev, $ob ) ) {
+			if ( ! $lot ) {
+				return ah_spa_raspuns( array( 'ok' => false, 'motiv' => 'obiect' ), 400 );
+			}
+			continue;
+		}
+		$bune[] = array( $ev, $ob );
 	}
 	$pl = isset( $p['platforma'] ) && is_string( $p['platforma'] ) ? $p['platforma'] : ah_spa_platforma();
 	$vr = isset( $p['versiune'] ) && is_string( $p['versiune'] ) ? $p['versiune'] : ah_spa_versiune();
-	ah_spa_stat_inc( $ev, $pl, $vr, $ob );
-	ah_spa_stat_activa( $e );
-	return ah_spa_raspuns( array( 'ok' => true ) );
+	$n  = 0;
+	foreach ( $bune as $x ) {
+		if ( ! ah_spa_limita( 'stat|' . $e, AH_SPA_STAT_ORA ) ) {
+			return ah_spa_raspuns( array( 'ok' => $n > 0, 'motiv' => 'prea des', 'numarate' => $n ), 429 );
+		}
+		ah_spa_stat_inc( $x[0], $pl, $vr, $x[1] );
+		$n++;
+	}
+	// amprenta zilei: o dată pe zi pe cont (nu la fiecare eveniment: fiecare scriere ar recalcula și amprentele lunii trecute)
+	if ( $n && ah_spa_limita( 'activa|' . $e . '|' . wp_date( 'Y-m-d' ), 1, DAY_IN_SECONDS ) ) {
+		ah_spa_stat_activa( $e );
+	}
+	return ah_spa_raspuns( array( 'ok' => true, 'numarate' => $n ) );
 }
 
 /* ---------- Setări › Aplicația mobilă › Statistici ---------- */
@@ -4566,11 +4699,26 @@ function ah_spa_stat_svg( $zile ) {
 		$o .= '<g><title>' . esc_html( wp_date( 'j.m', strtotime( $z . ' 12:00' ) ) . ': ' . (int) $v ) . '</title><rect x="' . round( $i * $pas, 1 ) . '" y="0" width="' . round( $pas, 1 ) . '" height="' . $h . '" fill="transparent"/>'
 			. ( $bh ? '<path d="M' . $x . ' ' . $h . 'V' . round( $h - $bh + min( 4, $bh / 2 ), 1 ) . 'q0 -' . round( min( 4, $bh / 2 ), 1 ) . ' ' . round( min( 4, $bw / 2 ), 1 ) . ' -' . round( min( 4, $bh / 2 ), 1 ) . 'H' . round( $x + $bw - min( 4, $bw / 2 ), 1 ) . 'q' . round( min( 4, $bw / 2 ), 1 ) . ' 0 ' . round( min( 4, $bw / 2 ), 1 ) . ' ' . round( min( 4, $bh / 2 ), 1 ) . 'V' . $h . 'z" fill="#964E46"/>' : '' ) . '</g>';
 		if ( 0 === $i % 7 || ( $i === $n - 1 && ( $n - 1 ) % 7 >= 3 ) ) { // etichetele la o săptămână, ultima zi doar dacă nu se suprapune
-			$o .= '<text x="' . round( $x + $bw / 2, 1 ) . '" y="' . ( $h + 16 ) . '" font-size="11" text-anchor="middle" fill="#6E5246">' . esc_html( wp_date( 'j.m', strtotime( $z . ' 12:00' ) ) ) . '</text>';
+			// prima etichetă lipită de margine (centrată ar ieși în afara graficului), ultima la fel, restul centrate
+			$anc = 0 === $i ? 'start' : ( $i === $n - 1 ? 'end' : 'middle' );
+			$tx  = 0 === $i ? $x : ( $i === $n - 1 ? $x + $bw : $x + $bw / 2 );
+			$o .= '<text x="' . round( $tx, 1 ) . '" y="' . ( $h + 16 ) . '" font-size="11" text-anchor="' . $anc . '" fill="#6E5246">' . esc_html( wp_date( 'j.m', strtotime( $z . ' 12:00' ) ) ) . '</text>';
 		}
 		$i++;
 	}
 	return $o . '</svg>';
+}
+
+/**
+ * O celulă CSV fără formulă: textul care începe cu = + - @ (sau tab / CR) primește un apostrof în față, ca Excel, Numbers și
+ * Google Sheets să nu-l ruleze (CSV injection). Valorile de azi sunt deja curățate la intrare (liste, cifre); asta e plasa. Pură.
+ */
+function ah_spa_csv_celula( $v ) {
+	if ( is_int( $v ) ) {
+		return $v;
+	}
+	$v = (string) $v;
+	return '' !== $v && false !== strpos( "=+-@\t\r", $v[0] ) ? "'" . $v : $v;
 }
 
 /** CSV-ul contoarelor (toate zilele păstrate): zi, eveniment, platformă, versiune, obiect, n. Fără date personale. */
@@ -4580,7 +4728,7 @@ function ah_spa_stat_csv() {
 	$f = fopen( 'php://temp', 'w+' );
 	fputcsv( $f, array( 'zi', 'eveniment', 'platforma', 'versiune', 'obiect', 'n' ), ',', '"', '' );
 	foreach ( $l as $x ) {
-		fputcsv( $f, array( $x['zi'], $x['ev'], $x['platforma'], $x['versiune'], $x['obiect'], (int) $x['n'] ), ',', '"', '' );
+		fputcsv( $f, array_map( 'ah_spa_csv_celula', array( $x['zi'], $x['ev'], $x['platforma'], $x['versiune'], $x['obiect'], (int) $x['n'] ) ), ',', '"', '' );
 	}
 	rewind( $f );
 	$c = (string) stream_get_contents( $f );
@@ -4649,7 +4797,9 @@ function ah_spa_pagina_statistici() {
 	echo '<p class="description">Procentele: din cele ' . (int) $N['cu_setari'] . ' telefoane cu aplicația 2.4 (cele mai vechi primesc tot).</p>';
 	$rr = array();
 	foreach ( $N['rata'] as $c => $x ) {
-		$rr[] = array( $CAT[ $c ], null === $x['trimise'] ? '— (pe telefon)' : $nr( $x['trimise'] ), $nr( $x['deschise'] ), $pc( $x['rata'] ) );
+		// „pe telefon” doar pentru mementourile locale (ciclul, zilnicul): pe acelea serverul nu le trimite, deci nu le numără
+		$local = in_array( $c, array( 'ciclu', 'zilnic' ), true );
+		$rr[]  = array( $CAT[ $c ], $local ? '— (pe telefon)' : $nr( (int) $x['trimise'] ), $nr( $x['deschise'] ), $pc( $x['rata'] ) );
 	}
 	echo '<h3>Deschise, pe categorie</h3>' . $tab( array( 'Categoria', 'Trimise', 'Deschise', 'Rata' ), $rr ); // phpcs:ignore
 	foreach ( array( 'pornite' => 'Meditațiile pornite cel mai des', 'terminate' => 'Meditațiile ascultate până la capăt (90%)' ) as $k => $t ) {

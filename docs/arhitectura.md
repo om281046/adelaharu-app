@@ -113,9 +113,23 @@ Nu se urcă nimic pe site fără OK-ul lui Mircea (se urcă inactiv, cu copie de
    `@capacitor/network`. Sunete: `res/raw/clopotel.wav` (Android, canalul implicit FCM din manifest `ah_clopotel`),
    `clopotel.caf` (iOS). Canalele Android: `ah_clopotel`, `ah_implicit`, `ah_liniste` și `ah_ciclu_*` (privat), create de punte.
    Id-urile notificărilor locale: ciclul 41000–41099, mementoul zilnic 41100.
+   **Runda 3 (19 nov.):** orele de liniște se socotesc în fusul orar al telefonului (`prefs.fus`, din `Intl…timeZone`, retrimis
+   la revenire după o schimbare de fus; nevalid sau lipsă ⇒ Europe/Bucharest). „După apus și răsărit” folosește orele
+   soarelui de la București (coordonatele, ora Bucureștiului) puse pe ceasul telefonului: la New York, seara vine la 16:38
+   ora ei, nu la 09:38 — „seara” e ceva ce trăiește ea, nu Bucureștiul; ceasul pe minut merge doar cu această alegere.
+   Notificările ținute peste liniște pleacă o singură dată: arendă prin UPDATE condiționat (`AH_SPA_AMANATE_ARENDA`, 600 s)
+   și cheie de înlocuire FCM (`ah-am-<id>`: `android.notification.tag`, `collapse_key`, `apns-collapse-id`), deci o retrimitere
+   după o oprire între trimitere și ștergere înlocuiește notificarea în loc s-o dubleze. Un token care trece la alt cont își
+   pierde notificările ținute, insigna și Setările de dinainte. Ciclul meu blocat se acoperă și la trecerea în fundal (poza
+   din aplicațiile recente); fereastra de deblocare (pe Android, codul telefonului = pause/resume) nu-l reblochează.
+   Temporizatorul de somn se oprește la închiderea playerului și urmează piesa nouă. Fără internet, „Descarcă” spune asta.
 8. **Statistici proprii** (2.4.0): fără Google Analytics, Firebase Analytics sau Meta în aplicație (ar cere ATT și bara de
-   cookie-uri). Puntea trimite `POST /ah-spa/v1/stat {ev, platforma, versiune, obiect?}` doar cu „Statistici anonime” pornit
-   (implicit da, interes legitim, opoziție din aplicație: `docs/juridic.md`, 5a). Serverul: contoare pe zi (13 luni) și o amprentă
+   cookie-uri). Puntea adună evenimentele în memorie și trimite `POST /ah-spa/v1/stat {platforma, versiune, evenimente:[{ev,
+   obiect?}]}` (≤ 30, la 30 s, la trecerea în fundal, la plecarea de pe pagină, cu `keepalive`; runda 3; forma veche cu un
+   singur `{ev, …}` merge în continuare) doar cu „Statistici anonime” pornit; oprirea golește și coada. Amprenta zilei se
+   scrie o dată pe zi pe cont. Indexuri: `ah_spa_stat (ev, zi)`, `ah_spa_unice (h)` (tabelele 4). CSV-ul neutralizează
+   celulele care încep cu = + - @. „Statistici anonime”
+   e pornit implicit (interes legitim, opoziție din aplicație: `docs/juridic.md`, 5a). Serverul: contoare pe zi (13 luni) și o amprentă
    HMAC lunară pe zi pentru utilizatoarele active (≤ 35 de zile, secretul vechi șters); fără adrese, IP-uri, id-uri de telefon.
    Pagina lui: `do_action( 'ah_spa_stat', 'el_deschidere', … )` / `ah_spa_stat_inc()`. Setări › Aplicația mobilă › Statistici, CSV.
 

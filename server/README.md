@@ -318,7 +318,7 @@ Toate sunt CIORNĂ, scrise în tonul Spațiului meu; se schimbă în `ah_spa_js(
 - Notificarea zilnică: „Un moment pentru tine” / „Meditația de azi te așteaptă în Inner Temple.”
 - Sunet: Clopoțel („Un clopoțel blând, al nostru”) · Sunetul telefonului · Fără sunet („Notificarea vine în liniște”)
 - Ore de liniște — „Noaptea, fără sunet; ce nu grăbește vine dimineața”; rândul „Liniștea ține” — „De la 22:00 până la 08:00”
-- Foaia orelor: „Meditațiile noi și înregistrările vin după ce se termină liniștea. Anunțul unei întâlniri vine la timp, dar fără sunet.” („De la”, „Până la”)
+- Foaia orelor: „Meditațiile noi și înregistrările vin după ce se termină liniștea. Anunțul unei întâlniri vine la timp, dar fără sunet.” („De la”, „Până la”); cu aceeași oră la ambele (runda 3): „Alege două ore diferite: începutul și sfârșitul liniștii.”
 - Pe ecranul blocat: Arată ce scrie („Titlul și câteva cuvinte”) · Doar „Adela Haru” („Și textul „Ai un mesaj nou.”; restul îl vezi în aplicație”)
 - Textul ascuns: „Adela Haru” / „Ai un mesaj nou.”
 - Insignă pe iconiță — „Un număr mic pentru ce n-ai deschis încă”
@@ -335,9 +335,10 @@ Toate sunt CIORNĂ, scrise în tonul Spațiului meu; se schimbă în `ah_spa_js(
 **Meditații**
 - Descarcă doar pe Wi-Fi — „Pe datele mobile te întrebăm întâi”
 - Întrebarea: „Nu ești pe Wi-Fi” / „Ai ales să descarci meditațiile doar pe Wi-Fi. Le descarci acum, pe datele mobile?” / „Descarcă acum”
+- Fără internet (runda 3): „Nu ești conectată la internet” / „Meditația se poate descărca doar cu internet. Încearcă din nou când ai Wi-Fi sau date mobile.” / „Am înțeles”
 - Spațiu folosit — „O meditație · 41,3 MB. Atinge ca s-o ștergi.” / „3 meditații · … Atinge ca să le ștergi.” / „Nicio meditație descărcată încă”
 - „Temporizatorul de somn e în player, la iconița cu luna.”
-- Temporizator de somn — „Meditația se oprește singură, cu sunetul stins încet în ultimele secunde.”: Oprit · 10 minute · 20 de minute · 30 de minute · 45 de minute · 60 de minute; pe buton „20 min”; la capăt (cititorul de ecran): „Temporizatorul de somn a oprit meditația.”
+- Temporizator de somn — „Meditația se oprește singură, cu sunetul stins încet în ultimele secunde.”: Oprit · 10 minute · 20 de minute · 30 de minute · 45 de minute · 60 de minute; pe buton „20 min”; eticheta accesibilă „Temporizator de somn: încă 1 minut / 5 minute / 20 de minute” (runda 3: „de” de la 20 în sus); la capăt (cititorul de ecran): „Temporizatorul de somn a oprit meditația.”
 
 **Confidențialitate**
 - Blochează Ciclul meu cu Face ID / Touch ID / amprenta / recunoașterea feței / codul telefonului — „Doar tu îl poți deschide”

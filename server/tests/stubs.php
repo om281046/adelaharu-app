@@ -200,7 +200,7 @@ class Ah_Test_Wpdb {
 		return preg_replace_callback( '/%[sd]/', function ( $m ) use ( &$i, $a, $pdo ) { $v = $a[ $i++ ]; return '%d' === $m[0] ? (string) (int) $v : $pdo->quote( (string) $v ); }, $q );
 	}
 	public function get_row( $q, $o = null ) { $r = $this->pdo->query( $q )->fetch( PDO::FETCH_ASSOC ); return $r ? $r : null; }
-	public function get_results( $q, $o = null ) { $q = $this->mysql( $q ); return is_array( $q ) ? $q : $this->pdo->query( $q )->fetchAll( PDO::FETCH_ASSOC ); }
+	public function get_results( $q, $o = null ) { $q = $this->mysql( $q ); $r = is_array( $q ) ? $q : $this->pdo->query( $q )->fetchAll( PDO::FETCH_ASSOC ); if ( ! empty( $GLOBALS['ah_test_dupa_select'] ) ) { $f = $GLOBALS['ah_test_dupa_select']; $GLOBALS['ah_test_dupa_select'] = null; $f( $q ); } return $r; } // ah_test_dupa_select: „altă cerere” lucrează între citire și scriere (o singură dată)
 	public function get_col_test( $q ) { return array_map( 'strval', $this->pdo->query( $q )->fetchAll( PDO::FETCH_COLUMN ) ); }
 	public function get_var( $q ) { $q = $this->mysql( $q ); if ( is_array( $q ) ) { return $q ? ( array_values( $q[0] )[0] ?? null ) : null; } $r = $this->pdo->query( $q )->fetch( PDO::FETCH_NUM ); return $r ? $r[0] : null; }
 	public function get_col( $q ) { return array_map( function ( $r ) { return $r[0]; }, $this->pdo->query( $q )->fetchAll( PDO::FETCH_NUM ) ); }

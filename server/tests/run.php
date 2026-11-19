@@ -1249,5 +1249,120 @@ foreach ( array( "cheama('AhApp','widget'", "cheama('AhApp','biometrie')", "chea
 egal( ah_spa_cfg( 'sp', 'ana@exemplu.ro' )['notif_zi'], 41100, 'configurația: id-ul mementoului zilnic' );
 verifica( false !== strpos( ah_spa_js_devreme(), 'window.AHSPA_SOARE=' ) && false !== strpos( ah_spa_js_devreme(), "getItem('ahspa_aspect')" ) && false !== strpos( ah_spa_js_devreme(), "getItem('ahspa_bio')==='1'" ), 'partea devreme: aspectul (soarele) și lacătul înaintea primei desenări' );
 
+
+/* ---------- 31. runda 3: notificările ținute — o singură dată (arenda, cheia de înlocuire), alt cont pe același telefon ---------- */
+update_option( 'ah_spa_fcm', wp_json_encode( array( 'project_id' => 'adela', 'client_email' => 'push@adela.iam.gserviceaccount.com', 'private_key' => $pem ) ) );
+set_transient( 'ah_spa_fcm_at_' . md5( 'push@adela.iam.gserviceaccount.com' ), 'at-proba', 3000 );
+$wpdb->query( 'DELETE FROM wp_ah_spa_push' ); $wpdb->query( 'DELETE FROM wp_ah_spa_amanate' );
+$GLOBALS['ah_test_http'] = array(); $GLOBALS['ah_test_http_raspuns'] = null;
+$acum3 = time();
+$rand( 'r3@exemplu.ro', 'tokR3', array( 'sunet' => 'implicit' ) + ah_spa_prefs_implicite() );
+ah_spa_amana( array( 'token_h' => hash( 'sha256', 'tokR3' ) ), array( 'tip' => 'meditatie', 'titlu' => 'O meditație nouă', 'text' => 'Somn', 'url' => '' ), $acum3 - 5 );
+$idA = (int) $wpdb->get_var( 'SELECT id FROM wp_ah_spa_amanate' );
+// un tick suprapus a luat deja rândul (arenda): al doilea nu-l mai trimite
+$wpdb->query( 'UPDATE wp_ah_spa_amanate SET trimite = ' . ( $acum3 + AH_SPA_AMANATE_ARENDA ) );
+egal( array( ah_spa_amanate_trimite( $acum3 + 1 ), count( $trimise() ) ), array( 0, 0 ), 'ținute: un rând luat de alt tick (arendat) nu pleacă a doua oară' );
+// arenda condiționată: doar cine vede valoarea citită o schimbă (două tick-uri care au citit același rând: unul singur trimite)
+$wpdb->query( 'UPDATE wp_ah_spa_amanate SET trimite = ' . ( $acum3 - 5 ) );
+$GLOBALS['ah_test_http_raspuns'] = function ( $u, $a ) use ( $wpdb, $acum3 ) {
+	// în timp ce primul trimite, al doilea tick citește rândul (deja arendat de primul): nu-l găsește scadent
+	$GLOBALS['ah_test_al_doilea'] = ah_spa_amanate_trimite( $acum3 + 2 );
+	return array( 'response' => array( 'code' => 200 ), 'body' => '{}' );
+};
+$GLOBALS['ah_test_http'] = array();
+egal( array( ah_spa_amanate_trimite( $acum3 + 1 ), $GLOBALS['ah_test_al_doilea'] ?? null, count( $GLOBALS['ah_test_http'] ) ), array( 1, 0, 1 ), 'ținute: două tick-uri suprapuse — o singură trimitere' );
+$GLOBALS['ah_test_http_ultim'] = $GLOBALS['ah_test_http'];
+$GLOBALS['ah_test_http_raspuns'] = null;
+// cursa adevărată: ambele tick-uri citesc rândul scadent; celălalt îl arendează între citirea și arenda acestuia
+$wpdb->query( 'UPDATE wp_ah_spa_amanate SET trimite = ' . ( $acum3 - 5 ) . ' WHERE id = ' . $idA );
+$wpdb->query( 'INSERT INTO wp_ah_spa_amanate (token_h, trimite, tip, titlu, text, url, creat) VALUES (' . $wpdb->pdo->quote( hash( 'sha256', 'tokR3' ) ) . ', ' . ( $acum3 - 5 ) . ", 'meditatie', 'cursa', 'x', '', 0)" );
+$GLOBALS['ah_test_dupa_select'] = function () use ( $wpdb, $acum3 ) { $wpdb->query( 'UPDATE wp_ah_spa_amanate SET trimite = ' . ( $acum3 + 999 ) ); };
+$GLOBALS['ah_test_http'] = array();
+egal( array( ah_spa_amanate_trimite( $acum3 + 1 ), count( $GLOBALS['ah_test_http'] ) ), array( 0, 0 ), 'ținute: cursa — rândurile arendate de celălalt tick între citire și arendă nu pleacă de aici' );
+$wpdb->query( "DELETE FROM wp_ah_spa_amanate WHERE titlu = 'cursa' OR id = " . $idA );
+$GLOBALS['ah_test_http'] = $GLOBALS['ah_test_http_ultim'] ?? array();
+$T3 = $trimise();
+egal( array( $T3['tokR3']['android']['notification']['tag'] ?? '', $T3['tokR3']['android']['collapse_key'] ?? '', $T3['tokR3']['apns']['headers']['apns-collapse-id'] ?? '' ), array( 'ah-am-' . $idA, 'ah-am-' . $idA, 'ah-am-' . $idA ), 'ținute: cheia de înlocuire (tag Android, collapse_key, apns-collapse-id) = id-ul rândului' );
+// o oprire între trimitere și ștergere: rândul revine după arendă și pleacă din nou, cu aceeași cheie (telefonul o înlocuiește)
+ah_spa_amana( array( 'token_h' => hash( 'sha256', 'tokR3' ) ), array( 'tip' => 'inreg', 'titlu' => 'Înregistrarea', 'text' => 'x', 'url' => '' ), $acum3 - 5 );
+$idB = (int) $wpdb->get_var( 'SELECT id FROM wp_ah_spa_amanate' );
+$GLOBALS['ah_test_http_raspuns'] = function () { throw new RuntimeException( 'oprire după trimitere' ); };
+try { ah_spa_amanate_trimite( $acum3 ); } catch ( RuntimeException $x ) {} // „PHP oprit” în mijlocul trimiterii
+$GLOBALS['ah_test_http_raspuns'] = null;
+egal( (int) $wpdb->get_var( 'SELECT trimite FROM wp_ah_spa_amanate WHERE id = ' . $idB ), $acum3 + AH_SPA_AMANATE_ARENDA, 'ținute: după o oprire, rândul rămâne (arendat), nu se pierde' );
+$GLOBALS['ah_test_http'] = array();
+egal( ah_spa_amanate_trimite( $acum3 + 60 ), 0, 'ținute: în timpul arendei, nimeni nu-l retrimite' );
+egal( array( ah_spa_amanate_trimite( $acum3 + AH_SPA_AMANATE_ARENDA ), $trimise()['tokR3']['android']['notification']['tag'] ?? '', (int) $wpdb->get_var( 'SELECT COUNT(*) FROM wp_ah_spa_amanate' ) ), array( 1, 'ah-am-' . $idB, 0 ), 'ținute: după arendă pleacă, cu aceeași cheie, apoi dispare' );
+// FCM: cheia doar dacă e dată și curată; fără ea mesajul e cel de dinainte („Pentru el” neschimbat)
+egal( ah_spa_fcm_mesaj( 'tok', 'T', 'X', array( 'url' => 'u' ), array( 'cheie' => 'rău cu spații' ) ), $m0, 'FCM: o cheie cu alte caractere se ignoră' );
+verifica( ! isset( ah_spa_fcm_mesaj( 'tok', 'T', 'X', array() )['message']['apns']['headers'] ), 'FCM: fără cheie, fără antetul apns' );
+// același telefon, alt cont: ce era ținut, insigna și Setările celei dinainte nu trec la ea
+$GLOBALS['ah_test_email'] = 'r3@exemplu.ro';
+$wpdb->query( "UPDATE wp_ah_spa_push SET necitite = 5, disp = 'telefon-r3' WHERE token = 'tokR3'" );
+ah_spa_amana( array( 'token_h' => hash( 'sha256', 'tokR3' ) ), array( 'tip' => 'inreg', 'titlu' => 'Înregistrarea zilei 3', 'text' => 'x', 'url' => '' ), $acum3 + 3600 );
+ah_spa_push_salveaza( 'alta@exemplu.ro', array( 'token' => 'tokR3', 'platforma' => 'android', 'versiune' => '2.4.0', 'disp' => 'telefon-r3' ) );
+egal( array( (int) $wpdb->get_var( 'SELECT COUNT(*) FROM wp_ah_spa_amanate' ), (int) $wpdb->get_var( "SELECT necitite FROM wp_ah_spa_push WHERE token = 'tokR3'" ), ah_spa_prefs( $wpdb->get_var( "SELECT prefs FROM wp_ah_spa_push WHERE token = 'tokR3'" ) ) ), array( 0, 0, null ), 'telefonul trece la alt cont: notificările ținute, insigna și Setările celei dinainte pleacă' );
+ah_spa_amana( array( 'token_h' => hash( 'sha256', 'tokR3' ) ), array( 'tip' => 'inreg', 'titlu' => 'a ei', 'text' => 'x', 'url' => '' ), $acum3 + 3600 );
+ah_spa_push_salveaza( 'alta@exemplu.ro', array( 'token' => 'tokR3', 'platforma' => 'android', 'versiune' => '2.4.0', 'disp' => 'telefon-r3' ) );
+egal( (int) $wpdb->get_var( 'SELECT COUNT(*) FROM wp_ah_spa_amanate' ), 1, 'același cont, același token (reînregistrare): ce e ținut rămâne' );
+// reinstalare: token nou pe același telefon (disp) — vechiul token și ce avea ținut pleacă, Setările vin cu tokenul nou
+ah_spa_push_salveaza( 'alta@exemplu.ro', array( 'token' => 'tokR3nou' . str_repeat( 'n', 30 ), 'platforma' => 'android', 'versiune' => '2.4.0', 'disp' => 'telefon-r3', 'prefs' => array( 'insigna' => true ) + ah_spa_prefs_implicite() ) );
+egal( array( (int) $wpdb->get_var( 'SELECT COUNT(*) FROM wp_ah_spa_amanate' ), (int) $wpdb->get_var( "SELECT COUNT(*) FROM wp_ah_spa_push WHERE token = 'tokR3'" ), ah_spa_prefs( $wpdb->get_var( "SELECT prefs FROM wp_ah_spa_push WHERE disp = 'telefon-r3'" ) )['insigna'] ), array( 0, 0, true ), 'reinstalare (token nou, același telefon): tokenul vechi și ce avea ținut pleacă; Setările noi pe rândul nou' );
+delete_option( 'ah_spa_fcm' );
+
+/* ---------- 32. runda 3: orele de liniște în fusul orar al telefonului ---------- */
+$ny  = new DateTimeZone( 'America/New_York' );
+$oNY = function ( $s ) use ( $ny ) { return ( new DateTimeImmutable( $s, $ny ) )->getTimestamp(); };
+$LN  = array( 'liniste' => array( 'on' => true, 'de' => '22:00', 'pana' => '08:00' ), 'fus' => 'America/New_York' ) + ah_spa_prefs_implicite();
+egal( ah_spa_liniste_pana( $LN, $oNY( '2026-11-19 23:00' ) ), $oNY( '2026-11-20 08:00' ), 'fus: la New York, 23:00 ora ei e liniște, până la 08:00 ora ei' );
+egal( ah_spa_liniste_pana( $LN, $oNY( '2026-11-19 17:00' ) ), 0, 'fus: 17:00 la New York (00:00 la București) nu e liniște' );
+egal( ah_spa_liniste_pana( $LN, $oNY( '2026-03-07 23:00' ) ), $oNY( '2026-03-08 08:00' ), 'fus: noaptea schimbării orei la New York (8 martie)' );
+egal( ah_spa_valideaza_prefs( array( 'fus' => 'America/New_York' ) )['prefs']['fus'], 'America/New_York', 'fus: păstrat' );
+foreach ( array( 'Marte/Olympus', '../../etc/passwd', 'Europe/Bucharest; DROP', str_repeat( 'A', 80 ), 42 ) as $f ) {
+	$v = ah_spa_valideaza_prefs( array( 'fus' => $f, 'sunet' => 'fara' ) );
+	egal( array( $v['ok'], $v['prefs']['fus'], $v['prefs']['sunet'] ), array( true, 'Europe/Bucharest', 'fara' ), 'fus nevalid (' . substr( (string) $f, 0, 20 ) . '): ignorat, ora României, restul păstrat' );
+}
+egal( ah_spa_liniste_pana( array( 'fus' => 'Nicaieri/Oras' ) + $L, $ora( '2026-11-19 23:00' ) ), $ora( '2026-11-20 08:00' ), 'fus necunoscut în rând (scris de altă versiune): ora României' );
+
+/* ---------- 33. runda 3: statisticile în loturi ---------- */
+$wpdb->query( 'DELETE FROM wp_ah_spa_stat' ); $wpdb->query( 'DELETE FROM wp_ah_spa_unice' ); delete_option( 'ah_spa_stat_secrete' );
+$GLOBALS['ah_test_transients'] = array();
+$GLOBALS['ah_test_email'] = 'lot@exemplu.ro';
+$r = $cere( 'ah_spa_r_stat', array( 'platforma' => 'android', 'versiune' => '2.4.0', 'evenimente' => array( array( 'ev' => 'deschidere' ), array( 'ev' => 'sectiune', 'obiect' => 'meditatii' ), array( 'ev' => 'meditatie_pornita', 'obiect' => '501' ), array( 'ev' => 'notificare_trimisa', 'obiect' => 'meditatii' ), array( 'ev' => 'sectiune', 'obiect' => '<script>' ), 'nu e obiect' ) ) );
+egal( array( $r->get_status(), $r->get_data()['numarate'] ), array( 200, 3 ), 'stat lot: 3 bune numărate, cele greșite (doar de pe server, obiect străin, nu e obiect) sărite' );
+egal( (int) $wpdb->get_var( "SELECT SUM(n) FROM wp_ah_spa_stat WHERE platforma = 'android' AND versiune = '2.4.0'" ), 3, 'stat lot: în contoare, cu platforma și versiunea lotului' );
+egal( $cere( 'ah_spa_r_stat', array( 'evenimente' => array_fill( 0, AH_SPA_STAT_LOT + 1, array( 'ev' => 'deschidere' ) ) ) )->get_status(), 400, 'stat lot: peste ' . AH_SPA_STAT_LOT . ' de evenimente, 400' );
+egal( $cere( 'ah_spa_r_stat', array( 'evenimente' => array() ) )->get_status(), 400, 'stat lot: gol, 400' );
+egal( $cere( 'ah_spa_r_stat', array( 'evenimente' => array( 'a' => array( 'ev' => 'deschidere' ) ) ) )->get_status(), 400, 'stat lot: nu e listă, 400' );
+$GLOBALS['ah_test_transients'] = array();
+$n = 0; $st = 0;
+for ( $i = 0; $i < 11; $i++ ) { $r = $cere( 'ah_spa_r_stat', array( 'evenimente' => array_fill( 0, AH_SPA_STAT_LOT, array( 'ev' => 'sectiune', 'obiect' => 'acasa' ) ) ) ); $n += (int) ( $r->get_data()['numarate'] ?? 0 ); $st = $r->get_status(); }
+egal( array( $n, $st ), array( AH_SPA_STAT_ORA, 429 ), 'stat lot: limita pe oră numără fiecare eveniment din lot' );
+$GLOBALS['ah_test_transients'] = array();
+$GLOBALS['ah_test_sql'] = array();
+$cere( 'ah_spa_r_stat', array( 'evenimente' => array( array( 'ev' => 'deschidere' ) ) ) );
+$cere( 'ah_spa_r_stat', array( 'evenimente' => array( array( 'ev' => 'deschidere' ) ) ) );
+egal( count( preg_grep( '/wp_ah_spa_unice/', $GLOBALS['ah_test_sql'] ) ), 1, 'stat: amprenta zilei scrisă o dată pe zi pe cont, nu la fiecare lot' );
+egal( ah_spa_stat_activi( 1 ), 1, 'stat lot: ea, activă azi' );
+$GLOBALS['ah_test_transients'] = array();
+
+/* ---------- 34. runda 3: CSV fără formule, indexurile panoului ---------- */
+egal( array_map( 'ah_spa_csv_celula', array( '=HYPERLINK("x")', '+1', '-1', '@SUM(A1)', "\tx", 'acasa', '2026-11-19', 7, '' ) ), array( "'=HYPERLINK(\"x\")", "'+1", "'-1", "'@SUM(A1)", "'\tx", 'acasa', '2026-11-19', 7, '' ), 'CSV: celulele care încep cu = + - @ tab primesc apostrof; restul neschimbate' );
+$wpdb->insert( 'wp_ah_spa_stat', array( 'zi' => wp_date( 'Y-m-d' ), 'ev' => 'sectiune', 'platforma' => '', 'versiune' => '', 'obiect' => '=cmd|calc', 'n' => 1 ) );
+verifica( false !== strpos( ah_spa_stat_csv(), ",'=cmd|calc," ) && false === strpos( ah_spa_stat_csv(), ',=cmd' ), 'CSV: un rând otrăvit (scris pe ocolite) iese neutralizat' );
+$wpdb->query( "DELETE FROM wp_ah_spa_stat WHERE obiect = '=cmd|calc'" );
+$GLOBALS['ah_test_dbdelta'] = array(); delete_option( 'ah_spa_tabel' );
+ah_test_actiune( 'init' );
+$dd = implode( "\n", $GLOBALS['ah_test_dbdelta'] );
+verifica( false !== strpos( $dd, 'KEY ev_zi (ev,zi)' ) && false !== strpos( $dd, 'KEY h (h)' ) && '4' === AH_SPA_TABEL_VER, 'tabelele 4: indexul panoului (ev, zi) și al reamprentării (h)' );
+$js3 = ah_spa_js();
+verifica( false === strpos( $js3, 'setInterval(ASP.aplica,60000); /*' ) && false !== strpos( $js3, "m==='soare';if(vrea&&!ASP.t)ASP.t=setInterval(ASP.aplica,60000)" ), 'aspectul: ceasul pe minut doar cu „După apus și răsărit”' );
+verifica( false !== strpos( $js3, 'evenimente:l' ) && false !== strpos( $js3, 'keepalive:true' ) && false !== strpos( $js3, "if(!on9)STAT.goleste()" ), 'puntea: statisticile în loturi (keepalive), coada golită la oprire' );
+
+$sv3 = ah_spa_stat_svg( array( '2026-11-01' => 1, '2026-11-02' => 2, '2026-11-03' => 3, '2026-11-04' => 1, '2026-11-05' => 1, '2026-11-06' => 1, '2026-11-07' => 1, '2026-11-08' => 4 ) );
+verifica( false !== strpos( $sv3, 'text-anchor="start"' ) && false !== strpos( $sv3, 'text-anchor="end"' ), 'graficul: prima și ultima etichetă nu ies din margini' );
+$GLOBALS['ah_test_admin'] = true; $_GET['tab'] = 'statistici';
+ob_start(); ah_spa_pagina_setari(); $pag3 = ob_get_clean(); unset( $_GET['tab'] ); $GLOBALS['ah_test_admin'] = false;
+verifica( 2 === substr_count( $pag3, '— (pe telefon)' ) && preg_match( '~Întâlniri \(în 15 minute\)</th><td>0</td>~', $pag3 ), 'Statistici: „pe telefon” doar la mementourile locale; întâlnirile fără trimiteri = 0' );
 echo "\n" . $GLOBALS['ok'] . ' teste trecute, ' . $GLOBALS['rau'] . " picate.\n";
 exit( $GLOBALS['rau'] ? 1 : 0 );

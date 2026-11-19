@@ -451,24 +451,32 @@ probează pe imitații):
     **dacă totuși sună, spuneți-ne**). Pe iPhone, mementoul ciclului cu „Fără sunet” nu sună. Pe Android, în Setările
     telefonului › Aplicații › Adela Haru › Notificări apar canalele „Notificări”, „…cu clopoțel”, „…fără sunet” și cele ale ciclului.
 31. **Ore de liniște** (ex. de acum până peste 30 de minute): o meditație nouă publicată în timpul ei sosește după capăt
-    (cronul la 5 minute); o întâlnire care începe în 15 minute sosește la timp, fără sunet.
+    (cronul la 5 minute); o întâlnire care începe în 15 minute sosește la timp, fără sunet. Liniștea e după ceasul telefonului (și
+    în alt fus orar). O meditație ținută peste noapte apare o singură dată, chiar dacă serverul a fost oprit la trimitere.
 32. **Pe ecranul blocat: „Doar Adela Haru”**: push-ul și mementourile arată „Adela Haru / Ai un mesaj nou.”; atingerea
     deschide totuși secțiunea potrivită.
 33. **Insigna**: cu ea pornită, două notificări ⇒ 2 pe iconiță (iPhone; pe Android, după lansator); la deschiderea
     aplicației, 0.
 34. **Mementoul zilnic de meditație**: la ora aleasă, o notificare; după schimbarea orei, doar una (cea nouă).
 35. **Aspect › După apus și răsărit**: seara (după apus, București) Spațiul meu trece singur în culorile de seară, în
-    cel mult un minut, și bara de stare se schimbă; „Ca telefonul” urmează tema telefonului.
+    cel mult un minut, și bara de stare se schimbă; „Ca telefonul” urmează tema telefonului. Cu telefonul pe alt fus orar,
+    seara vine la ora apusului de la București pe ceasul telefonului (de ex. 16:38 iarna).
 36. **Widgetul**: din galeria de widgeturi; arată meditația zilei (titlu, copertă), apoi „Faza ciclului de azi” după
     alegere; atingerea deschide aplicația în secțiunea potrivită; după ieșirea din cont, widgetul e gol.
 37. **Ciclul meu cu Face ID / amprenta**: pornit, la redeschiderea aplicației direct pe Ciclul meu nu se vede nimic din
     ciclu înainte de deblocare (nici o clipă); „Anulează” la Face ID lasă ecranul închis cu „Deblochează”; după mai mult
-    de un minut în fundal se închide din nou; cu Face ID refuzat de sistem, codul telefonului merge.
+    de un minut în fundal se închide din nou; cu Face ID refuzat de sistem, codul telefonului merge. În lista aplicațiilor
+    recente (glisare de jos), Ciclul meu deschis apare acoperit (**de verificat: poza o face sistemul, uneori înainte ca
+    pagina să apuce să se acopere**). Pe Android, cu PIN-ul în loc de amprentă: o singură cerere, fără reblocare după.
 38. **Temporizatorul de somn**: 10 minute cu ecranul blocat ⇒ meditația se oprește. Pe iPhone volumul unei pagini nu
     se poate micșora din JavaScript, deci acolo sunetul se oprește fără stingere; pe Android se stinge în ultimele 10 s.
-39. **Descarcă doar pe Wi-Fi**: pe date mobile, „Descarcă” întreabă întâi; pe Wi-Fi, nu.
+    **De verificat**: cu ecranul blocat 30 de minute, oprirea vine la timp (WebView-ul poate încetini ceasurile în fundal;
+    puntea se sprijină și pe „timeupdate” al sunetului). Închiderea playerului oprește temporizatorul.
+39. **Descarcă doar pe Wi-Fi**: pe date mobile, „Descarcă” întreabă întâi; pe Wi-Fi, nu; în modul avion, „Nu ești
+    conectată la internet”.
 40. **Statistici**: după câteva deschideri, Setări › Aplicația mobilă › Statistici arată numerele; cu „Statistici
-    anonime” oprit, în Web Inspector nu mai pleacă nicio cerere `/ah-spa/v1/stat`.
+    anonime” oprit, în Web Inspector nu mai pleacă nicio cerere `/ah-spa/v1/stat`. Cu ele pornite, cererile pleacă în
+    loturi (una la ~30 s, sau la trecerea în fundal), nu câte una pe atingere.
 41. **Vimeo**: în sala de curs, butonul de ecran întreg al playerului merge (allow="fullscreen" pus de punte), cu rotirea.
 
 
