@@ -49,6 +49,19 @@
             android:foregroundServiceType="mediaPlayback"
         />
 
+        <!-- Widgetul de pe ecranul principal (AhWidget): „Meditația zilei sau faza ciclului”. exported=false: APPWIDGET_UPDATE
+             vine de la sistem (AppWidgetService), care ajunge și la receiverele neexportate; alte aplicații nu-l pot chema
+             (ca în exemplul actual din documentația Android pentru widgeturi). -->
+        <receiver
+            android:name=".AhWidget"
+            android:exported="false"
+            android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/ah_widget_info" />
+        </receiver>
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -65,6 +78,10 @@
         <!-- pictograma notificărilor push (FCM): lotusul alb, monocrom (altfel Android pune un pătrat alb); culoarea, din mesaj -->
         <meta-data android:name="com.google.firebase.messaging.default_notification_icon" android:resource="@drawable/ic_stat_lotus" />
         <meta-data android:name="com.google.firebase.messaging.default_notification_color" android:resource="@color/ah_accent" />
+        <!-- canalul notificărilor push fără channel_id în mesaj: ah_clopotel (sunetul clopotel.wav), creat din JS de puntea
+             site-ului (LocalNotifications.createChannel). Dacă încă nu există (aplicația abia instalată), Firebase folosește
+             singur canalul lui de rezervă („Diverse”), deci cheia e sigură și înainte de crearea canalului. -->
+        <meta-data android:name="com.google.firebase.messaging.default_notification_channel_id" android:value="ah_clopotel" />
     </application>
 
     <!-- Permissions -->

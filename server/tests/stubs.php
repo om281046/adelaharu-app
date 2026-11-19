@@ -93,7 +93,10 @@ function nocache_headers() {}
 function status_header( $c ) { $GLOBALS['ah_test_status'] = $c; }
 function wp_check_filetype( $f ) { return array( 'ext' => 'mp3', 'type' => 'audio/mpeg' ); }
 function wp_mail( $to, $s, $b, $h = array() ) { $GLOBALS['ah_test_mail'][] = array( $to, $s, $b ); return true; }
-function current_user_can( $c ) { return false; }
+function current_user_can( $c ) { return ! empty( $GLOBALS['ah_test_admin'] ); }
+function wp_nonce_url( $u, $a = -1 ) { return $u . ( false === strpos( $u, '?' ) ? '?' : '&' ) . '_wpnonce=n'; }
+function check_admin_referer( $a = -1 ) { return 1; }
+function wp_die( $m = '' ) { throw new Exception( (string) $m ); }
 function is_wp_error( $x ) { return $x instanceof WP_Error; }
 class WP_Error { public $code; public $message; public function __construct( $c = '', $m = '' ) { $this->code = $c; $this->message = $m; } public function get_error_message() { return $this->message; } }
 /* parolele (codul de recenzie): ca în WordPress, doar amprenta; verificarea în timp constant */
@@ -182,7 +185,11 @@ class Ah_Test_Wpdb {
 	public function __construct() {
 		$this->pdo = new PDO( 'sqlite::memory:' );
 		$this->pdo->setAttribute( PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION );
-		$this->pdo->exec( 'CREATE TABLE wp_ah_spa_push ( id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT NOT NULL, token TEXT NOT NULL, token_h TEXT NOT NULL UNIQUE, platforma TEXT DEFAULT \'\', versiune TEXT DEFAULT \'\', disp TEXT DEFAULT \'\', creat TEXT, vazut TEXT )' );
+		$this->pdo->exec( 'CREATE TABLE wp_ah_spa_push ( id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT NOT NULL, token TEXT NOT NULL, token_h TEXT NOT NULL UNIQUE, platforma TEXT DEFAULT \'\', versiune TEXT DEFAULT \'\', disp TEXT DEFAULT \'\', prefs TEXT NULL, necitite INTEGER NOT NULL DEFAULT 0, creat TEXT, vazut TEXT )' );
+		// 2.4.0: notificările ținute peste orele de liniște, contoarele statisticilor, utilizatoarele unice
+		$this->pdo->exec( 'CREATE TABLE wp_ah_spa_amanate ( id INTEGER PRIMARY KEY AUTOINCREMENT, token_h TEXT NOT NULL, trimite INTEGER NOT NULL DEFAULT 0, tip TEXT DEFAULT \'\', titlu TEXT DEFAULT \'\', text TEXT NOT NULL DEFAULT \'\', url TEXT DEFAULT \'\', creat INTEGER DEFAULT 0 )' );
+		$this->pdo->exec( 'CREATE TABLE wp_ah_spa_stat ( zi TEXT NOT NULL, ev TEXT NOT NULL, platforma TEXT NOT NULL DEFAULT \'\', versiune TEXT NOT NULL DEFAULT \'\', obiect TEXT NOT NULL DEFAULT \'\', n INTEGER NOT NULL DEFAULT 0, PRIMARY KEY ( zi, ev, platforma, versiune, obiect ) )' );
+		$this->pdo->exec( 'CREATE TABLE wp_ah_spa_unice ( zi TEXT NOT NULL, h TEXT NOT NULL, luna TEXT NOT NULL, PRIMARY KEY ( zi, h ) )' );
 		$this->pdo->exec( 'CREATE TABLE wp_ah_sp_ciclu ( id INTEGER PRIMARY KEY AUTOINCREMENT, cheie TEXT UNIQUE, date TEXT, acord TEXT, actualizat TEXT )' );
 		$this->pdo->exec( 'CREATE TABLE wp_ah_ciclu ( id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT UNIQUE, token TEXT, start TEXT )' );
 		$this->pdo->exec( 'CREATE TABLE wp_ah_spa_incercari ( cheie TEXT PRIMARY KEY, n INTEGER NOT NULL DEFAULT 0, expira INTEGER NOT NULL DEFAULT 0 )' );

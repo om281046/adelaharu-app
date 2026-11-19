@@ -69,7 +69,24 @@ linkului, ca să-l poți opri oricând.
 
 Fazele sunt o estimare. Nu sunt o metodă de contracepție și nu înlocuiesc sfatul medicului.
 
-**Cât timp le păstrăm.** Cât timp ai cont. Din aplicație, la Mai mult › Aplicația › „Șterge contul”, ștergi oricând
+**Setările aplicației.** În Mai mult alegi ce notificări primești (meditații noi, întâlniri, înregistrări), sunetul,
+orele de liniște, dacă pe ecranul blocat se vede textul sau doar „Adela Haru” și dacă iconița arată un număr. Ca să
+le respectăm, aceste alegeri și numărul notificărilor necitite stau la noi, lângă tokenul de notificări al telefonului
+tău; o notificare care cade în orele tale de liniște o păstrăm până când se termină ele. Restul alegerilor (aspectul,
+widgetul de pe ecranul principal, descărcarea doar pe Wi-Fi, mementoul zilnic de meditație, blocarea Ciclului meu)
+rămân doar pe telefonul tău. Dacă blochezi Ciclul meu cu Face ID sau amprenta, verificarea o face telefonul; noi nu
+primim și nu păstrăm nimic biometric.
+
+**Statistici anonime.** Ca să știm ce meditații și ce funcții folosești și ce versiuni ale aplicației sunt încă pe
+telefoane, aplicația ne trimite, pe serverul nostru, evenimente simple: ai deschis aplicația, ai pornit sau ai ascultat
+până la capăt o meditație, ai descărcat una, ai deschis o notificare, ai pornit un video, ai deschis o secțiune.
+Le păstrăm doar ca numere pe zi (fără numele tău, adresa ta, adresa IP sau vreun cod al telefonului), timp de 13 luni.
+Ca să numărăm câte persoane folosesc aplicația, păstrăm cel mult 35 de zile un cod pe zi, obținut din adresa ta cu o
+cheie care se schimbă în fiecare lună. Nu folosim Google Analytics, Facebook sau alți furnizori pentru asta și nu
+combinăm aceste date cu altele. Temeiul este interesul nostru legitim de a îmbunătăți aplicația (art. 6 alin. (1)
+lit. f GDPR). Poți opri oricând: Mai mult › Confidențialitate › „Statistici anonime”; de atunci nu mai pleacă nimic.
+
+**Cât timp le păstrăm.** Cât timp ai cont. Din aplicație, la Mai mult › Confidențialitate › „Șterge contul”, ștergi oricând
 datele ciclului și notițele păstrate în cont (și abonarea la emailurile fazelor), înscrierea în Spațiul meu,
 dispozitivele conectate, tokenurile de notificări și accesurile date partenerului; pe telefon se șterg meditațiile descărcate, datele ciclului
 și mementourile. Comenzile și facturile de pe site se păstrează cât cere legea. Dacă nu mai ai aplicația, ne poți
@@ -86,6 +103,9 @@ de a te adresa Autorității Naționale de Supraveghere a Prelucrării Datelor c
 - paragraful „Partenerul tău” se publică odată cu activarea fragmentului `ah-sp-partener.php` pe site; până atunci
   rămâne doar cel despre linkul vechi (fără cuvântul „vechi”). E aliniat cu paragraful din `docs/partener.md`
   (cel mult 2 persoane, 30 de zile după oprire); „Șterge contul” șterge pe loc și accesul lui (18 nov., cu test);
+- 2.4.0: „instrumente de analiză” din primul paragraf = ale terților; statisticile noastre sunt descrise separat
+  („Statistici anonime”); dacă juristul preferă, primul paragraf devine „nu există reclame și nici instrumente de
+  analiză ale altor firme”;
 - fraza „nu există instrumente de analiză sau urmărire” e adevărată doar dacă fragmentul oprește în aplicație Google
   Analytics și pixelul Meta (`privacy-answers.md`, „Condiția”); altfel se rescrie;
 - emailurile fazelor: datele lor (tabelul `ah_ciclu` din 41) **nu** sunt criptate; nu scrieți nicăieri „toate datele

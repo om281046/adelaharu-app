@@ -25,7 +25,7 @@ const TMP = fs.mkdtempSync(path.join(process.env.AHSPA_TMP || os.tmpdir(), 'ahsp
 const FONT = path.join(RAD, 'app', 'node_modules', '@fontsource');
 fs.mkdirSync(OUT, { recursive: true });
 /* doar pozele acestui harnaș: partener-*.png (server/tests/partener/poze.cjs) și offline-*.png (app/) rămân */
-for (const f of fs.readdirSync(OUT)) if (/^(browser|aplicatie)-.*\.png$/.test(f)) fs.unlinkSync(path.join(OUT, f));
+for (const f of fs.readdirSync(OUT)) if (/^(browser|aplicatie|admin)-.*\.png$/.test(f)) fs.unlinkSync(path.join(OUT, f));
 execFileSync('php', [path.join(__dirname, 'construieste.php'), TMP], { stdio: 'inherit' });
 
 const UA_SAFARI = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Mobile/15E148 Safari/604.1';
@@ -68,6 +68,7 @@ async function ruta(context, varianta, jurnal, spa) {
     if (!p.startsWith('/fonts/') && !p.startsWith('/img/')) jurnal.push({ m: req.method(), u: req.url(), corp: req.postData(), h: req.headers()['x-ah-app'] || '', spp: req.headers()['x-ah-spp'] || '' });
     if (p === '/spatiul-meu/') return route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: cuSpa(fs.readFileSync(path.join(TMP, `sp-${u.searchParams.has('harnas_intrare') ? 'intrare-' : ''}${varianta}${u.searchParams.has('harnas_tema') ? '-tema' : ''}.html`), 'utf8'), spa) });
     if (p === '/wp-json/ah-spa/v1/punte') { const css = u.searchParams.get('f') === 'css'; return route.fulfill({ status: 200, contentType: css ? 'text/css; charset=utf-8' : 'application/javascript; charset=utf-8', headers: { 'Cache-Control': 'public, max-age=31536000, immutable' }, body: fs.readFileSync(path.join(TMP, css ? 'punte.css' : 'punte.js')) }); }
+    if (p === '/wp-admin/options-general.php') return route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: fs.readFileSync(path.join(TMP, 'admin-statistici.html')) });
     if (p === '/tema/site.css') return route.fulfill({ status: 200, contentType: 'text/css', body: fs.readFileSync(path.join(RAD, 'server', 'tests', 'date', 'tema', 'site.css')) });
     if (p === '/pentru-el/') return route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: '<!doctype html><title>Ciclul ei</title><h1>Pagina lui (harnașul partenerului o testează)</h1>' });
     if (p === '/sala-de-curs/') return route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: fs.readFileSync(path.join(TMP, `sala-${varianta}.html`)) });
@@ -108,7 +109,16 @@ function capacitor(opt) {
   const P = {
     App: { addListener: on('App'), getLaunchUrl: () => Promise.resolve({}), minimizeApp: () => { rec('App', 'minimizeApp'); return Promise.resolve(); } },
     Device: { getId: () => Promise.resolve({ identifier: 'iphone-de-proba-1' }) },
-    AhApp: { info: () => Promise.resolve({ push: ${JSON.stringify(opt.push !== false)}, versiune: '2.0.0', build: '2', mediaNativ: ${JSON.stringify(opt.platforma === 'android')} }) },
+    AhApp: Object.assign({ info: () => Promise.resolve({ push: ${JSON.stringify(opt.push !== false)}, versiune: '2.0.0', build: '2', mediaNativ: ${JSON.stringify(opt.platforma === 'android')} }) },
+      /* partea nativă 2.4.0 (widget, biometrie, insignă, temă); opt.vechi = aplicația de dinainte, fără ele (Capacitor ar respinge) */
+      ${JSON.stringify(!!opt.vechi)} ? {} : {
+        insigna: (a) => { rec('AhApp', 'insigna', a); return Promise.resolve({ ok: true }); },
+        widget: (a) => { rec('AhApp', 'widget', a); return Promise.resolve({ ok: true, imagine: !!a.imagine }); },
+        tema: (a) => { rec('AhApp', 'tema', a); return Promise.resolve({ ok: true }); },
+        biometrie: () => Promise.resolve(${JSON.stringify(opt.bio || { disponibil: false })}),
+        autentifica: (a) => { rec('AhApp', 'autentifica', a); return Promise.resolve(sessionStorage.getItem('harnas_auth') === 'nu' ? { ok: false, eroare: 'anulat' } : { ok: true }); },
+      }),
+    Network: { getStatus: () => Promise.resolve({ connected: true, connectionType: sessionStorage.getItem('harnas_retea') || ${JSON.stringify(opt.retea || 'wifi')} }) },
     AhMedia: ${JSON.stringify(opt.platforma === 'android')} ? {
       addListener: on('AhMedia'),
       actualizeaza: (a) => { rec('AhMedia', 'actualizeaza', a); return Promise.resolve(); },
@@ -335,9 +345,12 @@ const poza = async (page, nume) => { nr++; await page.screenshot({ path: path.jo
     await page.click('#ahsp .fo-x');
     /* Mai mult › Aplicația */
     await page.evaluate(() => { location.hash = '#mai'; }); await asteapta(900);
-    egal(await page.evaluate(() => [...document.querySelectorAll('#ahsp .spa-mai .rand b')].map((b) => b.textContent)), ['Notificări', 'Mementourile ciclului', 'Meditații descărcate', 'Șterge contul'], 'Mai mult › Aplicația: rândurile punții');
+    egal(await page.evaluate(() => [...document.querySelectorAll('#ahsp .spa-grup')].map((g) => g.querySelector('h2').textContent + ': ' + [...g.querySelectorAll('.rand b')].map((b) => b.textContent).join(' | '))), [
+      'Notificări: Notificări | Meditații noi | Întâlniri | Înregistrări gata | Mementourile ciclului | Mementoul zilnic de meditație | Sunet | Ore de liniște | Pe ecranul blocat | Insignă pe iconiță',
+      'Aspect: Culorile aplicației', 'Ecranul principal: Widgetul arată', 'Meditații: Descarcă doar pe Wi-Fi | Spațiu folosit',
+      'Confidențialitate: Statistici anonime | Șterge contul', 'Despre: Versiunea | Scrie-ne | Evaluează aplicația | Politica de confidențialitate | Termeni și condiții'], 'Mai mult › Setările: grupurile și rândurile (aplicația 2.4)');
     egal(await page.evaluate(() => [document.getElementById('spa-push').getAttribute('aria-checked'), document.getElementById('spa-ciclu').getAttribute('aria-checked')]), ['true', 'true'], 'comutatoarele: pornite');
-    egal(await page.evaluate(() => document.querySelectorAll('#ahsp h2').length && [...document.querySelectorAll('#ahsp h2')].filter((h) => h.textContent === 'Aplicația').length), 1, 'o singură secțiune „Aplicația” (cu 266)');
+    egal(await page.evaluate(() => [...document.querySelectorAll('#ahsp h2')].filter((h) => h.offsetParent && h.textContent === 'Aplicația').length), 0, '„Aplicația” lui 266 (Aspect de seară) ascunsă: o înlocuiește Setări › Aspect');
     verifica(await page.evaluate(() => /Cursurile, cărțile și meditațiile de pe această adresă apar aici\./.test(document.body.innerText) && !/Toate comenzile/.test(document.body.innerText)), 'Mai mult › Datele mele: fără „comenzi”');
     egal(await page.evaluate(() => { const a = document.querySelector('#spa-ciclu path'), b = document.querySelector('#spx-seara path'); return !!a && (!b || a.getAttribute('d') !== b.getAttribute('d')); }), true, 'Mementourile ciclului: altă iconiță decât Aspect de seară');
     await poza(page, 'aplicatie-16-mai-mult-aplicatia');
@@ -420,6 +433,8 @@ const poza = async (page, nume) => { nr++; await page.screenshot({ path: path.jo
     egal(vim, ['https://player.vimeo.com/video/1197728140?h=cff7aa9195&title=0&dnt=1'], 'sala: iframe-ul Vimeo pleacă din server cu dnt=1');
     await page.evaluate(() => { const f = document.createElement('iframe'); f.id = 'vim2'; f.src = 'https://player.vimeo.com/video/42?h=z'; document.getElementById('ahs').appendChild(f); }); await asteapta(400);
     egal(await page.evaluate(() => document.getElementById('vim2').getAttribute('src')), 'https://player.vimeo.com/video/42?h=z&dnt=1', 'sala: un iframe Vimeo adăugat mai târziu primește și el dnt=1');
+    egal(await page.evaluate(() => { const f = document.getElementById('vim2'); return [f.getAttribute('allow'), f.hasAttribute('allowfullscreen')]; }), ['autoplay; fullscreen; picture-in-picture', true], 'sala: Vimeo cu allow="autoplay; fullscreen; picture-in-picture" și allowfullscreen (2.4.0)');
+    egal(await page.evaluate(() => { const f = document.getElementById('ahs-vimeo'); return [f.getAttribute('allow'), f.hasAttribute('allowfullscreen'), /dnt=1/.test(f.src)]; }), ['autoplay; fullscreen; picture-in-picture', true, true], 'sala: iframe-ul din pagină păstrează allow-ul și dnt=1');
     egal(cereriUrm(jurnal), [], 'sala în aplicație: nicio cerere de urmărire');
     const t = await page.evaluate(() => document.body.innerText);
     verifica(/Abonament activ până pe 18 decembrie 2026\s*$/m.test(t), 'sala: starea abonamentului rămâne („Abonament activ până pe …”), fără „Abonamentul meu”');
@@ -451,7 +466,7 @@ const poza = async (page, nume) => { nr++; await page.screenshot({ path: path.jo
     await page.goto(SITE + '/spatiul-meu/#acasa'); await asteapta(3400);
     verifica(!(await page.locator('.ahspa-foaie').count()), 'Android fără Firebase: nu întreabă de notificări');
     await page.evaluate(() => { location.hash = '#mai'; }); await asteapta(900);
-    egal(await page.evaluate(() => [...document.querySelectorAll('#ahsp .spa-mai .rand b')].map((b) => b.textContent)), ['Mementourile ciclului', 'Meditații descărcate', 'Șterge contul'], 'Android fără Firebase: fără comutatorul Notificări');
+    egal(await page.evaluate(() => [...document.querySelectorAll('#ahsp #spa-g-notif .rand b')].map((b) => b.textContent)), ['Mementourile ciclului', 'Mementoul zilnic de meditație', 'Sunet', 'Pe ecranul blocat'], 'Android fără Firebase: fără comutatorul Notificări (nici categorii, liniște, insignă)');
     /* butonul Înapoi: întâi foaia deschisă, apoi (fără istoric) aplicația trece în fundal */
     await page.click('#spa-sterge'); await asteapta(300);
     await page.evaluate(() => window.__emit('App.backButton', { canGoBack: true })); await asteapta(200);
@@ -492,7 +507,9 @@ const poza = async (page, nume) => { nr++; await page.screenshot({ path: path.jo
     a5 = await apeluri(page);
     verifica(a5.some((x) => x[0] === 'AhMedia' && x[1] === 'opreste'), 'Android: la plecarea din pagină, notificarea AhMedia se oprește');
     const ch = a5.filter((x) => x[0] === 'LocalNotifications' && x[1] === 'createChannel').pop(), sc5 = a5.filter((x) => x[0] === 'LocalNotifications' && x[1] === 'schedule').pop();
-    verifica(ch && ch[2].id === 'ah_ciclu' && ch[2].visibility === 0 && sc5 && sc5[2].notifications.every((n) => n.channelId === 'ah_ciclu'), 'Android: mementourile pe canalul „privat” (fără conținut pe ecranul blocat)');
+    const chs = a5.filter((x) => x[0] === 'LocalNotifications' && x[1] === 'createChannel').map((x) => x[2]);
+    egal(chs.map((c) => [c.id, c.visibility, c.sound || '', c.vibration, c.importance]).sort(), [['ah_ciclu_clopotel', 0, 'clopotel.wav', true, 3], ['ah_ciclu_implicit', 0, '', true, 3], ['ah_ciclu_liniste', 0, '', false, 2], ['ah_clopotel', 1, 'clopotel.wav', true, 3], ['ah_implicit', 1, '', true, 3], ['ah_liniste', 1, '', false, 2]], 'Android: canalele create la pornire (clopoțel, sunetul telefonului, fără sunet; ciclul privat)');
+    verifica(ch && sc5 && sc5[2].notifications.every((n) => n.channelId === 'ah_ciclu_clopotel' && n.sound === 'clopotel.wav'), 'Android: mementourile pe canalul „privat” al ciclului, cu clopoțelul (implicit)');
     egal(erori, [], 'Android: fără erori JS');
     await ctx.close();
   }
@@ -808,7 +825,7 @@ const poza = async (page, nume) => { nr++; await page.screenshot({ path: path.jo
     await page.evaluate(() => { location.hash = '#mai'; }); await asteapta(900);
     egal(await page.evaluate(() => ['spa-push', 'spa-ciclu', 'spa-dl-tot', 'spa-sterge'].map((id) => { const b = document.getElementById(id); return b && [b.tagName, b.type, b.getAttribute('role')]; })), [['BUTTON', 'button', 'switch'], ['BUTTON', 'button', 'switch'], ['BUTTON', 'button', null], ['BUTTON', 'button', null]], 'Mai mult: comutatoarele și rândurile sunt <button> (role=switch unde e cazul)');
     egal(await page.evaluate(() => { const a = document.getElementById('spa-el'); return a && [a.textContent.includes('Ciclul ei'), a.getAttribute('href')]; }), [true, SITE + '/pentru-el/'], 'Mai mult: „Ciclul ei” spre /pentru-el/ (ah_spa_are_acces_el)');
-    verifica(await page.evaluate(() => /O meditație pe acest telefon\. Atinge ca s-o ștergi\./.test(document.getElementById('spa-dl-tot').textContent)), 'Mai mult: „Atinge ca s-o ștergi.” la o singură descărcare');
+    verifica(await page.evaluate(() => /O meditație · 1 B\. Atinge ca s-o ștergi\./.test(document.getElementById('spa-dl-tot').textContent)), 'Mai mult: „Spațiu folosit” cu mărimea și „Atinge ca s-o ștergi.” la o singură descărcare');
     await page.focus('#spa-ciclu'); await page.keyboard.press('Space'); await asteapta(400);
     egal(await page.evaluate(() => document.getElementById('spa-ciclu').getAttribute('aria-checked')), 'false', 'Mai mult: comutatorul merge și din tastatură (Spațiu)');
     await poza(page, 'aplicatie-26-mai-mult-butoane');
@@ -858,6 +875,266 @@ const poza = async (page, nume) => { nr++; await page.screenshot({ path: path.jo
     await page.evaluate(() => { location.hash = '#mai'; }); await asteapta(500);
     egal(await page.evaluate(() => { const w = document.getElementById('spx-seara'); return w ? w.getAttribute('aria-checked') : 'true'; }), 'true', 'modul întunecat: comutatorul „Aspect de seară” arată pornit');
     egal(erori, [], 'zoom / întunecat: fără erori JS');
+    await ctx.close();
+  }
+  /* ===== 17. 2.4.0: Setările aplicației (Mai mult): fiecare comutator rămâne, preferințele la server, foile, axe, poze ===== */
+  {
+    const jurnal = [], ctx = await browser.newContext({ ...ctxOpt, userAgent: UA_APP });
+    const TOK = 'fcmProba:APA91b' + 'x'.repeat(120);
+    await ruta(ctx, 'aplicatie', jurnal);
+    await ctx.addInitScript(capacitor({ perm: 'granted', prefs: { ah_push_intrebat: '1', ah_push_on: '1', ah_ciclu_notif: '1', ah_push: JSON.stringify({ token: TOK, cont: 'ea', cine: 'x', la: Date.now() }) }, retea: 'wifi' }));
+    await ctx.addInitScript(LOCAL);
+    const page = await ctx.newPage(); const erori = []; page.on('pageerror', (e) => erori.push(e.message));
+    await page.goto(SITE + '/spatiul-meu/#acasa'); await asteapta(1800);
+    let a = await apeluri(page);
+    verifica(a.some((x) => x[0] === 'AhApp' && x[1] === 'insigna' && x[2].n === 0) && jurnal.some((x) => x.m === 'POST' && x.u.endsWith('/ah-spa/v1/insigna') && JSON.parse(x.corp).token === TOK && x.h === '1'), 'deschiderea: insigna golită pe telefon (AhApp.insigna {n:0}) și pe server (POST /insigna)');
+    egal(a.filter((x) => x[0] === 'AhApp' && x[1] === 'tema').map((x) => x[2]), [{ seara: false }], 'deschiderea: AhApp.tema({seara:false}) (bara de stare)');
+    const w0 = a.filter((x) => x[0] === 'AhApp' && x[1] === 'widget').map((x) => x[2]);
+    verifica(w0.length === 1 && w0[0].mod === 'meditatie' && /^Meditația zilei/.test(w0[0].sub) && w0[0].url === SITE + '/spatiul-meu/#meditatii' && /^https:\/\/www\.adelaharu\.ro\/img\//.test(w0[0].imagine) && w0[0].culoare === '#964E46', 'widgetul: meditația zilei la deschidere (titlu, copertă, link) — ' + JSON.stringify(w0[0]));
+    const titluri = await page.evaluate(() => window.AH_SP.med_toate.map((m) => m.titlu));
+    verifica(titluri.indexOf(w0[0] && w0[0].titlu) > -1, 'widgetul: o meditație pe care o poate asculta');
+    const st0 = jurnal.filter((x) => x.u.endsWith('/ah-spa/v1/stat')).map((x) => JSON.parse(x.corp));
+    verifica(st0.some((x) => x.ev === 'deschidere' && x.platforma === 'ios') && st0.some((x) => x.ev === 'sectiune' && x.obiect === 'acasa'), 'statistici: deschiderea și secțiunea (fără date personale): ' + JSON.stringify(st0));
+    verifica(st0.every((x) => Object.keys(x).every((k) => ['ev', 'platforma', 'versiune', 'obiect'].indexOf(k) > -1)), 'statistici: doar ev, platforma, versiune, obiect');
+    await page.evaluate(() => { location.hash = '#mai'; }); await asteapta(1000);
+    const grupuri = ['spa-g-notif', 'spa-g-aspect', 'spa-g-widget', 'spa-g-med', 'spa-g-conf', 'spa-g-despre'];
+    const pozaGrup = async (id, nume) => { await page.evaluate((i) => document.getElementById(i).scrollIntoView({ block: 'start' }), id); await page.evaluate(() => window.scrollBy(0, -70)); await asteapta(150); nr++; await page.screenshot({ path: path.join(OUT, nume + '.png') }); };
+    await pozaGrup('spa-g-notif', 'aplicatie-30-setari-notificari');
+    egal(await axe(page), [], 'axe Setări (Mai mult): fără probleme serioase sau critice');
+    const sw = (id) => page.evaluate((i) => (document.getElementById(i) || {}).getAttribute && document.getElementById(i).getAttribute('aria-checked'), id);
+    const setari = async () => JSON.parse((await prefs(page)).ah_setari || '{}');
+    const prefSrv = () => jurnal.filter((x) => x.u.endsWith('/ah-spa/v1/preferinte')).map((x) => JSON.parse(x.corp));
+    /* categoriile push */
+    for (const k of ['meditatii', 'intalniri', 'inreg']) {
+      egal(await sw('spa-c-' + k), 'true', 'categoria ' + k + ': pornită implicit');
+      await page.click('#spa-c-' + k); await asteapta(250);
+      egal([await sw('spa-c-' + k), (await setari()).cat[k]], ['false', 0], 'categoria ' + k + ': oprită și păstrată pe telefon');
+      const u = prefSrv().pop();
+      verifica(u && u.token === TOK && u.prefs.cat[k] === false, 'categoria ' + k + ': trimisă serverului (POST /preferinte, tokenul ei)');
+    }
+    await page.click('#spa-c-intalniri'); await asteapta(250);
+    /* ore de liniște */
+    await page.click('#spa-liniste'); await asteapta(500);
+    egal([await sw('spa-liniste'), (await setari()).liniste], ['true', { on: 1, de: '22:00', pana: '08:00' }], 'ore de liniște: pornite, 22:00–08:00 implicit');
+    egal(await page.evaluate(() => document.activeElement && document.activeElement.id), 'spa-liniste', 'ore de liniște: focusul rămâne pe comutator după redesenare');
+    await page.click('#spa-liniste-ore'); await asteapta(400);
+    egal(await axe(page), [], 'axe foaia „Ore de liniște”');
+    nr++; await page.screenshot({ path: path.join(OUT, 'aplicatie-35-setari-foaie-liniste.png') });
+    await page.selectOption('#spa-ora-de', '23:00'); await page.selectOption('#spa-ora-pana', '07:30'); await page.click('.ahspa-foaie [data-a="da"]'); await asteapta(300);
+    egal([(await setari()).liniste, prefSrv().pop().prefs.liniste, await page.evaluate(() => document.querySelector('#spa-liniste-ore .t span').textContent)], [{ on: 1, de: '23:00', pana: '07:30' }, { on: true, de: '23:00', pana: '07:30' }, 'De la 23:00 până la 07:30'], 'ore de liniște: 23:00–07:30 pe telefon, la server și pe rând');
+    /* sunetul */
+    await page.click('#spa-sunet'); await asteapta(400);
+    egal(await page.evaluate(() => [...document.querySelectorAll('.ahspa-foaie input[type=radio]')].map((i) => i.value + (i.checked ? '*' : ''))), ['clopotel*', 'implicit', 'fara'], 'sunetul: Clopoțel (implicit), Sunetul telefonului, Fără sunet');
+    nr++; await page.screenshot({ path: path.join(OUT, 'aplicatie-34-setari-foaie-sunet.png') });
+    await page.check('.ahspa-foaie input[value="fara"]'); await page.click('.ahspa-foaie [data-a="da"]'); await asteapta(500);
+    egal([(await setari()).sunet, prefSrv().pop().prefs.sunet], ['fara', 'fara'], 'sunetul: „Fără sunet” păstrat și trimis');
+    /* ecranul blocat */
+    await page.click('#spa-ecran'); await asteapta(300); await page.check('.ahspa-foaie input[value="ascuns"]'); await page.click('.ahspa-foaie [data-a="da"]'); await asteapta(500);
+    egal([(await setari()).ecran, prefSrv().pop().prefs.ecran], ['ascuns', 'ascuns'], 'ecranul blocat: „Doar Adela Haru” păstrat și trimis');
+    const sc = (await apeluri(page)).filter((x) => x[0] === 'LocalNotifications' && x[1] === 'schedule').pop();
+    verifica(sc && sc[2].notifications.every((n) => n.title === 'Adela Haru' && n.body === 'Ai un mesaj nou.' && !('sound' in n) && n.extra.cat === 'ciclu'), 'mementourile ciclului: reprogramate cu textul ascuns și fără sunet');
+    /* insigna */
+    await page.click('#spa-insigna'); await asteapta(300);
+    egal([await sw('spa-insigna'), (await setari()).insigna, prefSrv().pop().prefs.insigna], ['true', 1, true], 'insigna: pornită, păstrată, trimisă');
+    /* mementoul zilnic: ora, notificarea locală (id propriu, zilnic) */
+    await page.click('#spa-zilnic'); await asteapta(700);
+    await page.click('#spa-zilnic-ora'); await asteapta(300);
+    egal(await page.evaluate(() => { const o = [...document.querySelectorAll('#spa-ora-z option')].map((x) => x.value); return [o[0], o[o.length - 1], o.length]; }), ['06:00', '22:30', 34], 'mementoul zilnic: 06:00–22:30, din 30 în 30 de minute');
+    await page.selectOption('#spa-ora-z', '21:30'); await page.click('.ahspa-foaie [data-a="da"]'); await asteapta(700);
+    const zs = (await apeluri(page)).filter((x) => x[0] === 'LocalNotifications' && x[1] === 'schedule' && x[2].notifications[0].id === 41100).pop();
+    egal(zs && [zs[2].notifications[0].schedule.on, zs[2].notifications[0].title, zs[2].notifications[0].extra], [{ hour: 21, minute: 30 }, 'Adela Haru', { url: SITE + '/spatiul-meu/#meditatii', cat: 'zilnic' }], 'mementoul zilnic: id 41100, zilnic la 21:30, textul ascuns, deschide Inner Temple');
+    egal((await setari()).zilnic, { on: 1, ora: '21:30' }, 'mementoul zilnic: păstrat');
+    verifica((await apeluri(page)).some((x) => x[0] === 'LocalNotifications' && x[1] === 'cancel' && x[2].notifications.some((n) => n.id === 41100)), 'mementoul zilnic: cel vechi anulat întâi (aceeași coadă)');
+    /* Wi-Fi, statistici */
+    await page.click('#spa-wifi'); await asteapta(200); egal([await sw('spa-wifi'), (await setari()).wifi], ['false', 0], 'Wi-Fi: oprit și păstrat');
+    await page.click('#spa-wifi'); await asteapta(200);
+    await pozaGrup('spa-g-aspect', 'aplicatie-31-setari-aspect-widget-meditatii');
+    await pozaGrup('spa-g-conf', 'aplicatie-32-setari-confidentialitate-despre');
+    /* widgetul: faza de azi (doar cu datele ciclului), cu avertismentul */
+    await page.click('#spa-widget'); await asteapta(300);
+    verifica(await page.evaluate(() => /îl pot vedea și alții/.test(document.querySelector('.ahspa-foaie').textContent) && document.querySelectorAll('.ahspa-foaie input').length === 3), 'widgetul: Meditația zilei / Faza ciclului de azi (cu avertismentul) / Nimic');
+    nr++; await page.screenshot({ path: path.join(OUT, 'aplicatie-36-setari-foaie-widget.png') });
+    await page.check('.ahspa-foaie input[value="faza"]'); await page.click('.ahspa-foaie [data-a="da"]'); await asteapta(400);
+    const wf = (await apeluri(page)).filter((x) => x[0] === 'AhApp' && x[1] === 'widget').pop()[2];
+    const sf = new Date(azi); sf.setDate(sf.getDate() - 8 + 10); const LN = ['ianuarie', 'februarie', 'martie', 'aprilie', 'mai', 'iunie', 'iulie', 'august', 'septembrie', 'octombrie', 'noiembrie', 'decembrie'];
+    egal(wf, { mod: 'faza', titlu: 'Primăvara interioară', sub: 'până în jur de ' + sf.getDate() + ' ' + LN[sf.getMonth()], culoare: '#56704D', imagine: '', url: SITE + '/spatiul-meu/#ciclu' }, 'widgetul: faza de azi cu numele de pe site și „până în jur de …” (ziua 9 din 28)');
+    /* Despre */
+    const de = await page.evaluate(() => [...document.querySelectorAll('#spa-g-despre a')].map((x) => x.getAttribute('href')));
+    verifica(/^mailto:contact@adelaharu\.ro\?subject=/.test(de[0]) && decodeURIComponent(de[0]).includes('Aplicația Adela Haru 1.0.0 · iPhone') && !/ana@/.test(decodeURIComponent(de[0])), 'Scrie-ne: mailto cu versiunea și telefonul, fără adresa ei');
+    egal(de.slice(1), ['https://apps.apple.com/ro/app/adela-haru/id0000000000?action=write-review', SITE + '/politica-de-confidentialitate/', SITE + '/termeni-si-conditii/'], 'Despre: Evaluează (App Store), Politica, Termenii');
+    /* Aspect: Mereu seară → clasa, ahspx_seara (266), AhApp.tema */
+    await page.click('#spa-aspect'); await asteapta(300);
+    egal(await axe(page), [], 'axe foaia „Culorile aplicației”');
+    await page.check('.ahspa-foaie input[value="seara"]'); await page.click('.ahspa-foaie [data-a="da"]'); await asteapta(300);
+    egal(await page.evaluate(() => [document.documentElement.classList.contains('ahsp-seara'), localStorage.getItem('ahspa_aspect'), localStorage.getItem('ahspx_seara')]), [true, 'seara', '1'], 'Mereu seară: clasa lui 266 și cheia ahspx_seara');
+    verifica((await apeluri(page)).filter((x) => x[0] === 'AhApp' && x[1] === 'tema').pop()[2].seara === true, 'Mereu seară: AhApp.tema({seara:true})');
+    await pozaGrup('spa-g-notif', 'aplicatie-39-setari-seara');
+    egal(await axe(page), [], 'axe Setări de seară');
+    await page.click('#spa-aspect'); await asteapta(300); await page.check('.ahspa-foaie input[value="zi"]'); await page.click('.ahspa-foaie [data-a="da"]'); await asteapta(300);
+    egal(await page.evaluate(() => [document.documentElement.classList.contains('ahsp-seara'), localStorage.getItem('ahspx_seara')]), [false, '0'], 'Mereu zi');
+    /* totul rămâne după o nouă deschidere */
+    await page.reload(); await asteapta(1500); await page.evaluate(() => { location.hash = '#mai'; }); await asteapta(1000);
+    egal([await sw('spa-c-meditatii'), await sw('spa-c-intalniri'), await sw('spa-liniste'), await sw('spa-insigna'), await sw('spa-zilnic'), await page.evaluate(() => [document.querySelector('#spa-sunet .t span').textContent, document.querySelector('#spa-ecran .t span').textContent, document.querySelector('#spa-aspect .t span').textContent, document.querySelector('#spa-widget .t span').textContent, document.querySelector('#spa-zilnic-ora .t span').textContent])],
+      ['false', 'true', 'true', 'true', 'true', ['Fără sunet', 'Doar „Adela Haru”', 'Mereu zi', 'Faza ciclului de azi', '21:30']], 'după redeschidere: fiecare alegere a rămas');
+    /* statisticile: meditația pornită (id), notificarea deschisă (categoria), fără nimic personal */
+    await page.evaluate(() => { location.hash = '#meditatii'; }); await asteapta(500);
+    await page.click('[data-play="502"]'); await asteapta(900); await page.click('#ahsp .player .pl-x');
+    await page.evaluate(() => { window.__emit('PushNotifications.pushNotificationActionPerformed', { notification: { data: { url: location.origin + '/spatiul-meu/#meditatii', tip: 'meditatie' } } }); window.__emit('LocalNotifications.localNotificationActionPerformed', { notification: { extra: { url: location.origin + '/spatiul-meu/#meditatii', cat: 'zilnic' } } }); }); await asteapta(600);
+    const st1 = jurnal.filter((x) => x.u.endsWith('/ah-spa/v1/stat')).map((x) => JSON.parse(x.corp));
+    verifica(st1.some((x) => x.ev === 'meditatie_pornita' && x.obiect === '502') && st1.some((x) => x.ev === 'notificare_deschisa' && x.obiect === 'meditatii') && st1.some((x) => x.ev === 'notificare_deschisa' && x.obiect === 'zilnic') && st1.some((x) => x.ev === 'sectiune' && x.obiect === 'meditatii'), 'statistici: meditația pornită (id), notificările deschise (categoria), secțiunea');
+    await page.evaluate(() => { location.hash = '#mai'; }); await asteapta(1000);
+    /* statisticile oprite: nimic nu mai pleacă */
+    await page.click('#spa-stat'); await asteapta(300);
+    egal((await setari()).stat, 0, 'Statistici anonime: oprite și păstrate');
+    const n0 = jurnal.filter((x) => x.u.endsWith('/ah-spa/v1/stat')).length;
+    await page.evaluate(() => { location.hash = '#ciclu'; }); await asteapta(400); await page.evaluate(() => { location.hash = '#meditatii'; }); await asteapta(400);
+    await page.click('[data-play="502"]'); await asteapta(800);
+    egal(jurnal.filter((x) => x.u.endsWith('/ah-spa/v1/stat')).length, n0, 'Statistici oprite: nicio cerere /stat (secțiuni, meditație pornită)');
+    /* temporizatorul de somn, în player */
+    egal(await page.evaluate(() => { const b = document.querySelector('#ahsp .player .spa-somn'); return b && b.getAttribute('aria-label'); }), 'Temporizator de somn: oprit', 'player: butonul temporizatorului');
+    await page.click('#ahsp .player .spa-somn'); await asteapta(300);
+    egal(await page.evaluate(() => [...document.querySelectorAll('.ahspa-foaie input')].map((i) => i.value)), ['0', '10', '20', '30', '45', '60'], 'temporizator: Oprit / 10 / 20 / 30 / 45 / 60 de minute');
+    await page.check('.ahspa-foaie input[value="20"]'); await page.click('.ahspa-foaie [data-a="da"]'); await asteapta(400);
+    egal(await page.evaluate(() => [document.querySelector('#ahsp .player .spa-somn').getAttribute('aria-label'), document.querySelector('#ahsp .player .spa-somn span').textContent]), ['Temporizator de somn: încă 20 de minute'.replace('20 de', '20'), '20 min'], 'temporizator: pornit, arată minutele rămase');
+    nr++; await page.screenshot({ path: path.join(OUT, 'aplicatie-38-setari-player-somn.png') });
+    egal(await axe(page), [], 'axe playerul cu temporizatorul');
+    /* sfârșitul, scurtat: stinge sunetul în ultimele 10 s, apoi pauză, volumul înapoi */
+    await page.evaluate(() => { const a = window.AHApp.somn; a.la = Date.now() + 4000; });
+    await asteapta(1800);
+    const mij = await page.evaluate(() => { const a = window.AHApp.somn.a; return [a.paused, a.volume]; });
+    verifica(mij[0] === false && mij[1] > 0 && mij[1] < 0.4, 'temporizator: în ultimele secunde sunetul se stinge (' + JSON.stringify(mij) + ')');
+    await asteapta(3000);
+    egal(await page.evaluate(() => { const s = window.AHApp.somn, a = window.AHApp.somn.a || document.querySelector('audio'); return [a ? a.paused : null, a ? a.volume : null, s.la, document.querySelector('#ahsp .player .spa-somn').getAttribute('aria-label')]; }), [true, 1, 0, 'Temporizator de somn: oprit'], 'temporizator: la capăt pauză, volumul înapoi, butonul oprit');
+    egal(erori, [], 'Setări: fără erori JS');
+    await ctx.close();
+  }
+
+  /* ===== 18. „Descarcă doar pe Wi-Fi”: pe datele mobile întreabă; fără plugin, descarcă ===== */
+  {
+    const jurnal = [], ctx = await browser.newContext({ ...ctxOpt, userAgent: UA_APP });
+    await ruta(ctx, 'aplicatie', jurnal); await ctx.addInitScript(capacitor({ perm: 'granted', prefs: { ah_push_intrebat: '1' }, retea: 'cellular' })); await ctx.addInitScript(LOCAL);
+    const page = await ctx.newPage(); const erori = []; page.on('pageerror', (e) => erori.push(e.message));
+    await page.goto(SITE + '/spatiul-meu/#meditatii'); await asteapta(1500);
+    const desc = () => jurnal.filter((x) => x.u.includes('/ah-spa/v1/descarca')).length;
+    await page.click('[data-spa-desc="501"]'); await asteapta(400);
+    egal(await page.evaluate(() => (document.querySelector('.ahspa-foaie h2') || {}).textContent), 'Nu ești pe Wi-Fi', 'Wi-Fi: pe datele mobile, întrebarea');
+    await page.click('.ahspa-foaie [data-a="nu"]'); await asteapta(300);
+    egal(desc(), 0, 'Wi-Fi: „Renunț” — nimic descărcat');
+    await page.click('[data-spa-desc="501"]'); await asteapta(300); await page.click('.ahspa-foaie [data-a="da"]'); await asteapta(1200);
+    egal(desc(), 1, 'Wi-Fi: „Descarcă acum” — descarcă');
+    await page.evaluate(() => sessionStorage.setItem('harnas_retea', 'wifi'));
+    await page.click('[data-spa-desc="503"]').catch(() => {}); await asteapta(1200);
+    verifica(!(await page.locator('.ahspa-foaie').count()), 'Wi-Fi: pe Wi-Fi nu întreabă');
+    egal(erori, [], 'Wi-Fi: fără erori JS');
+    await ctx.close();
+  }
+
+  /* ===== 19. Ciclul meu cu Face ID: comutatorul, lacătul, deblocarea, revenirea după un minut ===== */
+  {
+    const jurnal = [], ctx = await browser.newContext({ ...ctxOpt, userAgent: UA_APP });
+    await ruta(ctx, 'aplicatie', jurnal); await ctx.addInitScript(capacitor({ perm: 'granted', prefs: { ah_push_intrebat: '1' }, bio: { disponibil: true, tip: 'faceid' } })); await ctx.addInitScript(LOCAL);
+    const page = await ctx.newPage(); const erori = []; page.on('pageerror', (e) => erori.push(e.message));
+    await page.goto(SITE + '/spatiul-meu/#mai'); await asteapta(1500);
+    const auth = async () => (await apeluri(page)).filter((x) => x[0] === 'AhApp' && x[1] === 'autentifica').length;
+    egal(await page.evaluate(() => (document.querySelector('#spa-bio b') || {}).textContent), 'Blochează Ciclul meu cu Face ID', 'Face ID: comutatorul, doar cu biometria disponibilă');
+    await page.evaluate(() => sessionStorage.setItem('harnas_auth', 'nu'));
+    await page.click('#spa-bio'); await asteapta(300);
+    egal([await page.evaluate(() => document.getElementById('spa-bio').getAttribute('aria-checked')), await auth()], ['false', 1], 'Face ID: pornirea cere întâi deblocarea; anulată = rămâne oprit');
+    await page.evaluate(() => sessionStorage.setItem('harnas_auth', 'ok'));
+    await page.click('#spa-bio'); await asteapta(300);
+    egal([await page.evaluate(() => [document.getElementById('spa-bio').getAttribute('aria-checked'), localStorage.getItem('ahspa_bio')]), JSON.parse((await prefs(page)).ah_setari).bio], [['true', '1'], 1], 'Face ID: pornit (Preferences și cheia pentru partea devreme)');
+    /* o nouă pornire a aplicației, direct pe Ciclul meu: ascuns înainte de prima desenare */
+    await page.evaluate(() => sessionStorage.setItem('harnas_auth', 'nu'));
+    await page.goto(SITE + '/spatiul-meu/?pornire=1#ciclu'); await asteapta(1200); /* o pornire nouă (nu doar alt #) */
+    const bl = await page.evaluate(() => ({ cls: document.documentElement.classList.contains('ahspa-blocat'), lacat: !!document.getElementById('spa-lacat') && document.getElementById('spa-lacat').offsetParent !== null, vizibil: [...document.querySelectorAll('#ahsp-main .ecran > *:not(.spa-lacat)')].filter((x) => x.offsetParent !== null).length, text: document.getElementById('ahsp-main').innerText }));
+    verifica(bl.cls && bl.lacat && bl.vizibil === 0 && !/Ziua \d|interioară/.test(bl.text), 'Face ID: Ciclul meu acoperit, nimic din ciclu la vedere (' + JSON.stringify(bl).slice(0, 160) + ')');
+    egal((await apeluri(page)).filter((x) => x[0] === 'AhApp' && x[1] === 'autentifica').map((x) => x[2]).slice(2), [{ motiv: 'Deschide Ciclul meu' }], 'Face ID: deblocarea cerută singură, o dată, cu motivul');
+    nr++; await page.screenshot({ path: path.join(OUT, 'aplicatie-37-setari-ciclu-blocat.png') });
+    egal(await axe(page), [], 'axe Ciclul meu blocat');
+    await page.evaluate(() => sessionStorage.setItem('harnas_auth', 'ok'));
+    await page.click('#spa-deblocheaza'); await asteapta(500);
+    egal(await page.evaluate(() => [document.documentElement.classList.contains('ahspa-blocat'), !!document.getElementById('spa-lacat'), /interioară/.test(document.getElementById('ahsp-main').innerText)]), [false, false, true], 'Face ID: „Deblochează” — ciclul se vede');
+    await page.evaluate(() => { location.hash = '#acasa'; }); await asteapta(300); await page.evaluate(() => { location.hash = '#ciclu'; }); await asteapta(400);
+    egal([await page.evaluate(() => !!document.getElementById('spa-lacat')), (await apeluri(page)).filter((x) => x[1] === 'autentifica').length], [false, 4], 'Face ID: în aceeași folosire, Ciclul meu rămâne deschis');
+    /* în fundal mai mult de un minut, pe Ciclul meu: din nou blocat */
+    await page.evaluate(() => sessionStorage.setItem('harnas_auth', 'nu'));
+    await page.evaluate(() => { window.__emit('App.pause', {}); const n = Date.now; Date.now = () => n() + 61000; window.__emit('App.resume', {}); Date.now = n; }); await asteapta(500);
+    egal([await page.evaluate(() => !!document.getElementById('spa-lacat') && document.documentElement.classList.contains('ahspa-blocat')), (await apeluri(page)).filter((x) => x[1] === 'autentifica').length], [true, 5], 'Face ID: după > 60 s în fundal, blocat din nou și deblocarea cerută');
+    await page.evaluate(() => { window.__emit('App.pause', {}); window.__emit('App.resume', {}); }); await asteapta(300);
+    egal((await apeluri(page)).filter((x) => x[1] === 'autentifica').length, 5, 'Face ID: o revenire scurtă nu cere din nou');
+    egal(erori, [], 'Face ID: fără erori JS');
+    await ctx.close();
+  }
+
+  /* ===== 20. Aplicația veche (fără partea nativă 2.4): fără clopoțel, widget, insignă; Face ID ascuns ===== */
+  {
+    const ctx = await browser.newContext({ ...ctxOpt, userAgent: UA_APP });
+    await ruta(ctx, 'aplicatie', []); await ctx.addInitScript(capacitor({ perm: 'granted', prefs: { ah_push_intrebat: '1', ah_push_on: '1' }, vechi: true })); await ctx.addInitScript(LOCAL);
+    const page = await ctx.newPage(); const erori = []; page.on('pageerror', (e) => erori.push(e.message));
+    await page.goto(SITE + '/spatiul-meu/#mai'); await asteapta(1500);
+    egal(await page.evaluate(() => [!!document.getElementById('spa-g-widget'), !!document.getElementById('spa-insigna'), !!document.getElementById('spa-bio'), document.querySelector('#spa-sunet .t span').textContent]), [false, false, false, 'Sunetul telefonului'], 'aplicația veche: fără widget, insignă, Face ID; sunetul telefonului în locul clopoțelului');
+    await page.click('#spa-sunet'); await asteapta(300);
+    egal(await page.evaluate(() => [...document.querySelectorAll('.ahspa-foaie input')].map((i) => i.value)), ['implicit', 'fara'], 'aplicația veche: fără „Clopoțel” în foaie');
+    egal(erori, [], 'aplicația veche: fără erori JS');
+    await ctx.close();
+  }
+
+  /* ===== 21. „După apus și răsărit” (București): iarna, vara, zilele schimbării orei; o dată pe minut ===== */
+  {
+    const caz = [
+      ['2026-12-21T07:30:00+02:00', true, 'iarna, 07:30 (răsărit 07:48)'], ['2026-12-21T08:00:00+02:00', false, 'iarna, 08:00'],
+      ['2026-12-21T16:30:00+02:00', false, 'iarna, 16:30 (apus 16:38)'], ['2026-12-21T16:45:00+02:00', true, 'iarna, 16:45'],
+      ['2026-06-21T05:20:00+03:00', true, 'vara, 05:20 (răsărit 05:31)'], ['2026-06-21T05:45:00+03:00', false, 'vara, 05:45'],
+      ['2026-06-21T20:55:00+03:00', false, 'vara, 20:55 (apus 21:03)'], ['2026-06-21T21:10:00+03:00', true, 'vara, 21:10'],
+      ['2026-03-29T06:55:00+03:00', true, 'ziua trecerii la ora de vară, 06:55 (răsărit 07:02)'], ['2026-03-29T07:10:00+03:00', false, 'ziua trecerii la ora de vară, 07:10'],
+      ['2026-10-25T06:35:00+02:00', true, 'ziua trecerii la ora de iarnă, 06:35 (răsărit 06:43)'], ['2026-10-25T06:50:00+02:00', false, 'ziua trecerii la ora de iarnă, 06:50'],
+      ['2026-10-25T17:10:00+02:00', false, 'ziua trecerii la ora de iarnă, 17:10 (apus 17:15)'], ['2026-10-25T17:20:00+02:00', true, 'ziua trecerii la ora de iarnă, 17:20'],
+    ];
+    const ctx = await browser.newContext({ ...ctxOpt, userAgent: UA_APP, colorScheme: 'light' });
+    await ruta(ctx, 'aplicatie', []); await ctx.addInitScript(capacitor({ perm: 'granted', prefs: { ah_push_intrebat: '1' } })); await ctx.addInitScript(LOCAL);
+    await ctx.addInitScript(() => { try { localStorage.setItem('ahspa_aspect', 'soare'); } catch (e) {} });
+    const page = await ctx.newPage(); const erori = []; page.on('pageerror', (e) => erori.push(e.message));
+    const rez = [];
+    for (const [t, seara, nume] of caz) {
+      await page.clock.setFixedTime(new Date(t));
+      await page.goto(SITE + '/spatiul-meu/?ora=' + encodeURIComponent(t) + '#acasa'); await asteapta(500); /* pornire nouă la fiecare oră */
+      const r = await page.evaluate(() => [document.documentElement.classList.contains('ahsp-seara'), (document.querySelector('meta[name="theme-color"]') || {}).content]);
+      if (r[0] !== seara) rez.push(nume + ': ' + r[0]);
+      if (seara && r[1] !== '#221922') rez.push(nume + ': theme-color ' + r[1]);
+    }
+    egal(rez, [], 'După apus și răsărit: seara între apus și răsărit, la prima desenare (iarna, vara, zilele schimbării orei)');
+    /* re-evaluarea: la revenire și o dată pe minut */
+    await page.clock.setFixedTime(new Date('2026-12-21T16:30:00+02:00'));
+    await page.goto(SITE + '/spatiul-meu/?revenire=1#acasa'); await asteapta(500);
+    await page.clock.setFixedTime(new Date('2026-12-21T16:45:00+02:00'));
+    await page.evaluate(() => window.__emit('App.resume', {})); await asteapta(200);
+    const dupa = await page.evaluate(() => document.documentElement.classList.contains('ahsp-seara'));
+    const tema = (await apeluri(page)).filter((x) => x[0] === 'AhApp' && x[1] === 'tema').map((x) => x[2].seara);
+    verifica(dupa && tema[tema.length - 1] === true, 'După apus: la revenirea în aplicație după apus, seara (și AhApp.tema)');
+    await ctx.close();
+    const ctx2 = await browser.newContext({ ...ctxOpt, userAgent: UA_APP, colorScheme: 'light' });
+    await ruta(ctx2, 'aplicatie', []); await ctx2.addInitScript(capacitor({ perm: 'granted', prefs: { ah_push_intrebat: '1' } })); await ctx2.addInitScript(LOCAL);
+    await ctx2.addInitScript(() => { try { localStorage.setItem('ahspa_aspect', 'soare'); } catch (e) {} });
+    const p2 = await ctx2.newPage();
+    await p2.clock.install({ time: new Date('2026-12-21T16:37:00+02:00') });
+    await p2.goto(SITE + '/spatiul-meu/#acasa'); await p2.clock.runFor(3000);
+    const inainte = await p2.evaluate(() => document.documentElement.classList.contains('ahsp-seara'));
+    await p2.clock.runFor(125000);
+    egal([inainte, await p2.evaluate(() => document.documentElement.classList.contains('ahsp-seara'))], [false, true], 'După apus: fără nicio atingere, pagina trece în seară în minutul de după apus');
+    await ctx2.close();
+    egal(erori, [], 'aspect: fără erori JS');
+  }
+  /* ===== 22. Setări › Aplicația mobilă › Statistici (admin): graficul, tabelele, axe ===== */
+  {
+    const ctx = await browser.newContext({ viewport: { width: 1100, height: 900 }, locale: 'ro-RO' });
+    await ruta(ctx, 'browser', []);
+    const page = await ctx.newPage(); const erori = []; page.on('pageerror', (e) => erori.push(e.message));
+    await page.goto(SITE + '/wp-admin/options-general.php?page=ah-spa&tab=statistici'); await asteapta(300);
+    egal(await page.evaluate(() => [document.querySelectorAll('svg.ahspa-grafic path').length, document.querySelectorAll('svg.ahspa-grafic g title').length, !!document.querySelector('svg.ahspa-grafic[role=img] title')]), [30, 30, true], 'admin: graficul — 30 de zile, fiecare cu titlu (valoarea la hover), rol img cu titlu');
+    verifica(await page.evaluate(() => /Respirația inimii/.test(document.body.innerText) && /iPhone 2\.4\.0/.test(document.body.innerText) && !/@/.test(document.body.innerText)), 'admin: top meditații, versiunile, fără adrese');
+    egal(await axe(page), [], 'axe pagina Statistici: fără probleme serioase sau critice');
+    nr++; await page.screenshot({ path: path.join(OUT, 'admin-statistici.png'), fullPage: true });
+    egal(erori, [], 'admin: fără erori JS');
     await ctx.close();
   }
   await browser.close();

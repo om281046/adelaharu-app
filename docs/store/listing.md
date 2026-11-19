@@ -84,6 +84,11 @@ CICLUL MEU
 • Mementouri blânde la începutul fiecărei faze, programate chiar pe telefonul tău.
 • Dacă vrei, îl inviți pe partenerul tău: el vede doar anotimpul tău de azi și ce urmează, cu sfaturi despre cum să fie alături de tine. Tu hotărăști și poți opri accesul oricând.
 
+SETĂRILE APLICAȚIEI
+• Un widget pentru ecranul principal: meditația zilei sau faza ciclului, la o privire. Faza apare doar dacă o alegi tu.
+• Ciclul meu se poate bloca cu Face ID, Touch ID sau amprenta (și cu codul telefonului).
+• Un sunet de clopoțel blând pentru mementouri, ales de tine sau oprit.
+
 ÎNTÂLNIRI ȘI PODCAST
 • Întâlnirile live la care te-ai înscris, cu un memento înainte să înceapă, și înregistrările lor.
 • Episoadele podcastului, la o atingere distanță.
@@ -125,6 +130,13 @@ capturi** (Apple 2.3.1: metadate exacte). De verificat în special:
   testul intern cu Web Inspector sau `chrome://inspect` (și cu excluderile LiteSpeed din `release.md`);
 - „acolo stau criptate”: e despre păstrarea ciclului în cont (AES-256-GCM). Abonarea la emailurile fazelor ține data
   menstruației necriptat (`privacy-answers.md`); fraza nu vorbește despre ea, deci rămâne exactă așa cum e.
+
+- „Setările aplicației” (widget, blocarea cu Face ID / amprentă, clopoțelul): cer **și** partea de pe site (setările din
+  `ah-sp-aplicatie.php`, care cheamă `AhApp.widget` / `AhApp.autentifica` / canalele de notificări) **și** un build cu
+  ținta widgetului semnată (`app/README.md`, „Widgetul”). Dacă build-ul trimis nu are widgetul (App Group lipsă din
+  profil ⇒ `AhApp.widget` răspunde `{ok:false, eroare:'grup'}`), primul rând se scoate. Pe Android blocarea spune
+  „amprenta” / „fața” după telefon; textul general („Face ID, Touch ID sau amprenta”) rămâne exact pe ambele.
+  Lungimea descrierii rămâne sub 4000 de caractere.
 
 ## De confirmat de oameni
 

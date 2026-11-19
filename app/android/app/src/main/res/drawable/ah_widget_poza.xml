@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- conturul pozei din widgetul mediu (clipToOutline, Android 12+; înainte poza rămâne dreptunghiulară) -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="@color/ah_fundal" />
+    <corners android:radius="12dp" />
+</shape>

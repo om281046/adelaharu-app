@@ -20,7 +20,37 @@
 		A1D0C0DE2F00000000000003 /* AhAppPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D0C0DE2F00000000000004 /* AhAppPlugin.swift */; };
 		A1D0C0DE2F00000000000011 /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = A1D0C0DE2F00000000000013 /* FirebaseCore */; };
 		A1D0C0DE2F00000000000012 /* FirebaseMessaging in Frameworks */ = {isa = PBXBuildFile; productRef = A1D0C0DE2F00000000000014 /* FirebaseMessaging */; };
+		A1D0C0DE2F00000000000101 /* AhWidgetDate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D0C0DE2F00000000000102 /* AhWidgetDate.swift */; };
+		A1D0C0DE2F00000000000103 /* AhWidgetDate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D0C0DE2F00000000000102 /* AhWidgetDate.swift */; };
+		A1D0C0DE2F00000000000105 /* AdelaHaruWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D0C0DE2F00000000000104 /* AdelaHaruWidget.swift */; };
+		A1D0C0DE2F00000000000109 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A1D0C0DE2F00000000000108 /* Assets.xcassets */; };
+		A1D0C0DE2F0000000000010B /* AdelaHaruWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = A1D0C0DE2F0000000000010A /* AdelaHaruWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		A1D0C0DE2F00000000000118 /* clopotel.caf in Resources */ = {isa = PBXBuildFile; fileRef = A1D0C0DE2F00000000000117 /* clopotel.caf */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		A1D0C0DE2F00000000000112 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 504EC2FC1FED79650016851F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A1D0C0DE2F0000000000010D;
+			remoteInfo = AdelaHaruWidget;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		A1D0C0DE2F00000000000111 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				A1D0C0DE2F0000000000010B /* AdelaHaruWidget.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		A1D0C0DE2F00000000000002 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
@@ -38,6 +68,13 @@
 		A1D0C0DE2F00000000000015 /* App.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = App.entitlements; sourceTree = "<group>"; };
 		A1D0C0DE2F00000000000016 /* AppDebug.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = AppDebug.entitlements; sourceTree = "<group>"; };
 		958DCC722DB07C7200EA8C5F /* debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = debug.xcconfig; path = ../debug.xcconfig; sourceTree = SOURCE_ROOT; };
+		A1D0C0DE2F00000000000102 /* AhWidgetDate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AhWidgetDate.swift; sourceTree = "<group>"; };
+		A1D0C0DE2F00000000000104 /* AdelaHaruWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdelaHaruWidget.swift; sourceTree = "<group>"; };
+		A1D0C0DE2F00000000000106 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		A1D0C0DE2F00000000000107 /* AdelaHaruWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = AdelaHaruWidget.entitlements; sourceTree = "<group>"; };
+		A1D0C0DE2F00000000000108 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		A1D0C0DE2F0000000000010A /* AdelaHaruWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = AdelaHaruWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		A1D0C0DE2F00000000000117 /* clopotel.caf */ = {isa = PBXFileReference; lastKnownFileType = file; path = clopotel.caf; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -51,6 +88,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A1D0C0DE2F0000000000010F /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -59,6 +103,7 @@
 			children = (
 				958DCC722DB07C7200EA8C5F /* debug.xcconfig */,
 				504EC3061FED79650016851F /* App */,
+				A1D0C0DE2F0000000000010C /* AdelaHaruWidget */,
 				504EC3051FED79650016851F /* Products */,
 			);
 			sourceTree = "<group>";
@@ -67,6 +112,7 @@
 			isa = PBXGroup;
 			children = (
 				504EC3041FED79650016851F /* App.app */,
+				A1D0C0DE2F0000000000010A /* AdelaHaruWidget.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -85,10 +131,23 @@
 				A1D0C0DE2F00000000000015 /* App.entitlements */,
 				A1D0C0DE2F00000000000016 /* AppDebug.entitlements */,
 				A1D0C0DE2F00000000000002 /* PrivacyInfo.xcprivacy */,
+				A1D0C0DE2F00000000000117 /* clopotel.caf */,
 				2FAD9762203C412B000D30F8 /* config.xml */,
 				50B271D01FEDC1A000F3C39B /* public */,
 			);
 			path = App;
+			sourceTree = "<group>";
+		};
+		A1D0C0DE2F0000000000010C /* AdelaHaruWidget */ = {
+			isa = PBXGroup;
+			children = (
+				A1D0C0DE2F00000000000104 /* AdelaHaruWidget.swift */,
+				A1D0C0DE2F00000000000102 /* AhWidgetDate.swift */,
+				A1D0C0DE2F00000000000108 /* Assets.xcassets */,
+				A1D0C0DE2F00000000000106 /* Info.plist */,
+				A1D0C0DE2F00000000000107 /* AdelaHaruWidget.entitlements */,
+			);
+			path = AdelaHaruWidget;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -101,11 +160,13 @@
 				504EC3001FED79650016851F /* Sources */,
 				504EC3011FED79650016851F /* Frameworks */,
 				504EC3021FED79650016851F /* Resources */,
+				A1D0C0DE2F00000000000111 /* Embed Foundation Extensions */,
 				A1D0C0DE2F00000000000017 /* GoogleService-Info.plist (dacă există) */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				A1D0C0DE2F00000000000113 /* PBXTargetDependency */,
 			);
 			name = App;
 			packageProductDependencies = (
@@ -116,6 +177,23 @@
 			productName = App;
 			productReference = 504EC3041FED79650016851F /* App.app */;
 			productType = "com.apple.product-type.application";
+		};
+		A1D0C0DE2F0000000000010D /* AdelaHaruWidget */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A1D0C0DE2F00000000000114 /* Build configuration list for PBXNativeTarget "AdelaHaruWidget" */;
+			buildPhases = (
+				A1D0C0DE2F0000000000010E /* Sources */,
+				A1D0C0DE2F0000000000010F /* Frameworks */,
+				A1D0C0DE2F00000000000110 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = AdelaHaruWidget;
+			productName = AdelaHaruWidget;
+			productReference = A1D0C0DE2F0000000000010A /* AdelaHaruWidget.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -129,6 +207,10 @@
 					504EC3031FED79650016851F = {
 						CreatedOnToolsVersion = 9.2;
 						LastSwiftMigration = 1100;
+						ProvisioningStyle = Automatic;
+					};
+					A1D0C0DE2F0000000000010D = {
+						CreatedOnToolsVersion = 16.0;
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -151,6 +233,7 @@
 			projectRoot = "";
 			targets = (
 				504EC3031FED79650016851F /* App */,
+				A1D0C0DE2F0000000000010D /* AdelaHaruWidget */,
 			);
 		};
 /* End PBXProject section */
@@ -167,6 +250,15 @@
 				50379B232058CBB4000EE86E /* capacitor.config.json in Resources */,
 				504EC30D1FED79650016851F /* Main.storyboard in Resources */,
 				2FAD9763203C412B000D30F8 /* config.xml in Resources */,
+				A1D0C0DE2F00000000000118 /* clopotel.caf in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A1D0C0DE2F00000000000110 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A1D0C0DE2F00000000000109 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -202,10 +294,28 @@
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
 				9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */,
 				A1D0C0DE2F00000000000003 /* AhAppPlugin.swift in Sources */,
+				A1D0C0DE2F00000000000101 /* AhWidgetDate.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A1D0C0DE2F0000000000010E /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A1D0C0DE2F00000000000105 /* AdelaHaruWidget.swift in Sources */,
+				A1D0C0DE2F00000000000103 /* AhWidgetDate.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		A1D0C0DE2F00000000000113 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A1D0C0DE2F0000000000010D /* AdelaHaruWidget */;
+			targetProxy = A1D0C0DE2F00000000000112 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin PBXVariantGroup section */
 		504EC30B1FED79650016851F /* Main.storyboard */ = {
@@ -384,6 +494,59 @@
 			};
 			name = Release;
 		};
+		A1D0C0DE2F00000000000115 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 958DCC722DB07C7200EA8C5F /* debug.xcconfig */;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = AdelaHaruWidget/AdelaHaruWidget.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 2;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = AdelaHaruWidget/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 2.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = ro.adelaharu.app.widget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		A1D0C0DE2F00000000000116 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = AdelaHaruWidget/AdelaHaruWidget.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 2;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = AdelaHaruWidget/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 2.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = ro.adelaharu.app.widget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -401,6 +564,15 @@
 			buildConfigurations = (
 				504EC3171FED79650016851F /* Debug */,
 				504EC3181FED79650016851F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A1D0C0DE2F00000000000114 /* Build configuration list for PBXNativeTarget "AdelaHaruWidget" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A1D0C0DE2F00000000000115 /* Debug */,
+				A1D0C0DE2F00000000000116 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

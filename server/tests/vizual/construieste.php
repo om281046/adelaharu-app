@@ -187,4 +187,41 @@ file_put_contents( $dir . '/punte.css', ah_spa_css_tot() );
    harnașul să compare: fără ele (cum le scoate ah_spa_scoate_tema) pagina trebuie să arate la fel. */
 $sp_a = file_get_contents( $dir . '/sp-aplicatie.html' );
 file_put_contents( $dir . '/sp-aplicatie-tema.html', preg_replace( '~<link rel="stylesheet" href="/fonts/fonts.css">~', '<link rel="stylesheet" href="/tema/site.css">$0', $sp_a, 1 ) );
+/* Setări › Aplicația mobilă › Statistici (2.4.0), cu date de probă: 30 de zile de deschideri, meditații, notificări */
+global $wpdb;
+$GLOBALS['ah_test_posts'][501] = array( 'post_type' => 'ah_meditatie', 'post_status' => 'publish', 'post_title' => 'Respirația inimii' );
+$GLOBALS['ah_test_posts'][502] = array( 'post_type' => 'ah_meditatie', 'post_status' => 'publish', 'post_title' => 'Pântecul, centrul tău' );
+$GLOBALS['ah_test_posts'][503] = array( 'post_type' => 'ah_meditatie', 'post_status' => 'publish', 'post_title' => 'Întoarcerea acasă, în corp' );
+for ( $i = 29; $i >= 0; $i-- ) {
+	$z = wp_date( 'Y-m-d', time() - $i * DAY_IN_SECONDS );
+	$b = 40 + ( ( $i * 37 ) % 23 ) + ( 0 === $i % 7 ? 18 : 0 );
+	foreach ( array( array( 'deschidere', 'ios', '2.4.0', '', (int) ( $b * 0.6 ) ), array( 'deschidere', 'android', '2.4.0', '', (int) ( $b * 0.3 ) ), array( 'deschidere', 'android', '2.3.0', '', (int) ( $b * 0.1 ) ),
+		array( 'meditatie_pornita', 'ios', '2.4.0', '501', 9 ), array( 'meditatie_pornita', 'ios', '2.4.0', '502', 5 ), array( 'meditatie_pornita', 'android', '2.4.0', '503', 3 ),
+		array( 'meditatie_terminata', 'ios', '2.4.0', '501', 6 ), array( 'meditatie_terminata', 'ios', '2.4.0', '502', 2 ), array( 'descarcare', 'ios', '2.4.0', '502', 1 ),
+		array( 'notificare_trimisa', 'ios', '2.4.0', 'meditatii', 0 === $i % 10 ? 60 : 0 ), array( 'notificare_deschisa', 'ios', '2.4.0', 'meditatii', 0 === $i % 10 ? 21 : 0 ),
+		array( 'notificare_deschisa', 'ios', '2.4.0', 'ciclu', 2 ), array( 'ciclu_deschis', 'ios', '2.4.0', '', 12 ), array( 'el_deschidere', 'android', '2.4.0', '', 1 ), array( 'video_pornit', 'ios', '2.4.0', 'sala', 3 ) ) as $x ) {
+		if ( $x[4] ) {
+			$wpdb->insert( ah_spa_tabel_stat(), array( 'zi' => $z, 'ev' => $x[0], 'platforma' => $x[1], 'versiune' => $x[2], 'obiect' => $x[3], 'n' => $x[4] ) );
+		}
+	}
+	for ( $k = 0; $k < 20 + $i % 5; $k++ ) {
+		$wpdb->insert( ah_spa_tabel_unice(), array( 'zi' => $z, 'h' => substr( md5( 'p' . ( ( $k * 7 + $i ) % 60 ) ), 0, 32 ), 'luna' => wp_date( 'Y-m' ) ) );
+	}
+}
+$wpdb->query( 'DELETE FROM wp_ah_spa_push' );
+foreach ( range( 1, 24 ) as $k ) {
+	$wpdb->insert( 'wp_ah_spa_push', array( 'email' => 'c' . ( $k % 20 ) . '@exemplu.ro', 'token' => 't' . $k, 'token_h' => hash( 'sha256', 't' . $k ), 'platforma' => $k % 3 ? 'ios' : 'android', 'prefs' => $k % 4 ? wp_json_encode( array( 'cat' => array( 'meditatii' => true, 'intalniri' => 0 !== $k % 5, 'inreg' => true ), 'sunet' => 'clopotel', 'liniste' => array( 'on' => 0 === $k % 2, 'de' => '22:00', 'pana' => '08:00' ), 'ecran' => 0 === $k % 6 ? 'ascuns' : 'tot', 'insigna' => 0 === $k % 3 ) ) : null, 'creat' => 'x', 'vazut' => 'x' ) );
+}
+$GLOBALS['ah_test_admin'] = true;
+$_GET['tab'] = 'statistici';
+ob_start();
+ah_spa_pagina_setari();
+$adm = ob_get_clean();
+unset( $_GET['tab'] );
+$GLOBALS['ah_test_admin'] = false;
+$wpcss = 'body{margin:0;background:#f0f0f1;color:#1d2327;font:13px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}.wrap{margin:10px 20px 40px}h1{font-size:23px;font-weight:400;margin:0 0 12px}h2{font-size:1.3em;margin:1.6em 0 .6em}h3{font-size:1.1em}'
+	. '.nav-tab-wrapper{border-bottom:1px solid #c3c4c7;margin-bottom:12px}.nav-tab{display:inline-block;padding:5px 10px;margin-left:.5em;border:1px solid #c3c4c7;border-bottom:0;background:#dcdcde;color:#50575e;text-decoration:none;font-size:14px;font-weight:600}.nav-tab-active{background:#f0f0f1;color:#000;border-bottom:1px solid #f0f0f1;margin-bottom:-1px}'
+	. '.widefat{border-spacing:0;width:100%;background:#fff;border:1px solid #c3c4c7}.widefat th,.widefat td{padding:8px 10px;text-align:left;border-bottom:1px solid #f0f0f1}.widefat thead th{font-weight:600}.striped>tbody>:nth-child(odd){background:#f6f7f7}'
+	. '.button{display:inline-block;padding:4px 12px;border:1px solid #2271b1;border-radius:3px;color:#2271b1;background:#f6f7f7;text-decoration:none}.description{color:#646970;font-style:italic}details{margin:8px 0}';
+file_put_contents( $dir . '/admin-statistici.html', '<!doctype html><html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Aplicația mobilă ‹ Statistici</title><style>' . $wpcss . '</style></head><body>' . $adm . '</body></html>' );
 echo "gata\n";

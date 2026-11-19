@@ -45,10 +45,13 @@ wp cron event delete ah_spp_zilnic            # doar dacă și „Pentru el” s
 
 Ce lasă în baza de date (se pot șterge **doar** dacă aplicația nu mai e folosită deloc; ștergerea tokenurilor oprește
 notificările, a secretului `ah_spa_cine_secret` face din fiecare telefon „alt cont” la o reactivare):
-- tabelele `wp_ah_spa_push` (tokenurile push), `wp_ah_spa_incercari` (contoarele codului, doar amprente);
+- tabelele `wp_ah_spa_push` (tokenurile push, cu Setările lor din 2.4.0), `wp_ah_spa_incercari` (contoarele codului, doar
+  amprente), `wp_ah_spa_amanate` (notificările ținute peste orele de liniște), `wp_ah_spa_stat` (contoarele statisticilor),
+  `wp_ah_spa_unice` (amprentele utilizatoarelor active, ≤ 35 de zile);
 - opțiunile `ah_spa_setari`, `ah_spa_recenzie`, `ah_spa_fcm` (cheia Firebase), `ah_spa_tabel`, `ah_spa_pornit`,
   `ah_spa_jurnal`, `ah_spa_lucrari`, `ah_spa_trimis`, `ah_spa_cine_secret`, `ah_spa_cine_din`, `ah_spa_alias`,
-  `ah_spa_cron_tick`, `ah_spa_cron_lot`; tranzitoriile `ah_spa_*`; meta `_ah_spa_anuntat` pe meditații.
+  `ah_spa_cron_tick`, `ah_spa_cron_lot`, `ah_spa_stat_secrete` (secretele lunare ale amprentelor), `ah_spa_stat_curatat`;
+  tranzitoriile `ah_spa_*`; meta `_ah_spa_anuntat` pe meditații.
 - „Pentru el” are lista lui în `docs/partener.md`.
 
 ### Cronul (2.3.0)
@@ -170,6 +173,9 @@ Autentificare = cookie-ul `ah_sp` existent (`ah_sp_email()`). Cererile care schi
 | `GET /descarca?id=` | acces verificat cu `ah_med_acces()` + `ah_med_poate()` (51) → `{url, expira, titlu, durata, imagine, ext}`; `url` = `/fisier`, semnat HMAC, 15 minute. 60/oră. |
 | `GET /fisier?id&exp&c&s` | fără cookie (îl cere FileTransfer); semnătura `HMAC(id\|exp\|cine)`, `cine` = amprenta adresei (adresa nu apare în link). Fișierul din `ah_med_cale()` cu `Range` (206/416), sau 302 spre URL-ul extern al sunetului. |
 | `POST /sterge-cont` | `{confirmare: true}` → șterge: ciclul din cont (`ah_sp_ciclu`, ca `ciclu-sterge`), emailurile fazelor (`ah_ciclu`, 41), intrarea din `ah_sp_conturi` (281), vizitele (`ah_sp_vizite`), tokenurile push, telefoanele/minutele/ascultările Inner Temple (`ah_med_d_/min_/asc_`), cookie-urile `ah_sp`, `ah_med`, `ah_ct_*`, `ah_sc*`; pe comenzile ei (`wc_get_orders` după `billing_email`) mementourile sălii `_ah_sc_ritm` și `_ah_sc_repeta` → `activ=false`, `sms=false`, `telefon=''`, cu `ah_sc_ritm_index`/`ah_sc_repeta_index` și o notă pe comandă; înscrierea ei din `ah_respira_inscrieri` (220) ștearsă; partenerii invitați de ea (`ah-sp-partener.php`: rândurile și tokenurile lor push, `pentru_el` în email). Comenzile și facturile rămân. Email echipei (cu ce s-a șters, inclusiv `sala_ritm`/`sala_repeta`/`respira_inscriere`, și ce e de verificat de mână: EmailOctopus). Cârlig: `ah_spa_cont_sters`. |
+| `POST /preferinte` | 2.4.0. `{token, prefs:{cat:{meditatii,intalniri,inreg}, sunet: clopotel\|implicit\|fara, liniste:{on,de,pana} (HH:00 / HH:30), ecran: tot\|ascuns, insigna}}` → Setările ei pe rândul tokenului (`prefs`, JSON). Cere contul (`ah_sp`), `X-AH-App`, și ca tokenul să fie **al ei** (alt cont sau token necunoscut: același `404 token`; puntea îl retrimite prin `POST /push`). Strict: o valoare cu altă formă = `400` cu câmpul; cheile necunoscute se ignoră. 60/oră. Aceleași prefs pot veni și în `POST /push` (nevalide = ignorate, tokenul se leagă oricum). |
+| `POST /insigna` | 2.4.0. `{token}` → `necitite = 0` (aplicația s-a deschis). Ca `/push/sterge`: cine are tokenul; `X-AH-App`; 120/oră pe token. |
+| `POST /stat` | 2.4.0. `{ev, platforma, versiune, obiect?}` → contorul zilei (`wp_ah_spa_stat`) + amprenta zilei (`wp_ah_spa_unice`). Doar evenimentele cunoscute (`deschidere`, `meditatie_pornita`/`_terminata` și `descarcare` cu id-ul, `notificare_deschisa` cu categoria, `video_pornit`, `ciclu_deschis`, `sectiune` cu fila); `el_deschidere` și `notificare_trimisa` doar de pe server. Cere contul (limita, 300/oră, și amprenta); nu păstrează adresa, IP-ul sau un id de telefon. Puntea trimite doar cu „Statistici anonime” pornit. |
 | `GET /config` | `{versiune_minima:{ios,android}, mesaj, magazine:{ios,android}, pagina}` (public, 5 minute cache). Din 2.3.0 îl întreabă și pagina offline a aplicației (CORS, `r.ok`), ca să deosebească „fără internet” de „site-ul e în lucru”: trebuie să rămână public și neblocat de pluginurile de securitate. |
 
 Cu fragmentul „Pentru el” **oprit**, `sterge-cont` șterge totuși invitații ei direct din tabelele lui
@@ -181,6 +187,16 @@ Cu fragmentul „Pentru el” **oprit**, `sterge-cont` șterge totuși invitați
 - **Înregistrare „Respiră-te acasă”**: `update_option_ah_respira_inregistrari` + cronul la 5 minute (`ah_spa_tick`) → către înscrisele în ziua aceea (`ah_respira_inreg_destinatare`). Nu și dacă mai e mai puțin de o oră din cele 24, nici pentru înregistrări publicate înainte de pornirea fragmentului.
 - **Întâlnire în 15 minute**: `ah_respira_start()` (220) → către înscrisele în ziua aceea. Alte module: filtrul `ah_spa_intalniri`.
 - `data.url` deschide în aplicație secțiunea potrivită. Jurnal în Setări (fără adrese de email).
+- **Setările ei** (2.4.0, `prefs` pe rândul tokenului), aplicate în lot (`ah_spa_push_decizie`, `ah_spa_push_optiuni`): categoria
+  oprită ⇒ nimic; **ore de liniște** (Europe/Bucharest, peste miezul nopții, cu schimbarea orei): meditația nouă și înregistrarea
+  ⇒ ținute în `wp_ah_spa_amanate` (doar amprenta tokenului) până la capătul liniștii, trimise de `ah_spa_tick` (Setările se
+  recitesc: categorie oprită între timp ⇒ nimic); întâlnirea în 15 minute (și tipurile altor module) ⇒ pleacă acum, **fără sunet**
+  (canalul `ah_liniste`, fără `aps.sound`); „Doar «Adela Haru»” ⇒ titlul „Adela Haru”, textul „Ai un mesaj nou.” (textul adevărat
+  nu pleacă); sunetul ⇒ `channel_id` `ah_clopotel` / `ah_implicit` / `ah_liniste`, `aps.sound` `clopotel.caf` / `default` / fără;
+  insigna ⇒ `aps.badge` și `notification_count` = necitite + 1 (necitite crește la fiecare trimitere reușită, se golește prin
+  `POST /insigna`). Proba din setări pleacă oricum. **Rândurile fără Setări** (aplicațiile de dinainte) primesc exact mesajul de
+  dinainte. `ah_spa_fcm_mesaj( $token, $titlu, $text, $date, $opt = array() )`: fără `$opt`, neschimbat (îl folosește și
+  `ah-sp-partener.php`). Fiecare notificare plecată numără `notificare_trimisa` pe categorie (rata de deschidere).
 
 ## Puntea `window.AHApp` (JavaScript, doar în aplicație)
 
@@ -191,7 +207,7 @@ Cu fragmentul „Pentru el” **oprit**, `sterge-cont` șterge totuși invitați
 - **Refacerea ciclului** (iOS poate goli `localStorage`): pe Spațiul meu, cu contul intrat, dacă `ahsp_ciclu`/`ah_ciclu_v1` n-au date dar `Preferences.ah_ciclu` e al aceluiași cont (`cine`), îl pune înapoi în `localStorage.ahsp_ciclu`; `#ahsp` stă ascuns (`html.ahspa-refac`, cel mult 1,5 s) până răspunde Preferences, iar dacă 235 desenase deja, redesenează (`hashchange`). Copia și mementourile **nu** se șterg când `localStorage` e gol; se șterg doar la: „Șterge datele de pe acest telefon” (`removeItem('ahsp_ciclu')` pe o cheie existentă: pe loc, nu după 900 ms), ieșirea din cont, „Șterge contul”. Copia altui cont: nu se reface, se șterge.
 - **Descărcări**: „Descarcă” / „Se descarcă… %” / „Descărcat” + „Șterge descărcarea” lângă fiecare meditație Inner Temple pe care o poate asculta. Fișierele: `meditatii/<id>.<ext>` și `meditatii/<id>.jpg` în `LIBRARY_NO_CLOUD` (iOS: Library fără copie iCloud, cerința Apple pentru conținut redescărcabil) sau `DATA` (Android). Index: `Preferences.ah_descarcate = [{id,titlu,durata,fisier,poza,dir,descarcat}]` — `dir` e directorul de folosit la citire.
 - **Ecranul blocat**: Media Session (titlu, „Adela Haru”, poza, play/pauză, ±15 s, poziție) pe orice sunet pornit (playerul Inner Temple, sunetele din sală).
-- **Mai mult › Aplicația**: Notificări, Mementourile ciclului, Meditații descărcate (șterge tot), **Șterge contul** (bifă de confirmare; apoi șterge descărcările, Preferences, mementourile și datele `ahsp_*` de pe telefon), versiunea. Se alătură secțiunii „Aplicația” a lui 266, dacă există.
+- **Mai mult** (până la 2.3.0 „Aplicația”, din 2.4.0 Setările de mai jos): **Șterge contul** (Confidențialitate; bifă de confirmare; apoi șterge descărcările, Preferences — și `ah_setari` —, mementourile, mementoul zilnic, widgetul și datele `ahsp_*` de pe telefon).
 - **Ieșirea din cont**: înainte de „Ieși din cont” scoate tokenul push, descărcările și mementourile. **Din 2.3.0, o pagină fără cont (cookie expirat) nu mai șterge nimic** de pe telefon (descărcările, copia ciclului, mementourile și tokenul ei rămân); pleacă doar un token rămas al lui. Curăță doar: ieșirea cerută, alt cont pe telefon, „Șterge contul”.
 - **Amprenta contului** (`AH_SPA.cine`, 2.3.0): HMAC al adresei cu un secret creat o dată în baza de date (`ah_spa_cine_secret`, nu din sărurile WordPress: rotirea lor nu mai e „alt cont”). `AH_SPA.cine_vechi` = amprentele acceptate ca același cont: cea din săruri (60 de zile de la prima rulare 2.3.0) și aliasurile din „Mută contul” (un an). Partea „devreme” doar rescrie `ahspa_cine` pentru ele; refacerea primește și o copie `ah_ciclu` cu o amprentă veche.
 - **„Șterge contul” întrerupt** (2.3.0): înainte de cerere se scrie `Preferences.ah_sterge`; după curățenie se scoate. Dacă aplicația se închide între răspuns și curățenie, la pornirea următoare puntea curăță tot (înaintea refacerii ciclului).
@@ -200,6 +216,44 @@ Cu fragmentul „Pentru el” **oprit**, `sterge-cont` șterge totuși invitați
 - **Rândul „Ciclul ei”** în Mai mult: `AH_SPA.el = apply_filters( 'ah_spa_are_acces_el', <cookie-ul lui pe telefon>, $email )` (filtrul îl pune `ah-sp-partener.php`); când e adevărat, un rând spre `/pentru-el/`.
 - **Al cui e tokenul** (`PUSH.al`): `Preferences.ah_push = {token, cont:'ea'|'el', cine, la}`. Puntea scrie `cont:'ea'`; pagina lui `/pentru-el/` scrie `cont:'el'`. `PUSH.opreste()` scoate doar un token al ei (+ `unregister()`); un token al lui rămâne cât e intrat el (`AH_SPA.el`), altfel pleacă prin `POST /ah-spp/v1/push/sterge` cu `X-AH-SPP: 1` (2.3.0; un fragment al lui mai vechi, 404/405, primește `DELETE /ah-spp/v1/push`) (`AH_SPA.api_el`). Tokenul ei: `POST /ah-spa/v1/push/sterge`. Când ea e intrată, tokenul telefonului trece la ea (contul ei e cel activ pe telefon).
 - **Versiunea minimă**: sub ea, o bandă cu mesajul și „Actualizează” (linkul magazinului).
+- **Setările aplicației** (2.4.0), în „Mai mult”, înaintea „Datele mele”, ca grupuri cu aspectul rândurilor din 235 (comutatoare
+  `role=switch`; o alegere cu mai multe variante deschide o foaie cu butoane radio sau liste de ore; focusul rămâne pe rând după
+  o redesenare). „Aplicația” lui 266 (Aspect de seară) e ascunsă: o înlocuiește Aspect. Alegerile stau în `Preferences.ah_setari`
+  (+ `localStorage.ahspa_setari`; se șterg la ieșire, alt cont, „Șterge contul”).
+  - **Notificări**: Notificări (push, ca înainte) și, cu ele pornite, Meditații noi · Întâlniri · Înregistrări gata (pe server,
+    `POST /preferinte`); Mementourile ciclului (ca înainte); **Mementoul zilnic de meditație** (local, id `S.notif_zi` = 41100,
+    `schedule.on {hour, minute}`, 06:00–22:30 din 30 în 30, prin aceeași coadă ca mementourile); **Sunet** (Clopoțel doar pe
+    aplicația nouă); **Ore de liniște** (22:00–08:00, de schimbat); **Pe ecranul blocat** (și pentru notificările locale);
+    **Insignă pe iconiță**. Canalele Android se fac la pornire: `ah_implicit`, `ah_liniste` (sunet inexistent `ah_fara_sunet`,
+    fără vibrație), `ah_ciclu_implicit`, `ah_ciclu_liniste` (privat) și, pe aplicația nouă, `ah_clopotel` / `ah_ciclu_clopotel`
+    (`clopotel.wav`). Notificările locale: `channelId` după sunet, `sound` `clopotel.caf` (iPhone) / `clopotel.wav` (Android 7) /
+    `default` / fără.
+  - **Aspect**: Ca telefonul / După apus și răsărit (NOAA, București 44,43 N 26,10 E, fără locație; `window.AHSPA_SOARE` din
+    partea devreme, re-evaluat la minut, la revenire și la `visibilitychange`) / Mereu zi / Mereu seară (scrise și în
+    `ahspx_seara`, cheia lui 266). Partea devreme pune clasa `ahsp-seara` înaintea primei desenări. `AhApp.tema({seara})` la
+    fiecare schimbare și deschidere (bara de stare).
+  - **Ecranul principal** (doar pe aplicația nouă): `AhApp.widget({mod, titlu, sub, culoare, imagine, url})` la fiecare
+    deschidere și revenire (widgetul nativ revine la neutru după 36 h), la alegere și când se schimbă datele ciclului: meditația
+    zilei (aleasă la fel toată ziua dintre cele cu acces), faza de azi (numele de pe site, „până în jur de …”, doar cu date, cu
+    avertismentul), nimic. La ieșire: `mod:'nimic'`.
+  - **Meditații**: Descarcă doar pe Wi-Fi (`Network.getStatus()`; doar `cellular` întreabă; fără plugin, descarcă), Spațiu folosit
+    (`Filesystem.stat` pe sunet și poză; atingerea șterge tot), **temporizatorul de somn** în playerul lui 235 (luna: Oprit /
+    10–60 de minute; volumul scade în ultimele 10 s, apoi pauză, volumul înapoi).
+  - **Confidențialitate**: Blochează Ciclul meu cu Face ID / Touch ID / amprenta (doar cu `AhApp.biometrie()` `disponibil`; pornirea
+    și oprirea cer `AhApp.autentifica`); Statistici anonime; Ciclul ei; Șterge contul.
+  - **Despre**: versiunea și telefonul, Scrie-ne (`mailto:` cu versiunea, fără adresa ei), Evaluează aplicația (`S.magazin`; pe
+    iPhone `?action=write-review`), Politica, Termenii.
+- **Ciclul meu blocat** (2.4.0): cu lacătul pornit, conținutul secțiunii e ascuns (`html.ahspa-blocat`) și acoperit de o stare
+  liniștită cu „Deblochează”; partea devreme pune clasa înaintea primei desenări (cheia `ahspa_bio`), iar la schimbarea secțiunii o
+  pune puntea în același eveniment. Prima deschidere cere singură deblocarea; deblocat, rămâne deschis până la o ședere de peste
+  60 s în fundal. Dacă puntea nu se încarcă, Ciclul meu rămâne închis (sigur, nu deschis).
+- **Statisticile** (2.4.0, `STAT.ev`): `deschidere` (pornirea, revenirea după 30 de minute), `sectiune` și `ciclu_deschis`,
+  `meditatie_pornita` / `meditatie_terminata` (90%; id-ul din butonul `data-play`), `descarcare`, `notificare_deschisa` (categoria
+  din `data.tip` / `extra.cat`), `video_pornit` (Vimeo, prin `postMessage`, fără scriptul lor). Nimic cu „Statistici anonime” oprit.
+- **Insigna** (2.4.0): la fiecare deschidere și revenire `AhApp.insigna({n:0})` și `POST /insigna`. Același apel spune dacă
+  aplicația are partea nativă 2.4 (`NATIV2`): fără ea nu apar widgetul, insigna, Face ID și clopoțelul.
+- **Vimeo** (2.4.0): `allow="autoplay; fullscreen; picture-in-picture"` și `allowfullscreen`, din server (`ah_spa_vimeo_permisiuni`)
+  și din punte pentru iframe-urile desenate mai târziu (un iframe deja încărcat se reîncarcă o dată); `dnt=1` rămâne.
 
 ## Teste
 
@@ -212,13 +266,32 @@ Rulează tot: verifică întâi că `server/tests/date/v2/` (bucățile din 235/
 `php server/tests/integrare/run.php`. Harnașul vizual de aici șterge la pornire doar pozele lui (`browser-*`, `aplicatie-*`),
 nu și `partener-*` sau `offline-*`.
 
-- `php server/tests/run.php` — 675 de verificări (2.3.0: amprenta din baza de date și rotirea sărurilor, rutele private fără cache, `POST /push/sterge`, contoarele fără „adrese” nevalide și curățenia lor, versiunea tabelelor doar cu coloanele, ștergerea „Pentru el” cu fragmentul lui oprit, „Mută contul”, cronul oprit; în plus față de 322: contul de recenzie, punctul 9 din `docs/review-account.md`; urmărirea pe pagina publică salvată `reference/v2/spatiul-meu-public.html` + un pixel Meta clasic; coada de scripturi; filtrele pluginurilor; Conversions API; `ob_start` doar în aplicație; Vimeo `dnt=1`; podcastul), WordPress imitat (`tests/stubs.php`, `$wpdb` = SQLite în memorie): recunoașterea, lista permisă (36 de adrese, în aplicație și în browser), zona politici, portalurile REST, curățarea datelor (pe `tests/date/spatiul-meu.json`) și a ieșirii shortcode-ului, „nimic în browser”, semnăturile și `Range`, `descarca`/`fisier`, validarea și tabelul push, ștergerea contului (ce pleacă, mementourile sălii, Respiră-te acasă, ce rămâne, datele altor cliente), loturile push cu cheie (oprire la mijloc, bugetul de timp, cel mult o dublură), AASA/assetlinks, setările, declanșatorii, JWT-ul FCM (RS256 verificat).
+- `php server/tests/run.php` — 824 de verificări (2.4.0: `POST /preferinte` — cont, antet, tokenul altei cliente, validarea,
+  limita; prefs în `POST /push`; `POST /insigna`; orele de liniște peste miezul nopții și în nopțile schimbării orei; decizia pe
+  categorie / liniște / probă; mesajul FCM neschimbat fără opțiuni și cu canal, sunet, insignă, text ascuns; lotul cu Setările —
+  aplicația veche ca înainte, ținute și trimise la capăt, categorie oprită între timp; `POST /stat` — cont, eveniment, obiect,
+  limita, contoare, unice peste schimbarea lunii, curățenia la 35 de zile / 13 luni, nicio adresă sau IP; pagina Statistici,
+  graficul, CSV; Vimeo `allow`. Înainte, 2.3.0: amprenta din baza de date și rotirea sărurilor, rutele private fără cache, `POST /push/sterge`, contoarele fără „adrese” nevalide și curățenia lor, versiunea tabelelor doar cu coloanele, ștergerea „Pentru el” cu fragmentul lui oprit, „Mută contul”, cronul oprit; în plus față de 322: contul de recenzie, punctul 9 din `docs/review-account.md`; urmărirea pe pagina publică salvată `reference/v2/spatiul-meu-public.html` + un pixel Meta clasic; coada de scripturi; filtrele pluginurilor; Conversions API; `ob_start` doar în aplicație; Vimeo `dnt=1`; podcastul), WordPress imitat (`tests/stubs.php`, `$wpdb` = SQLite în memorie): recunoașterea, lista permisă (36 de adrese, în aplicație și în browser), zona politici, portalurile REST, curățarea datelor (pe `tests/date/spatiul-meu.json`) și a ieșirii shortcode-ului, „nimic în browser”, semnăturile și `Range`, `descarca`/`fisier`, validarea și tabelul push, ștergerea contului (ce pleacă, mementourile sălii, Respiră-te acasă, ce rămâne, datele altor cliente), loturile push cu cheie (oprire la mijloc, bugetul de timp, cel mult o dublură), AASA/assetlinks, setările, declanșatorii, JWT-ul FCM (RS256 verificat).
 - `node server/tests/ciclu.test.cjs` — ~50.000 de comparații între calculul ciclului din punte și `CI` citit direct din `reference/v2/sn235.php`: fazele pentru ciclu 21–45 × menstruație 2–10, `CI.d` și `CI.lung` pe 3.000 de istorii aleatoare (cu date stricate și limite depășite), mementourile pe 3 cicluri.
-- `node server/tests/vizual/poze.cjs` — harnașul vizual: Spațiul meu (CSS/JS din 235 și 266) , o sală de curs de probă (cu „Mai departe”, 214 și calendarul .ics) și Termeni și condiții (antetul și subsolul temei din pagina publică), în Chromium 390×844, browser vs aplicație (cu `window.Capacitor` imitat), totul servit local ca `https://www.adelaharu.ro` (nimic nu pleacă pe internet). 269 de verificări (2.3.0, scenariile 11–16: sărurile rotite păstrează datele ei, o pagină fără cont nu șterge nimic, „Șterge contul” întrerupt, ecranul de intrare și codul, axe-core pe toate secțiunile, foaia „Șterge contul”, ecranul de intrare și playerul fără probleme serioase/critice, focusul prins în foaie, Escape, `inert`, „Mai mult” cu butoane, zoom 200% la 195 px fără derulare laterală, modul întunecat al telefonului; axe-core vine din `app/node_modules`, deci `cd app && npm ci` înainte; scenariul 7: contul pentru el pe același telefon: tokenul lui trece la ea când ea e intrată, ieșirea ei nu-l atinge, o pagină fără cont îl scoate de la el, bara „Înapoi la ciclul ei” pe politici; paginile au și urmărirea de pe site, din pagina publică salvată: în browser se cer GA/pixel/Complianz/atribuirea, în aplicație nimic; Vimeo cu `dnt=1` din server și pentru iframe-urile adăugate târziu; podcastul fără playerul Apple; tokenul APNs nu ajunge la server; refacerea ciclului după golirea `localStorage`, ștergerea cerută care nu revine, copia altui cont; niciun text/link/element de cumpărare vizibil în aplicație, pe fiecare secțiune; martorii din browser; mementourile = 235; descărcarea; Media Session; push; linkurile; ieșirea; ștergerea contului). Pozele: `docs/screenshots-v2/` (`browser-*` și `aplicatie-*`). În pozele „full page”, bara de jos (fixă) apare la mijlocul paginii: e doar efectul capturii.
+- `node server/tests/vizual/poze.cjs` — harnașul vizual: Spațiul meu (CSS/JS din 235 și 266) , o sală de curs de probă (cu „Mai departe”, 214 și calendarul .ics) și Termeni și condiții (antetul și subsolul temei din pagina publică), în Chromium 390×844, browser vs aplicație (cu `window.Capacitor` imitat), totul servit local ca `https://www.adelaharu.ro` (nimic nu pleacă pe internet). 349 de verificări (2.4.0, scenariile 17–22: Setările — grupurile, fiecare comutator și alegere păstrate după redeschidere,
+preferințele trimise serverului, mementoul zilnic (41100, la ora aleasă), ecranul blocat și sunetul în mementouri, insigna,
+widgetul (meditația zilei, faza cu numele de pe site), Despre, aspectul (Mereu seară/zi, cheia lui 266, `AhApp.tema`), statisticile
+și oprirea lor, temporizatorul (stingerea și pauza), axe pe Setări, foi, Ciclul meu blocat și player; Wi-Fi pe date mobile; Face ID —
+pornirea cu deblocare, Ciclul meu acoperit înainte de prima desenare, „Deblochează”, revenirea după un minut; aplicația veche fără
+widget / insignă / Face ID / clopoțel; după apus și răsărit — iarna, vara, zilele schimbării orei, trecerea singură în minutul de după
+apus (ceas imitat); pagina admin Statistici cu axe; canalele Android. Pozele `aplicatie-30…39-setari-*` și `admin-statistici.png`.
+2.3.0, scenariile 11–16: sărurile rotite păstrează datele ei, o pagină fără cont nu șterge nimic, „Șterge contul” întrerupt, ecranul de intrare și codul, axe-core pe toate secțiunile, foaia „Șterge contul”, ecranul de intrare și playerul fără probleme serioase/critice, focusul prins în foaie, Escape, `inert`, „Mai mult” cu butoane, zoom 200% la 195 px fără derulare laterală, modul întunecat al telefonului; axe-core vine din `app/node_modules`, deci `cd app && npm ci` înainte; scenariul 7: contul pentru el pe același telefon: tokenul lui trece la ea când ea e intrată, ieșirea ei nu-l atinge, o pagină fără cont îl scoate de la el, bara „Înapoi la ciclul ei” pe politici; paginile au și urmărirea de pe site, din pagina publică salvată: în browser se cer GA/pixel/Complianz/atribuirea, în aplicație nimic; Vimeo cu `dnt=1` din server și pentru iframe-urile adăugate târziu; podcastul fără playerul Apple; tokenul APNs nu ajunge la server; refacerea ciclului după golirea `localStorage`, ștergerea cerută care nu revine, copia altui cont; niciun text/link/element de cumpărare vizibil în aplicație, pe fiecare secțiune; martorii din browser; mementourile = 235; descărcarea; Media Session; push; linkurile; ieșirea; ștergerea contului). Pozele: `docs/screenshots-v2/` (`browser-*` și `aplicatie-*`). În pozele „full page”, bara de jos (fixă) apare la mijlocul paginii: e doar efectul capturii.
 - `bash server/tests/partener/ruleaza.sh` — contul pentru el (`docs/partener.md`): `run.php` 265 (1.1.0: întârzierea = pauză neutră, „Trimite din nou” deconectează sesiunile, „Trimite-mi linkul” fără anularea linkului vechi și cu timp egal), fazele față de 235 (73.273 de comparații), harnașul vizual 88 de verificări (plus linkul lipit la „Sunt partenerul ei”) (în plus: tokenul lui la `ah-spp/v1`, `Preferences.ah_push.cont`, „Ieși” scoate doar tokenul lui, `unregister()` doar pe tokenul lui, atingerea notificării lui; fără notificări pentru el fără Firebase, cu token APNs sau cu ea intrată pe telefon).
 - `php server/tests/integrare/run.php` — 51 de verificări cu **ambele fragmente încărcate** (stubs-ul partenerului, cu `do_action`/`apply_filters` care rulează cârligele): `/pentru-el/` pe lista permisă și în `S.permise`, cărțile tot blocate, AASA = căile din `AndroidManifest.xml` (același șir), Associated Domains, `allowNavigation`; 302 `/spatiul-meu/` → `/pentru-el/` doar fără ea și doar în aplicație; `AH_SPA.el`; tokenul push mutat ea ↔ el, 409 `cont_ea`, APNs refuzat, „Ieși” de fiecare parte; `sterge-cont` cu `pentru_el` și tokenurile lor, altă femeie neatinsă; pagina lui în aplicație fără cărți / Google / urmărire / puntea ei.
 
 ## Ce rămâne de făcut de oameni
+
+- **2.4.0, înainte de activare**: paragrafele „Setările aplicației” și „Statistici anonime” în Politica de confidențialitate
+  (`docs/store/privacy-policy-addendum.md`); App Privacy (Product Interaction + Analytics) și Data safety (Analiză)
+  (`docs/store/privacy-answers.md`); juristul: lectura art. 5(3) pentru statisticile cu cookie-ul contului (`docs/juridic.md`, 5a).
+- **2.4.0, echipa aplicației**: `PrivacyInfo.xcprivacy` — la ProductInteraction și scopul `NSPrivacyCollectedDataTypePurposeAnalytics`.
+- **2.4.0, pe telefon**: `docs/release.md`, pasul 9, punctele 30–41 (sunetul, liniștea, ecranul blocat, insigna, widgetul, Face ID,
+  temporizatorul pe iPhone fără stingere: WebKit nu lasă volumul paginii să se schimbe).
 
 - **Adela**: textele marcate CIORNĂ (explicația notificărilor, mementourile fazelor, ștergerea contului, `/app/intra`, notificările push, banda de actualizare).
 - **Mircea**: OK pentru urcare (inactiv, cu copie); LiteSpeed (pasul 5, cu `ah_sp` și `/wp-json/ah-` din 2.3.0); cheia Firebase; Team ID și amprentele după crearea aplicațiilor în magazine.
@@ -228,3 +301,55 @@ nu și `partener-*` sau `offline-*`.
 - **De verificat pe telefon** (Web Inspector / `chrome://inspect`, cu fragmentul activ): nicio cerere spre `googletagmanager.com`, `google-analytics.com`, `connect.facebook.net`, `facebook.com/tr`, `clarity.ms`; nicio bară de cookie-uri; iframe-urile Vimeo cu `dnt=1`; intrarea cu codul fix.
 - Juridic (Mircea): confirmarea că bara poate lipsi în aplicație (raționamentul de mai sus). Pe site nu se schimbă nimic.
 - Rămân în sală, ca stare, fraze ca „Abonamentul îl oprești oricând” (224, fără link). De văzut cu Adela dacă se rescriu.
+
+## Texte noi (2.4.0) — pentru Adela
+
+Toate sunt CIORNĂ, scrise în tonul Spațiului meu; se schimbă în `ah_spa_js()` (puntea) și `ah_spa_fcm_mesaj()`.
+
+**Mai mult › grupurile:** Notificări · Aspect · Ecranul principal · Meditații · Confidențialitate · Despre
+
+**Notificări**
+- Notificări — „De la noi, pe telefonul tău”
+- Meditații noi — „Când apare o meditație nouă în Inner Temple”
+- Întâlniri — „Cu 15 minute înainte să înceapă”
+- Înregistrări gata — „Când te așteaptă înregistrarea unei întâlniri”
+- Mementoul zilnic de meditație — „Un semn blând, la ora aleasă de tine”
+- Ora mementoului (foaia: „În fiecare zi, la ora aceasta, îți amintim de meditația ta.”, „Ora”)
+- Notificarea zilnică: „Un moment pentru tine” / „Meditația de azi te așteaptă în Inner Temple.”
+- Sunet: Clopoțel („Un clopoțel blând, al nostru”) · Sunetul telefonului · Fără sunet („Notificarea vine în liniște”)
+- Ore de liniște — „Noaptea, fără sunet; ce nu grăbește vine dimineața”; rândul „Liniștea ține” — „De la 22:00 până la 08:00”
+- Foaia orelor: „Meditațiile noi și înregistrările vin după ce se termină liniștea. Anunțul unei întâlniri vine la timp, dar fără sunet.” („De la”, „Până la”)
+- Pe ecranul blocat: Arată ce scrie („Titlul și câteva cuvinte”) · Doar „Adela Haru” („Și textul „Ai un mesaj nou.”; restul îl vezi în aplicație”)
+- Textul ascuns: „Adela Haru” / „Ai un mesaj nou.”
+- Insignă pe iconiță — „Un număr mic pentru ce n-ai deschis încă”
+- Butoanele foilor: „Gata” · „Renunț”
+
+**Aspect**
+- Culorile aplicației: Ca telefonul („Zi sau seară, cum e setat telefonul”) · După apus și răsărit („Seara de la apus până la răsărit, la București”) · Mereu zi · Mereu seară („Culori închise, blânde cu ochii”)
+
+**Ecranul principal**
+- „Poți pune widgetul Adela Haru pe ecranul principal al telefonului, din lista de widgeturi.”
+- Widgetul arată: Meditația zilei („Titlul și coperta; atingerea te duce în Inner Temple”) · Faza ciclului de azi („Ecranul principal îl pot vedea și alții: faza ta va fi la vedere.”) · Nimic
+- Pe widget: „Meditația zilei · 16 min”; „Primăvara interioară” / „până în jur de 23 noiembrie” (numele fazelor sunt cele de pe site)
+
+**Meditații**
+- Descarcă doar pe Wi-Fi — „Pe datele mobile te întrebăm întâi”
+- Întrebarea: „Nu ești pe Wi-Fi” / „Ai ales să descarci meditațiile doar pe Wi-Fi. Le descarci acum, pe datele mobile?” / „Descarcă acum”
+- Spațiu folosit — „O meditație · 41,3 MB. Atinge ca s-o ștergi.” / „3 meditații · … Atinge ca să le ștergi.” / „Nicio meditație descărcată încă”
+- „Temporizatorul de somn e în player, la iconița cu luna.”
+- Temporizator de somn — „Meditația se oprește singură, cu sunetul stins încet în ultimele secunde.”: Oprit · 10 minute · 20 de minute · 30 de minute · 45 de minute · 60 de minute; pe buton „20 min”; la capăt (cititorul de ecran): „Temporizatorul de somn a oprit meditația.”
+
+**Confidențialitate**
+- Blochează Ciclul meu cu Face ID / Touch ID / amprenta / recunoașterea feței / codul telefonului — „Doar tu îl poți deschide”
+- Motivul cerut de telefon: „Deschide Ciclul meu”
+- Ecranul închis: „Ciclul meu e închis” / „L-ai păstrat doar pentru tine. Îl deschizi cu un gest.” / „Deblochează”
+- Anunțuri (cititorul de ecran): „Ciclul meu e deschis.” · „Ciclul meu se deschide de acum doar cu deblocare.” · „Ciclul meu se deschide fără deblocare.”
+- Statistici anonime — „Numărăm ce se folosește, fără nume și fără adresă”
+
+**Despre**
+- Versiunea — „2.4.0 · iPhone”
+- Scrie-ne — „contact@adelaharu.ro” (emailul pornește cu subiectul „Aplicația Adela Haru” și, jos, versiunea)
+- Evaluează aplicația — „În App Store” / „În Google Play”
+- Politica de confidențialitate · Termeni și condiții
+
+**Admin (Setări › Aplicația mobilă › Statistici)** — pentru echipă, nu pentru cliente: titlurile tabelelor („Utilizatoare active”, „Deschideri pe zi”, „iPhone și Android”, „Versiunile folosite”, „Notificări”, „Deschise, pe categorie”, „Meditațiile pornite cel mai des”, „Meditațiile ascultate până la capăt (90%)”, „Altele”, „Descarcă tot (CSV)”).

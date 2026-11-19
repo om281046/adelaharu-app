@@ -10,5 +10,10 @@
 	<array>
 		<string>applinks:www.adelaharu.ro</string>
 	</array>
+	<!-- widgetul de pe ecranul principal (AdelaHaruWidget) citește datele scrise de aplicație din acest grup -->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.ro.adelaharu.app</string>
+	</array>
 </dict>
 </plist>

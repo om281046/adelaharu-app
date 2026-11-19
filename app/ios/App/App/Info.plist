@@ -60,6 +60,9 @@
 	<string>Aplicația deschide galeria doar când alegi tu o poză pe care să o încarci în contul tău.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Aplicația folosește microfonul doar când alegi tu să filmezi un video pe care să-l încarci în contul tău.</string>
+	<!-- Ciclul meu blocat (Setările aplicației): AhApp.autentifica, Face ID cu codul telefonului ca rezervă -->
+	<key>NSFaceIDUsageDescription</key>
+	<string>Folosim Face ID ca să deblochezi Ciclul meu.</string>
 
 	<!-- Firebase Messaging (doar pentru tokenul FCM al notificărilor push): AppDelegate îi dă singur tokenul APNs,
 	     deci fără „swizzling”; tokenul FCM se face doar după ce ea permite notificările (register), nu la pornire. -->
@@ -79,6 +82,8 @@
 	<array>
 		<string>arm64</string>
 	</array>
+	<!-- Peisajul rămâne permis pe iPhone doar pentru videoul pe tot ecranul (playerul WebKit se rotește singur);
+	     ecranul aplicației e vertical: AhBridgeViewController.supportedInterfaceOrientations = .portrait. -->
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>

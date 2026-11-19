@@ -100,12 +100,31 @@ Nu se urcă nimic pe site fără OK-ul lui Mircea (se urcă inactiv, cu copie de
    email. Apoi aplicația șterge descărcările și `Preferences`. Pentru că accesul vine din comenzi, o nouă intrare cu
    același email arată din nou conținutul cumpărat, fără datele șterse (spus în notele de recenzie).
 
+7. **Setările aplicației** (2.4.0, Mircea, 19 nov.): în „Mai mult”, grupuri cu aspectul rândurilor din 235 — Notificări
+   (push pe categorii, mementourile ciclului, mementoul zilnic de meditație, sunet, ore de liniște, ecranul blocat, insignă),
+   Aspect (ca telefonul / după apus și răsărit la București, NOAA, fără locație / mereu zi / mereu seară, peste `ahspx_seara`
+   din 266), Ecranul principal (widgetul), Meditații (doar pe Wi-Fi, spațiul folosit; temporizatorul în player), Confidențialitate
+   (Ciclul meu cu Face ID / amprenta, Statistici anonime, Ciclul ei, Șterge contul), Despre. Alegerile de pe telefon:
+   `Preferences.ah_setari`; cele pentru push: pe rândul tokenului ei (`POST /ah-spa/v1/preferinte`), aplicate de server în lot.
+   **Interfața punte ↔ nativ** (fixă; puntea verifică și tace dacă lipsește): `AhApp.widget({mod:'meditatie'|'faza'|'nimic',
+   titlu, sub, culoare, imagine, url})` → `{ok}`; `AhApp.biometrie()` → `{disponibil, tip:'faceid'|'touchid'|'amprenta'|'fata'|'cod'}`;
+   `AhApp.autentifica({motiv})` → `{ok}` / `{ok:false, eroare}`; `AhApp.insigna({n})` → `{ok}` (răspunsul lui spune și că
+   aplicația are partea nativă 2.4); `AhApp.tema({seara})` → `{ok}` (bara de stare). Toate se rezolvă, nu resping. Plugin
+   `@capacitor/network`. Sunete: `res/raw/clopotel.wav` (Android, canalul implicit FCM din manifest `ah_clopotel`),
+   `clopotel.caf` (iOS). Canalele Android: `ah_clopotel`, `ah_implicit`, `ah_liniste` și `ah_ciclu_*` (privat), create de punte.
+   Id-urile notificărilor locale: ciclul 41000–41099, mementoul zilnic 41100.
+8. **Statistici proprii** (2.4.0): fără Google Analytics, Firebase Analytics sau Meta în aplicație (ar cere ATT și bara de
+   cookie-uri). Puntea trimite `POST /ah-spa/v1/stat {ev, platforma, versiune, obiect?}` doar cu „Statistici anonime” pornit
+   (implicit da, interes legitim, opoziție din aplicație: `docs/juridic.md`, 5a). Serverul: contoare pe zi (13 luni) și o amprentă
+   HMAC lunară pe zi pentru utilizatoarele active (≤ 35 de zile, secretul vechi șters); fără adrese, IP-uri, id-uri de telefon.
+   Pagina lui: `do_action( 'ah_spa_stat', 'el_deschidere', … )` / `ah_spa_stat_inc()`. Setări › Aplicația mobilă › Statistici, CSV.
+
 ## Ce ascunde fragmentul în aplicație
 
 - Server: în aplicație, orice pagină în afara listei permise (`/spatiul-meu/`, `/sala-de-curs/`, `/cartile-mele/`,
   `/meditatiile-mele/`, `/app/*`, politica de confidențialitate, termenii, politica de cookie-uri, `/wp-json/`,
   fișierele media) → redirect 302 la `/spatiul-meu/`.
-- **Fără analiză și urmărire în aplicație (cerință fermă; de ea depind etichetele de confidențialitate și notele de
+- **Fără analiză și urmărire a terților în aplicație (cerință fermă; statisticile noastre, de mai sus, nu pleacă la nimeni; de ea depind etichetele de confidențialitate și notele de
   recenzie):** în aplicație nu se încarcă Google Analytics (`gtag` / Site Kit / GTM), pixelul Meta
   (`facebook-for-woocommerce`), atribuirea comenzilor WooCommerce (`sourcebuster`, `wc-order-attribution`) și bara de
   cookie-uri Complianz (în aplicație se folosesc doar cookie-uri funcționale: `ah_sp`, `ah_app`, `ah_med`, ale sălii,
@@ -113,7 +132,8 @@ Nu se urcă nimic pe site fără OK-ul lui Mircea (se urcă inactiv, cu copie de
   Complianz, ieșirea pixelului), doar când `ah_spa_e_aplicatie()`, cu test; fără `gtag`, evenimentele `ev()` (235) și
   `masoara()` (266) nu pleacă nicăieri. Verificare în aplicație: nicio cerere spre `google-analytics.com`,
   `googletagmanager.com`, `connect.facebook.net`.
-- **Vimeo fără urmărire:** orice iframe `player.vimeo.com` din aplicație are `dnt=1` (embed-urile din 235, 44, 51, 265
+- **Vimeo fără urmărire:** orice iframe `player.vimeo.com` din aplicație are `dnt=1` (și, din 2.4.0, `allow="autoplay;
+  fullscreen; picture-in-picture"` + `allowfullscreen`) (embed-urile din 235, 44, 51, 265
   îl au deja; puntea îl adaugă celor care nu-l au). Embed-ul Apple Podcasts: de verificat; dacă pune cookie-uri de
   analiză, în aplicație se înlocuiește cu linkul spre aplicația Podcasts.
 - Pagini: CSS + JS care urmăresc desenările (ca 266): fila Comenzi și rândurile ei, butoanele/linkurile de plată și
@@ -126,7 +146,8 @@ Nu se urcă nimic pe site fără OK-ul lui Mircea (se urcă inactiv, cu copie de
 ## Pe server, fragmentul nou mai face
 
 - `ah-spa/v1`: `POST /push`, `POST /push/sterge` (+ `DELETE /push`, pentru aplicațiile vechi), `GET /descarca`,
-  `POST /sterge-cont`, `GET /config` (versiunea minimă, mesaj; îl întreabă și pagina offline).
+  `POST /sterge-cont`, `GET /config` (versiunea minimă, mesaj; îl întreabă și pagina offline); din 2.4.0 `POST /preferinte`,
+  `POST /insigna`, `POST /stat`.
   Autentificare = cookie-ul `ah_sp` existent (`ah_sp_email()`), nimic nou. `Cache-Control: no-store`, LiteSpeed nocache —
   din 2.3.0 pe toate rutele `ah-sp`, `ah-spx`, `ah-spp`, `ah-spa` (`rest_post_dispatch`), în afară de `punte` și `config`.
 - **„Mută contul”** (2.3.0, Setări › Aplicația mobilă, doar administratori): adresa veche → nouă pentru ciclul din cont

@@ -111,6 +111,42 @@ banner. Regula e scrisă și în `server/README.md`.
 
 În browser, site-ul rămâne cu bannerul Complianz, ca acum.
 
+### 5a. Statisticile proprii ale aplicației (2.4.0) și Setările
+
+**Ce:** aplicația numără, pe serverul nostru, ce se folosește: deschideri, meditații pornite și ascultate până la capăt
+(id-ul meditației), descărcări, notificări deschise (categoria), videouri pornite, Ciclul meu deschis, secțiunea. Fără
+Google Analytics, Firebase Analytics, Meta sau alt terț; fără IP, fără id de telefon, fără adresa ei în tabele.
+Rezultatul sunt **contoare pe zi** (zi, eveniment, platformă, versiune, obiect → număr), păstrate **13 luni**, apoi
+șterse automat. Pentru „utilizatoare active azi / 7 / 30 de zile” păstrăm, **cel mult 35 de zile**, câte o amprentă pe
+zi: HMAC-SHA256 al adresei cu un secret care se schimbă lunar (secretul vechi se șterge când nu mai are rânduri).
+Partenerul: doar un contor „pagina lui deschisă” (fără nimic despre el).
+
+**Temei: art. 6(1)(f), interes legitim** — să știm ce meditații și funcții se folosesc, dacă notificările ajută sau
+deranjează și ce versiuni ale aplicației mai sunt pe telefoane (ca să nu oprim una folosită). Testul de echilibru:
+date minime și pseudonime, nimic despre sănătate (ciclul apare doar ca „secțiune deschisă”, nu cu faza sau zilele),
+păstrare scurtă pentru amprentă, nicio combinare cu alte date, nicio decizie despre ea, și **opoziție simplă**:
+comutatorul „Statistici anonime” din Mai mult › Confidențialitate (pornit implicit; oprit = nu mai pleacă nimic).
+Politica de confidențialitate o spune (paragraful „Statistici anonime”).
+
+**Fără consimțământ după ePrivacy (art. 5(3) din Directiva 2002/58, art. 4(5) din Legea 506/2004):** pentru statistici
+nu se scrie și nu se citește nimic nou pe telefon în afară de alegerea ei (comutatorul, în `Preferences.ah_setari`),
+care e o preferință cerută de ea. Evenimentele pleacă cu cookie-ul de cont `ah_sp`, care există oricum pentru serviciu
+(strict necesar) și e folosit aici doar ca să limităm numărul de cereri și pentru amprenta zilei. **Atenție, de
+confirmat cu juristul:** o parte din autorități (EDPB, Ghidurile 2/2023 despre art. 5(3)) consideră că și folosirea unui
+identificator deja existent în alt scop cade sub art. 5(3). Dacă juristul ține la lectura strictă, varianta e să
+trimitem statisticile **fără cookie** (fără amprenta zilei, deci fără „utilizatoare active”) sau să le pornim doar cu
+acord. Codul permite ambele: amprenta e o singură funcție (`ah_spa_stat_activa`).
+
+**Numele „Statistici anonime”:** contoarele sunt anonime; amprenta celor 35 de zile e pseudonimă (noi am putea, cât
+există secretul, să recalculăm amprenta unei adrese). Textul politicii spune exact asta. La Apple am declarat
+„Product Interaction · Analytics · legat de identitate · fără urmărire” (`docs/store/privacy-answers.md`).
+
+**Setările notificărilor** (categoriile, sunetul, orele de liniște, textul ascuns, insigna) stau pe rândul tokenului ei
+de notificări, ca parte a serviciului cerut de ea (art. 6(1)(b)); se șterg cu tokenul. O notificare ținută peste
+orele de liniște stă cel mult până la capătul lor, legată doar de amprenta tokenului. Widgetul, aspectul, Face ID,
+Wi-Fi și mementoul zilnic stau **doar pe telefon**. Face ID / amprenta: verificarea o face sistemul, aplicația
+primește doar „da/nu” — nicio dată biometrică (art. 9) nu e prelucrată de noi.
+
 ## 6. Nu este dispozitiv medical (Regulamentul (UE) 2017/745)
 
 Un software destinat contracepției sau diagnosticului e dispozitiv medical și are nevoie de marcaj CE (cum au
@@ -136,6 +172,8 @@ De adăugat în registrul firmei (dacă nu există, acesta e începutul lui):
 | Ciclul în cont | cliente | zile, lungime, situație, notițe (criptate) | 9(2)(a) | găzduirea site-ului | nu | până le șterge ea; propunere mai jos |
 | Emailurile fazelor (ea) | cliente | email, prenume, prima zi, lungimi | 9(2)(a) | găzduirea, serviciul de email | după serviciul de email | până la dezabonare |
 | Accesul partenerului | cliente, parteneri | vezi secțiunea 1 | 9(2)(a) / 6(1)(f) / 6(1)(b) / 6(1)(a) | găzduirea, serviciul de email, Firebase | ca mai sus | 30 de zile după oprire; pe loc la ștergere |
+| Setările notificărilor (2.4.0) | cliente | categorii, sunet, ore de liniște, text ascuns, insignă, numărul de necitite | 6(1)(b) | găzduirea; Firebase (livrarea) | ca la notificări | cât există tokenul |
+| Statisticile aplicației (2.4.0) | cliente (parteneri: doar un contor) | contoare pe zi fără date personale; amprentă HMAC lunară a adresei | 6(1)(f), cu opoziție din aplicație | găzduirea | nu | contoarele 13 luni; amprentele cel mult 35 de zile |
 
 **Contracte de împuternicire (art. 28):** acceptate de firmă, de păstrat ca PDF:
 - Google Firebase (Data Processing and Security Terms, acceptate în consola Firebase);

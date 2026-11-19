@@ -49,6 +49,13 @@ Adela, pe fundalul crem `#FBF6F3`, cu fonturile Spațiului meu (Gilda Display / 
 | 6 | Cursurile mele / o lecție | Cursurile tale, la tine în buzunar |
 | 7 | Pagina offline (faza de azi + meditațiile descărcate), din `docs/screenshots-v2/` refăcută la dimensiune | Și când nu ai semnal |
 | 8 | Întâlnirile / o înregistrare (dacă contul de recenzie are una) | Întâlnirile tale și înregistrările lor |
+| 9 (opțional) | Ecranul principal al telefonului cu widgetul **mediu** „Meditația zilei” (poza, titlul, „Adela Haru”) lângă iconițe obișnuite | Meditația zilei, pe ecranul tău |
+
+**Widgetul (captura 9):** doar cu modul „meditație”, **niciodată** cu faza ciclului (e o informație intimă, chiar
+dacă e a contului de recenzie). iPhone: simulatorul, ține apăsat pe ecranul principal → „+” → Adela Haru → mediu,
+după ce aplicația a deschis o dată Spațiul meu (puntea scrie datele). Fundal simplu, fără alte widgeturi colorate,
+ora 9:41. Android: la fel din lista de widgeturi (descrierea „Meditația zilei sau faza ciclului”), 4×2. Captura arată
+doar ce face build-ul trimis (dacă widgetul nu e în build, captura nu se pune).
 
 **Nu folosim** în magazin: ecranul de intrare și codul, Abonamente, „Mai mult”, ștergerea contului, cărțile (copertele
 pot fi ale altor edituri; dacă sunt ale voastre, se pot adăuga).

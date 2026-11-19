@@ -2,4 +2,8 @@
 <resources>
     <!-- accentul Spațiului meu (sn235): culoarea pictogramei notificărilor push -->
     <color name="ah_accent">#964E46</color>
+    <!-- widgetul (AhWidget): fondul, textul și textul secundar ale Spațiului meu -->
+    <color name="ah_fundal">#FBF6F3</color>
+    <color name="ah_text">#4E3D34</color>
+    <color name="ah_text_bland">#7A6A60</color>
 </resources>

@@ -39,6 +39,14 @@ Data și ATT; la Google, partajare cu Meta în scop publicitar.
 | Tokenul de notificări (FCM) + platforma + versiunea aplicației | doar dacă permite notificările | serverul adelaharu.ro (tabelul `ah_spa_push`; al partenerului: `ah_spp_push`); Google Firebase (livrează notificarea) | notificări: meditație nouă, înregistrare, întâlnire în 15 minute; la el, începutul fiecărei faze. Un telefon are un singur token și el aparține unui singur cont (al ei sau al lui), niciodată amândurora |
 | Identificatorul telefonului pentru limita de dispozitive (meditații 51, sala 44: un cod aleator în cookie + User-Agent-ul scurtat) | la prima deschidere a meditațiilor / sălii | serverul adelaharu.ro | limita de 5 dispozitive, „Golește dispozitivele” |
 | Fișierele meditațiilor descărcate | la „Descarcă” | **de la** server spre telefon (stocare privată, exclusă din backup) | ascultat fără internet |
+| **Setările notificărilor** (2.4.0): ce categorii primește, sunetul, orele de liniște, textul ascuns pe ecranul blocat, insigna; numărul de notificări necitite | când le alege în Mai mult › Notificări (doar cu notificările permise) | serverul adelaharu.ro, pe rândul tokenului ei (`ah_spa_push.prefs`, `necitite`); o notificare ținută peste orele de liniște stă în `ah_spa_amanate` (fără adresă, doar amprenta tokenului) până la capătul lor | să trimită doar ce vrea ea, cum vrea ea |
+| **Statistici anonime** (2.4.0, comutator în Mai mult › Confidențialitate, pornit implicit): evenimentul (deschidere, meditație pornită / terminată cu id-ul ei, descărcare, notificare deschisă cu categoria, video pornit, Ciclul meu deschis, secțiunea), platforma, versiunea aplicației | la fiecare eveniment, cât timp comutatorul e pornit | serverul adelaharu.ro: **contoare pe zi** (`ah_spa_stat`, fără nicio dată personală, 13 luni) + **o amprentă pe zi** pentru „utilizatoare active” (`ah_spa_unice`: HMAC al adresei cu un secret lunar, ținută cel mult 35 de zile; secretul vechi se șterge) | să știm ce se folosește (meditații, notificări) și ce versiuni sunt încă pe telefoane. Fără IP, fără id de telefon, fără Google/Meta |
+| Setările de pe telefon (aspectul, widgetul, Wi-Fi, Face ID, mementoul zilnic) | — | **doar pe telefon** (`Preferences.ah_setari`, `localStorage`) | — |
+| **Widgetul** (2.4.0): titlul meditației zilei și coperta, sau faza ciclului de azi (numele fazei și „până în jur de …”) | când ea alege ce arată | **doar pe telefon** (aplicația îl dă widgetului de pe ecranul principal) | ecranul principal; faza se vede doar dacă o alege ea, cu avertismentul că ecranul îl pot vedea și alții |
+
+Face ID / amprenta (2.4.0, „Blochează Ciclul meu”): verificarea o face sistemul telefonului; aplicația primește doar
+„da/nu”, nimic biometric nu pleacă și nu se păstrează. „Descarcă doar pe Wi-Fi” citește doar tipul conexiunii, pe telefon.
+„După apus și răsărit” calculează soarele pentru București, fără locație.
 
 Nu pleacă: locația, contactele, pozele, microfonul, identificatorul de reclame (IDFA/AAID), date de plată, istoricul
 de navigare. Mementourile fazelor sunt **notificări locale** (calculate și programate pe telefon), nu trec prin server.
@@ -71,7 +79,7 @@ Servicii terțe care primesc ceva din aplicație:
 | Contact Info › **Name** (prenumele din comenzi, afișat în cont) | Da | App Functionality | Da | Nu |
 | Health & Fitness › **Health** (ciclul și notițele, doar cu păstrarea în cont pornită; data menstruației și lungimile, doar cu abonarea la emailurile fazelor) | Da | App Functionality | Da | Nu |
 | Purchases › **Purchase History** (ce are în cont: cursuri, Inner Temple, cărți) | Da | App Functionality | Da | Nu |
-| Usage Data › **Product Interaction** (lecții terminate, minute ascultate) | Da | App Functionality | Da | Nu |
+| Usage Data › **Product Interaction** (lecții terminate, minute ascultate; din 2.4.0 și „Statistici anonime”) | Da | App Functionality, **Analytics** | Da | Nu |
 | Identifiers › **Device ID** (tokenul de notificări, identificatorul dispozitivului din cookie) | Da | App Functionality | Da | Nu |
 
 Toate celelalte: **Nu** (Phone, Physical Address, Other Contact Info, Fitness, Payment Info, Credit Info, Other
@@ -83,6 +91,16 @@ Același set de 6 tipuri este în `PrivacyInfo.xcprivacy` (verificat 18 nov. 202
 `AppFunctionality`, `Linked = true`, `Tracking = false`; `NSPrivacyTracking = false`.
 
 Explicații și puncte nesigure:
+- **Statistici anonime (2.4.0): Product Interaction, scopul Analytics, „Linked to you: Yes”.** Am ales „legat” cu bună
+  știință, deși contoarele în sine (zi, eveniment, platformă, versiune, obiect) nu au nicio legătură cu ea: pentru
+  „utilizatoare active” păstrăm, cel mult 35 de zile, o amprentă HMAC a adresei cu un secret lunar. Cât timp secretul
+  există, noi (nu un terț) am putea recalcula amprenta pornind de la o adresă, deci datele sunt pseudonime, nu anonime
+  (Apple: „not linked” cere eliminarea identificatorilor înainte de colectare). „Tracking: No”: nu se combină cu date
+  de la alte firme și nu pleacă nicăieri. Fără IDFA, fără ATT. Dacă Mircea vrea „Not linked”, varianta e să renunțăm
+  la numărarea utilizatoarelor unice (rămân doar contoarele) — atunci Product Interaction pentru Analytics devine „Not
+  linked”. **Manifestul `app/ios/App/App/PrivacyInfo.xcprivacy` (partea nativă) trebuie să aibă la ProductInteraction
+  și `NSPrivacyCollectedDataTypePurposeAnalytics`** (cerut echipei aplicației).
+- **Setările notificărilor** (2.4.0) sunt preferințe de funcționare (App Functionality), nu un tip de date nou.
 - **Partenerul (el):** datele lui (prenume, email, token push) intră la Name, Email Address și Device ID, deja
   bifate (contul lui e tot în aplicația aceasta, fără parolă și fără cumpărături; ce vede el despre ea e Health,
   deja bifat). Faza ei arătată lui nu e „partajare cu terți” în sensul Apple (nu e un partener comercial; o face ea,
@@ -107,7 +125,7 @@ Explicații și puncte nesigure:
 **Colectează sau partajează aplicația vreun tip de date al utilizatorilor?** → Da
 **Sunt toate datele criptate în timpul transferului?** → Da (doar HTTPS, `cleartext: false`)
 **Oferiți o modalitate prin care utilizatorii pot solicita ștergerea datelor?** → Da
-(în aplicație: „Mai mult” › „Aplicația” › „Șterge contul”; pe web: URL-ul de mai jos)
+(în aplicație: „Mai mult” › „Confidențialitate” › „Șterge contul”; pe web: URL-ul de mai jos)
 **Conturi:** aplicația permite intrarea într-un cont (email + cod), deci se cere **URL de ștergere a contului**.
 
 | Categoria › tipul | Colectat | Partajat | Prelucrat efemer | Obligatoriu / opțional | Scopuri |
@@ -116,10 +134,14 @@ Explicații și puncte nesigure:
 | Informații personale › **Adresă de email** | Da | Nu | Nu | Obligatoriu | Funcționalitatea aplicației; Gestionarea contului |
 | Informații financiare › **Istoricul achizițiilor** | Da | Nu | Nu | Obligatoriu | Funcționalitatea aplicației |
 | Sănătate și fitness › **Informații despre sănătate** (păstrarea ciclului în cont; abonarea la emailurile fazelor) | Da | Nu | Nu | **Opțional** | Funcționalitatea aplicației |
-| Activitatea în aplicație › **Interacțiuni cu aplicația** | Da | Nu | Nu | Obligatoriu | Funcționalitatea aplicației |
+| Activitatea în aplicație › **Interacțiuni cu aplicația** | Da | Nu | Nu | Obligatoriu (partea de funcționare; statisticile se pot opri din aplicație) | Funcționalitatea aplicației; **Analiză** (2.4.0, „Statistici anonime”) |
 | ID-uri ale dispozitivului sau alte ID-uri | Da | Nu | Nu | Obligatoriu | Funcționalitatea aplicației |
 
-Restul: nu. (Firebase = furnizor de servicii, nu „partajare”.) **Partenerul:** Google nu consideră „partajare”
+Restul: nu. (Firebase = furnizor de servicii, nu „partajare”.) **Statistici anonime (2.4.0):** la „Interacțiuni cu
+aplicația” se adaugă scopul **Analiză**; nu e „partajare” (rămân la noi), nu sunt „prelucrate efemer” (contoarele stau
+13 luni). Google întreabă „obligatoriu sau opțional” pe tipul de date, nu pe scop: interacțiunile rămân „obligatorii”
+pentru funcționare (progresul la cursuri), iar textul politicii spune că partea de statistici se oprește din aplicație.
+Fără SDK de analiză (fără Firebase Analytics / Google Analytics / Meta), deci nicio declarație de SDK nou. **Partenerul:** Google nu consideră „partajare”
 transferul pornit de utilizatoare printr-o acțiune explicită, cu acordul ei, către cine alege ea (invitația cu
 bifa separată); de aceea „Partajat” rămâne „Nu”. *Nesigur:* dacă vreți varianta cea mai prudentă, la „Informații
 despre sănătate” bifați „Partajat”, scop „Funcționalitatea aplicației”. Linkul vechi „Pentru el” (`?ciclul-ei#d=…`)
@@ -128,7 +150,7 @@ scopul „Comunicări ale dezvoltatorului” la adresa de email.
 
 **URL pentru ștergerea contului** (obligatoriu, public, fără login): **de creat** pe site, de ex.
 `https://www.adelaharu.ro/stergere-cont-aplicatie/`, cu textul (CIORNĂ, pentru Adela):
-> Ca să îți ștergi contul din aplicația Adela Haru, deschide aplicația › Mai mult › Aplicația › Șterge contul.
+> Ca să îți ștergi contul din aplicația Adela Haru, deschide aplicația › Mai mult › Confidențialitate › Șterge contul.
 > Dacă nu mai ai aplicația, scrie-ne de pe adresa contului la contact@adelaharu.ro, cu subiectul „Ștergere cont
 > aplicație”, și o facem în cel mult 30 de zile. Se șterg: datele ciclului și notițele păstrate în cont (și
 > abonarea la emailurile fazelor), înscrierea în Spațiul meu, telefoanele conectate, tokenurile de notificări și

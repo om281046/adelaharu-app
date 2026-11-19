@@ -1,12 +1,24 @@
 package ro.adelaharu.app;
 
+import android.content.pm.ActivityInfo;
+import android.graphics.Color;
 import android.os.Bundle;
+import android.view.View;
+import android.view.ViewGroup;
+import android.view.Window;
+import android.view.WindowManager;
 import android.webkit.RenderProcessGoneDetail;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebView;
+import android.widget.FrameLayout;
+import androidx.activity.OnBackPressedCallback;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
 import com.getcapacitor.Bridge;
 import com.getcapacitor.BridgeActivity;
+import com.getcapacitor.BridgeWebChromeClient;
 import com.getcapacitor.BridgeWebViewClient;
 import com.getcapacitor.Logger;
 
@@ -20,6 +32,12 @@ import com.getcapacitor.Logger;
  *    în loc de „Nu avem internet” (adresa paginii offline nu poate primi ?cod=: serverul local o recunoaște doar exact);
  *  - procesul care desenează pagina (renderer) oprit de sistem (memorie puțină, WebView actualizat): fără tratare,
  *    Android închide toată aplicația. Întoarcem true și refacem activitatea (un WebView nou, Spațiul meu de la capăt).
+ *
+ * Video pe tot ecranul (AhWebChromeClient): BridgeWebChromeClient din Capacitor 8 refuză ecranul complet
+ * (onShowCustomView cheamă imediat callback.onCustomViewHidden()), deci butonul „ecran complet” din playerul Vimeo nu
+ * făcea nimic. Aici vederea videoului se pune peste tot ecranul, barele de sistem se ascund, ecranul rămâne aprins și
+ * orientarea trece pe peisaj (după senzor) cât ține; Înapoi închide întâi ecranul complet. Restul (fișiere, permisiuni
+ * pentru cameră/microfon, consola) rămâne al lui Capacitor (extindem clasa lui).
  */
 public class MainActivity extends BridgeActivity {
 
@@ -30,6 +48,73 @@ public class MainActivity extends BridgeActivity {
         super.onCreate(savedInstanceState);
         if (bridge != null) {
             bridge.setWebViewClient(new AhWebViewClient(bridge, this));
+            // în onCreate: BridgeWebChromeClient își înregistrează lansatoarele de rezultat (registerForActivityResult),
+            // permis doar înainte de onStart
+            AhWebChromeClient chrome = new AhWebChromeClient(bridge, this);
+            bridge.getWebView().setWebChromeClient(chrome);
+            // după super.onCreate ⇒ după callback-ul pluginului App (backButton), deci are prioritate cât e activ
+            getOnBackPressedDispatcher().addCallback(this, chrome.inapoi);
+        }
+    }
+
+    static class AhWebChromeClient extends BridgeWebChromeClient {
+
+        private final BridgeActivity activitate;
+        private View vedere;
+        private CustomViewCallback inchide;
+        private int orientareaDinainte = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED;
+
+        /** Înapoi, cât e un video pe tot ecranul: iese din ecranul complet (nu navighează în pagină). */
+        final OnBackPressedCallback inapoi = new OnBackPressedCallback(false) {
+            @Override
+            public void handleOnBackPressed() {
+                onHideCustomView();
+            }
+        };
+
+        AhWebChromeClient(Bridge bridge, BridgeActivity activitate) {
+            super(bridge);
+            this.activitate = activitate;
+        }
+
+        @Override
+        public void onShowCustomView(View view, CustomViewCallback callback) {
+            if (vedere != null) {
+                // deja pe tot ecranul: WebView-ul cere închiderea celei noi
+                callback.onCustomViewHidden();
+                return;
+            }
+            Window w = activitate.getWindow();
+            ViewGroup decor = (ViewGroup) w.getDecorView();
+            vedere = view;
+            inchide = callback;
+            view.setBackgroundColor(Color.BLACK);
+            decor.addView(view, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            WindowInsetsControllerCompat ic = WindowCompat.getInsetsController(w, decor);
+            ic.setSystemBarsBehavior(WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+            ic.hide(WindowInsetsCompat.Type.systemBars());
+            w.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+            orientareaDinainte = activitate.getRequestedOrientation();
+            // filmele sălii de curs sunt orizontale: peisaj după senzor (ambele sensuri), chiar cu rotirea blocată
+            activitate.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
+            inapoi.setEnabled(true);
+        }
+
+        @Override
+        public void onHideCustomView() {
+            if (vedere == null) return;
+            Window w = activitate.getWindow();
+            ViewGroup decor = (ViewGroup) w.getDecorView();
+            decor.removeView(vedere);
+            vedere = null;
+            inapoi.setEnabled(false);
+            WindowCompat.getInsetsController(w, decor).show(WindowInsetsCompat.Type.systemBars());
+            w.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+            activitate.setRequestedOrientation(orientareaDinainte);
+            CustomViewCallback c = inchide;
+            inchide = null;
+            // spune WebView-ului că ecranul complet s-a închis (altfel playerul rămâne „în ecran complet”)
+            if (c != null) c.onCustomViewHidden();
         }
     }
 

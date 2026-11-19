@@ -9,6 +9,8 @@ require 'base64'
 skip_docs # nu generăm fastlane/README.md
 
 APP_ID = 'ro.adelaharu.app'.freeze
+# extensia widgetului (ținta AdelaHaruWidget): alt App ID, cu App Group-ul group.ro.adelaharu.app, și profilul ei
+WIDGET_ID = 'ro.adelaharu.app.widget'.freeze
 
 # Dir.pwd e folderul fastlane/ în timpul rulării lane-urilor.
 ROOT = ENV['GITHUB_WORKSPACE'] || File.expand_path(File.basename(Dir.pwd) == 'fastlane' ? '..' : '.')
@@ -43,17 +45,19 @@ platform :ios do
 
     match(
       type: 'appstore',
-      app_identifier: APP_ID,
+      # aplicația + widgetul: câte un profil App Store pentru fiecare App ID (ambele cu App Groups, docs/release.md)
+      app_identifier: [APP_ID, WIDGET_ID],
       team_id: team_id,
       api_key: api_key,
       storage_mode: 'git',
       git_url: ENV.fetch('MATCH_GIT_URL'),
       git_basic_authorization: ENV['MATCH_GIT_BASIC_AUTHORIZATION'],
       readonly: ENV['MATCH_READONLY'] != 'false',
-      # La "creează certificate" regenerăm și profilul (ex. după ce am adăugat Push / Associated Domains).
+      # La "creează certificate" regenerăm și profilurile (ex. după ce am adăugat Push / Associated Domains / App Groups).
       force: ENV['MATCH_READONLY'] == 'false'
     )
     profil = ENV.fetch("sigh_#{APP_ID}_appstore_profile-name")
+    profil_widget = ENV.fetch("sigh_#{WIDGET_ID}_appstore_profile-name")
 
     xcodeproj = File.join(IOS_DIR, 'App.xcodeproj')
     workspace = File.join(IOS_DIR, 'App.xcworkspace') # doar dacă proiectul folosește CocoaPods
@@ -68,6 +72,16 @@ platform :ios do
       code_sign_identity: 'Apple Distribution',
       profile_name: profil,
       bundle_identifier: APP_ID
+    )
+    update_code_signing_settings(
+      path: xcodeproj,
+      use_automatic_signing: false,
+      team_id: team_id,
+      targets: ['AdelaHaruWidget'],
+      build_configurations: ['Release'],
+      code_sign_identity: 'Apple Distribution',
+      profile_name: profil_widget,
+      bundle_identifier: WIDGET_ID
     )
 
     versiune = versiune_aplicatie
@@ -87,7 +101,7 @@ platform :ios do
       configuration: 'Release',
       export_method: 'app-store',
       export_options: {
-        provisioningProfiles: { APP_ID => profil },
+        provisioningProfiles: { APP_ID => profil, WIDGET_ID => profil_widget },
         signingStyle: 'manual',
         teamID: team_id
       },

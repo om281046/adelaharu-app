@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- fondul widgetului: crem (#FBF6F3), colțuri rotunjite -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="@color/ah_fundal" />
+    <corners android:radius="16dp" />
+</shape>

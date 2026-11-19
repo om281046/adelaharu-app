@@ -17,7 +17,7 @@ Ecranele React, API-ul și datele de probă din v1 au fost scoase (rămân în i
 | Fără internet | `server.errorPath: 'offline.html'` | Capacitor încarcă pagina locală când pagina principală nu se încarcă (iOS: `didFail`/`didFailProvisionalNavigation`, mai puțin navigările anulate -999 / WebKit 102, pe care le filtrează `AhNavigare` din `AhAppPlugin.swift`; Android: `onReceivedError` **și** `onReceivedHttpError` pe cadrul principal, deci și la un 404/500 de pe site). |
 | Contul pentru el | `server.url` + fragmentul `ah-sp-partener.php` | Aceeași aplicație, alt cont: partenerul ei intră cu linkul `/pentru-el/?t=…` din email (App Link / universal link, căile `/pentru-el*`) și vede doar pagina lui `/pentru-el/` (Azi, Învață, notificările fazelor). Aplicația pornește tot din `/spatiul-meu/`: fără contul ei, cu cookie-ul lui, serverul o duce la `/pentru-el/`. `www.adelaharu.ro` e în `allowNavigation`, deci pagina rămâne în aplicație. Nimic de construit în `app/` pentru asta. |
 | Linkuri externe | `server.allowNavigation` | Rămân în aplicație doar `www.adelaharu.ro` și `adelaharu.ro` (2.2.0: fără Vimeo și Apple Podcasts; iframe-urile Vimeo nu sunt navigări de nivel superior și se încarcă oricum, iar pe Android originile din listă primesc puntea, deci lista e și o barieră). Orice altă adresă de nivel superior (Spotify, Apple Podcasts, Zoom, WhatsApp, `mailto:`, `tel:`) o deschide **Capacitor singur** în aplicația/browserul sistemului — nu e nevoie de script: iOS `WebViewDelegationHandler.decidePolicyFor` → `UIApplication.shared.open`; Android `Bridge.launchIntent` → `Intent.ACTION_VIEW`. iframe-urile (Vimeo, YouTube) nu sunt afectate. |
-| Pluginuri | `package.json` | App, PushNotifications, LocalNotifications, Preferences, Filesystem, FileTransfer (`@capacitor/file-transfer`), Browser, Device, SplashScreen, StatusBar + `AhApp` și `AhMedia` (ale noastre). Pagina site-ului le folosește prin `window.Capacitor.Plugins.*` (Capacitor injectează puntea pe originea `https://www.adelaharu.ro`). |
+| Pluginuri | `package.json` | App, PushNotifications, LocalNotifications, Preferences, Filesystem, FileTransfer (`@capacitor/file-transfer`), Browser, Device, Network (`@capacitor/network`), SplashScreen, StatusBar + `AhApp` și `AhMedia` (ale noastre). Pagina site-ului le folosește prin `window.Capacitor.Plugins.*` (Capacitor injectează puntea pe originea `https://www.adelaharu.ro`). |
 | Splash, bara de sus | `plugins.SplashScreen`, `plugins.StatusBar`, `SystemBars` | Fond `#FBF6F3` (Spațiul meu). Splash-ul rămâne până se vede pagina: puntea îl ascunde după prima desenare (`SplashScreen.hide()`), pagina offline la fel; dacă nu (pagina lui, o eroare), se ascunde singur după 4 s (`launchShowDuration`). Seara: `StatusBar.setStyle({style:'DARK'})` din punte. |
 | Puntea pe iOS | `AhPuntePazita` în `AhAppPlugin.swift` | mesajele `bridge` (JS → pluginuri) trec doar din cadrul principal, de pe `https://www.adelaharu.ro` sau pagina offline (`capacitor://www.adelaharu.ro`); restul (iframe-uri, alte gazde) se ignoră. Pe Android, Capacitor face singur asta (`addWebMessageListener`, doar cadrul principal, doar originile din `allowNavigation`); pe un WebView foarte vechi, fără `WEB_MESSAGE_LISTENER`, cade pe `addJavascriptInterface`, fără filtru. |
 | Butonul Înapoi (Android) | puntea (`App.addListener('backButton')`) și `src/offline/cap.ts` (`laInapoi`) | închide întâi foaia de deasupra / playerul, apoi înapoi în istoric (nu pe pagina offline), iar la început aplicația trece în fundal (`App.minimizeApp`). |
@@ -90,6 +90,105 @@ AhMedia.actualizeaza({titlu, artist:'Adela Haru', poza:'file://…|https://…',
 AhMedia.opreste();
 AhMedia.addListener('actiune', ({tip, pozitie}) => …); // play | pause | inainte | inapoi | seek | stop
 ```
+
+## Setările aplicației — partea nativă
+
+Pagina de setări e pe site (`ah-sp-aplicatie.php`); aici sunt doar metodele native pe care le cheamă, **detectate**
+(`typeof AhApp.widget === 'function'`), deci o aplicație mai veche nu se strică. Toate răspund cu `resolve`, niciodată
+`reject` pentru cazuri obișnuite (refuz, anulare, lipsă).
+
+```js
+const { AhApp } = window.Capacitor.Plugins;
+await AhApp.widget({ mod: 'meditatie'|'faza'|'nimic', titlu, sub, culoare: '#964E46', imagine: 'https://…'|'', url });
+//   → {ok, imagine}  ({ok:false, eroare:'grup'} pe iPhone dacă build-ul nu are App Group-ul în semnătură)
+await AhApp.biometrie();               // → {disponibil, tip: 'faceid'|'touchid'|'amprenta'|'fata'|'cod'}
+await AhApp.autentifica({ motiv });    // → {ok:true} | {ok:false, eroare:'anulat'|'blocat'|'indisponibil'|'eroare'}
+await AhApp.insigna({ n });            // → {ok}   iOS: cifra pe pictogramă; Android: n=0 șterge notificările afișate
+await AhApp.tema({ seara });           // → {ok}   textul barelor + fondul din spatele paginii
+```
+
+| Ce | iPhone | Android |
+|---|---|---|
+| **Widget** | Extensia WidgetKit `AdelaHaruWidget` (`ios/App/AdelaHaruWidget/`, ținta e în `project.pbxproj`, adăugată de mână și verificată cu pachetul Python `pbxproj`): mic, mediu, ecranul blocat (dreptunghiular, iOS 16+). Datele: `AhWidgetDate.swift` (compilat în ambele ținte) în App Group `group.ro.adelaharu.app` (UserDefaults + poza în containerul grupului). | `AhWidget` (AppWidgetProvider, `RemoteViews`): 2×2, redimensionabil la 4×2 (Android 12+: aspectul după mărime, `RemoteViews(Map<SizeF,…>)`; înainte, după lățimea din opțiuni). Datele: `AhWidgetDate.java` în SharedPreferences `ah_widget`, poza în `files/widget/imagine.jpg`. Lista de widgeturi: „Meditația zilei sau faza ciclului”, previzualizarea `drawable-nodpi/ah_widget_previzualizare.png` (lotusul). |
+| Poza | descărcată de aplicație (doar `https`, `image/*`, ≤ 3 MB, oprită de cum trece), micșorată la 600 px (ImageIO), JPEG; widgetul doar o citește | la fel (`HttpURLConnection`, `inSampleSize`, ≤ 600 px) |
+| Atingerea | `widgetURL` → `scene(_:openURLContexts:)` → `appUrlOpen` | `ACTION_VIEW` explicit spre `MainActivity` (singleTask) → `appUrlOpen` / `getLaunchUrl` |
+| Reguli comune | `mod` necunoscut = `nimic`; `url` doar `https://www.adelaharu.ro` / `adelaharu.ro` (altfel `/spatiul-meu/`); `culoare` doar `#RGB`/`#RRGGBB`; titlu ≤ 80, sub ≤ 140; după **36 h** fără o nouă scriere widgetul trece singur pe starea neutră (o fază de alaltăieri ar fi greșită). **Faza**: doar numele fazei și textul dat, fără poză (poza veche se șterge); pe iPhone cu `.privacySensitive()` (ascunsă pe ecranul blocat cu telefonul blocat și în StandBy). **Nimic**: doar lotusul și „Adela Haru”. | aceleași (testate în `android/app/src/test/…/AhWidgetDateTest.java`) |
+| Aspect | crem `#FBF6F3`, titlul serif (Gilda Display nu e inclus ca TTF în aplicație ⇒ serif-ul sistemului: New York / `serif`), lotusul în culoarea dată, „Adela Haru” mic | la fel |
+| **Blocarea** | `LocalAuthentication`, `.deviceOwnerAuthentication` (Face ID / Touch ID, apoi codul telefonului); `NSFaceIDUsageDescription` în `Info.plist` | `androidx.biometric` 1.1.0, `BiometricPrompt` cu `BIOMETRIC_WEAK \| DEVICE_CREDENTIAL` (WEAK include STRONG; combinația merge pe toate versiunile, API 24+); `MainActivity` e `AppCompatActivity` ⇒ `FragmentActivity` |
+| **Insigna** | `setBadgeCount` (iOS 16+) / `applicationIconBadgeNumber`, doar cu notificările permise și insigna pornită | lansatorul o ia din notificări; `n = 0` șterge notificările afișate, fără cea a meditației (în curs) |
+| **Tema** | `bridge.statusBarStyle` (text deschis seara) + fondul controlerului și al WebView-ului (`#FBF6F3` / `#221922`) | `WindowInsetsControllerCompat` (text deschis seara, bara de sus și cea de jos); culoarea barelor doar sub Android 15 (edge-to-edge); fondul ferestrei și al WebView-ului. Poate înlocui `StatusBar.setStyle` din punte. |
+
+### Sunetele notificărilor
+
+Clopoțelul e **sintetizat** de `scripts/clopotel.py` (numpy; un bol simplificat: 528 Hz + 1320 Hz, cu „bătăi” lente,
+atac 12 ms, stingere exponențială, 2,5 s, −3 dBFS, mono 44,1 kHz, 16 biți), fără nicio înregistrare străină:
+- Android: `android/app/src/main/res/raw/clopotel.wav` (≈ 215 KB). Canalele le face puntea din JS:
+  `LocalNotifications.createChannel({ id: 'ah_clopotel', sound: 'clopotel.wav', … })` (Capacitor caută `res/raw/clopotel`).
+  Atenție: pe Android sunetul unui canal **nu se mai poate schimba** după creare; pentru alt sunet, alt `id` de canal.
+- iOS: `ios/App/App/clopotel.caf` (PCM 16 biți, 2,5 s; în resursele țintei App): `sound: 'clopotel.caf'` la
+  `LocalNotifications.schedule`, iar în push-ul APNs (prin FCM) `apns.payload.aps.sound = "clopotel.caf"`.
+- Push pe Android: mesajul FCM poartă `android.notification.channel_id`. Fără el, `AndroidManifest.xml` trimite la
+  `ah_clopotel` (`default_notification_channel_id`); dacă acel canal încă nu există (aplicația abia instalată, puntea nu
+  l-a creat), Firebase folosește singur canalul lui de rezervă, deci nu se pierde nimic.
+
+**Alt sunet** (de ex. un clopoțel înregistrat de Adela): un fișier WAV mono, sub 5 s, liniștit la capăt, pus peste
+`clopotel.wav`; pentru iPhone `afconvert -f caff -d LEI16 clopotel.wav ios/App/App/clopotel.caf` (macOS) sau
+`ffmpeg -i clopotel.wav -c:a pcm_s16le -f caf ios/App/App/clopotel.caf`. Sau se schimbă `PARTIALI` / `DURATA` în
+`scripts/clopotel.py` și se rulează `python3 scripts/clopotel.py`. Limite: Android < 300 KB, iOS < 30 s. O versiune nouă
+a aplicației e necesară (sunetele sunt în pachet). Pe Android, schimbarea sunetului cere și un `id` nou de canal (puntea).
+
+### Video pe tot ecranul (Vimeo)
+
+- **Android**: `BridgeWebChromeClient` din Capacitor 8 **refuza** ecranul complet (`onShowCustomView` cheamă imediat
+  `onCustomViewHidden()`). `MainActivity.AhWebChromeClient` (extinde clasa lui Capacitor, deci fișierele și permisiunile
+  rămân) pune vederea videoului peste tot ecranul, ascunde barele (revin la glisare), ține ecranul aprins
+  (`FLAG_KEEP_SCREEN_ON`) și trece pe peisaj după senzor (`SCREEN_ORIENTATION_SENSOR_LANDSCAPE`, și cu rotirea blocată),
+  apoi pune totul la loc. Înapoi închide întâi ecranul complet (callback prioritar față de cel al pluginului App).
+  Aplicația în sine nu e blocată pe vertical (manifestul nu are `screenOrientation`), ca până acum.
+- **iPhone**: Capacitor pune deja `allowsInlineMediaPlayback`, AirPlay, redarea fără atingere și
+  `isElementFullscreenEnabled`; `AhBridgeViewController.webViewConfiguration` adaugă explicit Picture in Picture.
+  Ecranul aplicației rămâne **vertical** (`supportedInterfaceOrientations = .portrait` pe iPhone), dar `Info.plist`
+  păstrează peisajul: playerul pe tot ecranul al WebKit e un controler separat și se rotește singur. Sunetul continuă
+  cu ecranul blocat (`UIBackgroundModes = audio`, verificat, existent). AirPlay: din playerul Vimeo / ecranul complet.
+  **Chromecast nu există** într-un WebView (nici pe Android); doar prin aplicația Vimeo.
+
+### Widgetul pe iPhone: ce trebuie făcut o dată (proprietara)
+
+1. **Apple Developer → Identifiers → App Groups → „+”**: `group.ro.adelaharu.app` (descriere „Adela Haru”).
+2. **Identifiers → `ro.adelaharu.app`** → bifați **App Groups** → Configure → alegeți `group.ro.adelaharu.app` → Save
+   (Apple invalidează profilul vechi).
+3. **Identifiers → „+” → App IDs → App**: Bundle ID explicit **`ro.adelaharu.app.widget`**, descriere „Adela Haru
+   Widget”, capabilitatea **App Groups** cu același grup. (Fără Push, fără Associated Domains: widgetul nu le folosește.)
+4. GitHub → Actions → **iOS** → Run workflow cu **„creează certificate”** bifat o dată: `fastlane match` face profilul
+   App Store și pentru `ro.adelaharu.app.widget` și îl reface pe cel al aplicației (cu App Groups). Fastfile semnează
+   acum ambele ținte (`App` și `AdelaHaruWidget`) și le dă ambele profiluri la export. Match **nu** creează App ID-uri:
+   pașii 1–3 trebuie făcuți înainte, altfel rularea se oprește la `sigh_ro.adelaharu.app.widget_appstore_profile-name`.
+5. Local (Xcode, semnare automată): ținta **AdelaHaruWidget** → Signing & Capabilities → aceeași echipă; App Groups
+   apare din `AdelaHaruWidget.entitlements`. Același lucru la ținta **App**.
+
+Pe Android nu e nimic de configurat (receiverul e în manifest).
+
+### De încercat pe telefoane reale (nu se pot verifica aici: nu există Xcode / Android SDK)
+
+1. **Widget**: deschideți aplicația (puntea cheamă `AhApp.widget`), apoi adăugați widgetul (iPhone: apăsare lungă pe
+   ecranul principal → „+” → Adela Haru; Android: lista de widgeturi). Verificați mic / mediu (cu poza) / ecranul blocat
+   (iPhone), modul „faza” (fără poză; pe iPhone, ascuns pe ecranul blocat cât telefonul e blocat), „nimic” (doar lotusul),
+   atingerea (se deschide `/spatiul-meu/#…` din aplicație, și cu aplicația închisă), redimensionarea pe Android, trecerea
+   pe starea neutră după 36 h (ora telefonului mutată înainte). Din Safari/Chrome inspector:
+   `await Capacitor.Plugins.AhApp.widget({mod:'meditatie',titlu:'Test',sub:'Text',culoare:'#5B7F6A',imagine:'https://www.adelaharu.ro/wp-content/uploads/…jpg',url:'https://www.adelaharu.ro/spatiul-meu/#inner-temple'})`.
+2. **Blocarea**: `AhApp.biometrie()` pe un telefon cu Face ID / Touch ID / amprentă / doar cod / fără cod;
+   `AhApp.autentifica({motiv:'Deblochează Ciclul meu'})`: reușit, anulat, greșit de 5 ori (iPhone cere codul), fără
+   biometrie înrolată (cere codul). Prima dată iPhone arată textul `NSFaceIDUsageDescription`.
+3. **Insigna**: iPhone `AhApp.insigna({n:3})` cu notificările permise (cifra 3), apoi `{n:0}`; fără permisiune → `ok:false`.
+   Android: cu o meditație care cântă și o notificare de fază afișată, `{n:0}` șterge doar notificarea fazei.
+4. **Tema**: `AhApp.tema({seara:true})` → textul barei albă pe fond închis; `{seara:false}` → înapoi.
+5. **Sunetele**: o notificare locală pe canalul `ah_clopotel` (Android) / cu `sound:'clopotel.caf'` (iPhone) sună
+   clopoțelul; un push FCM fără `channel_id` cade pe `ah_clopotel` (sau pe canalul de rezervă, dacă nu există încă).
+6. **Video**: o lecție Vimeo din sala de curs → butonul ecran complet: Android trece pe peisaj, fără bare, ecranul nu se
+   stinge; Înapoi iese din ecranul complet (nu din pagină); la ieșire, aplicația revine cum era. iPhone: ecranul complet
+   se rotește, aplicația rămâne verticală după ieșire; Picture in Picture (glisare spre ecranul principal în timpul
+   redării); AirPlay spre un Apple TV.
+7. **Network**: `Capacitor.Plugins.Network.getStatus()` și evenimentul `networkStatusChange` (mod avion).
 
 ## Ecranul blocat și sunetul în fundal — decizia
 
@@ -194,7 +293,9 @@ La o versiune nouă se schimbă toate trei, plus `versionCode` / `CURRENT_PROJEC
 ## Nativ, pe scurt
 
 - **iOS**: `Info.plist` — `UIBackgroundModes` doar `audio`, `CFBundleLocalizations` ro, texte de permisiune în română
-  (cameră, galerie, microfon: pentru eventualele `<input type="file">` de pe site), `arm64`.
+  (cameră, galerie, microfon: pentru eventualele `<input type="file">` de pe site; Face ID: Ciclul meu blocat), `arm64`.
+  Ținte: `App` și extensia `AdelaHaruWidget` (`ro.adelaharu.app.widget`, încorporată prin „Embed Foundation
+  Extensions”); ambele au App Group-ul `group.ro.adelaharu.app` în entitlements. Resurse în plus: `clopotel.caf`.
   `App.entitlements` (Release) / `AppDebug.entitlements` (Debug) — `applinks:www.adelaharu.ro`, `aps-environment` production / development. `PrivacyInfo.xcprivacy` — UserDefaults (CA92.1, Preferences),
   FileTimestamp (C617.1, Filesystem), date colectate legate de cont, doar pentru funcționare, fără urmărire:
   email, nume, sănătate (ciclul, doar dacă îl păstrează în cont), istoricul accesului/abonamentelor, interacțiunea
@@ -203,7 +304,8 @@ La o versiune nouă se schimbă toate trei, plus `versionCode` / `CURRENT_PROJEC
   site se anulează și se deschide `offline.html?cod=<cod>` (serverul local ia doar calea); anularea dă WebKit 102, deja
   filtrat. Capacitor 8 nu are metoda (la o actualizare: `grep navigationResponse` în `WebViewDelegationHandler.swift`).
   Codul și momentul stau și în `AhNavigare.ultimaEroare`, citite prin `AhApp.info().eroare`.
-- **Android**: `AndroidManifest.xml` — App Links `autoVerify` pentru `/spatiul-meu*`, `/app/intra*` și `/pentru-el*` (aceleași căi ca AASA; testul `server/tests/integrare/run.php` le compară), `POST_NOTIFICATIONS`,
+- **Android**: `AhWidget` (receiver neexportat: actualizările vin de la sistem), `androidx.biometric`, `res/raw/clopotel.wav`,
+  `MainActivity.AhWebChromeClient` (video pe tot ecranul). `AndroidManifest.xml` — App Links `autoVerify` pentru `/spatiul-meu*`, `/app/intra*` și `/pentru-el*` (aceleași căi ca AASA; testul `server/tests/integrare/run.php` le compară), `POST_NOTIFICATIONS`,
   `FOREGROUND_SERVICE` + `FOREGROUND_SERVICE_MEDIA_PLAYBACK`, serviciul `AhMediaService`, `allowBackup=false`.
   `androidx.media:media` pentru MediaSession. Iconița de notificare `ic_stat_lotus` (folosită și de LocalNotifications).
   `MainActivity.AhWebViewClient` (2.3.0, pus cu `bridge.setWebViewClient` după `super.onCreate`, extinde

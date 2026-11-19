@@ -28,7 +28,7 @@ function redirect_spre( $uri, $devreme = true ) {
 }
 
 /* ---------- 0. fragmentul se încarcă o singură dată, fără efecte ---------- */
-egal( AH_SPA, '2.3.0', 'versiunea fragmentului' );
+egal( AH_SPA, '2.4.0', 'versiunea fragmentului' );
 verifica( isset( $GLOBALS['ah_test_hooks']['template_redirect'] ), 'cârligul de redirecționare e legat' );
 $n_hooks = count( $GLOBALS['ah_test_hooks'], COUNT_RECURSIVE );
 require __DIR__ . '/../ah-sp-aplicatie.php'; // a doua oară: gărzile AH_SPA și function_exists
@@ -186,7 +186,7 @@ verifica( strlen( $cap ) < 6000, 'aplicație: <head>-ul punții e mic (' . strle
 egal( substr_count( $cap, 'rel="preload"' ), 4, 'aplicație: fonturile primului ecran preîncărcate (Figtree, Gilda; latin și latin-ext)' );
 verifica( false !== strpos( $cap, '/wp-content/uploads/elementor/google-fonts/fonts/figtree-xms-huzqdcfdgfmm4s9dq.woff2" as="font" type="font/woff2" crossorigin>' ), 'aplicație: preload Figtree latin, crossorigin' );
 verifica( false === strpos( $cap, 'ana@exemplu.ro' ), 'puntea nu tipărește adresa de email' );
-verifica( 0 === strpos( ah_spa_punte_ver(), '2.3.0-' ) && false === strpos( ah_spa_js() . ah_spa_css_tot(), 'ana@exemplu.ro' ), 'fișierele punții: aceleași pentru toate (fără date personale)' );
+verifica( 0 === strpos( ah_spa_punte_ver(), '2.4.0-' ) && false === strpos( ah_spa_js() . ah_spa_css_tot(), 'ana@exemplu.ro' ), 'fișierele punții: aceleași pentru toate (fără date personale)' );
 verifica( false !== strpos( ah_spa_css_tot(), '#ahsp a[href="https://www.adelaharu.ro/"]' ), 'aplicație: „Înapoi pe site” ascuns din stil' );
 preg_match( '~window\.AH_SPA=(\{.*?\});\(function~s', $cap, $m );
 $cfg = json_decode( $m[1] ?? 'null', true );
@@ -755,8 +755,8 @@ $v = array(
 foreach ( $v as $a => $b ) {
 	egal( ah_spa_vimeo_dnt( $a ), $b, 'Vimeo dnt: ' . $a );
 }
-egal( ah_spa_vimeo_dnt_html( '<div><iframe src="https://player.vimeo.com/video/9?h=b" allow="autoplay"></iframe><iframe src="https://www.youtube.com/embed/x"></iframe></div>' ), '<div><iframe src="https://player.vimeo.com/video/9?h=b&dnt=1" allow="autoplay"></iframe><iframe src="https://www.youtube.com/embed/x"></iframe></div>', 'Vimeo dnt în HTML; YouTube neatins' );
-egal( ah_spa_vimeo_dnt_html( '<iframe class="cmplz-iframe" data-src-cmplz="https://player.vimeo.com/video/9?h=b" src="about:blank"></iframe>' ), '<iframe class="cmplz-iframe" src="https://player.vimeo.com/video/9?h=b&dnt=1"></iframe>', 'Vimeo ținut de Complianz: pornește cu dnt=1' );
+egal( ah_spa_vimeo_dnt_html( '<div><iframe src="https://player.vimeo.com/video/9?h=b" allow="autoplay"></iframe><iframe src="https://www.youtube.com/embed/x"></iframe></div>' ), '<div><iframe allowfullscreen src="https://player.vimeo.com/video/9?h=b&dnt=1" allow="autoplay; fullscreen; picture-in-picture"></iframe><iframe src="https://www.youtube.com/embed/x"></iframe></div>', 'Vimeo dnt în HTML; YouTube neatins' );
+egal( ah_spa_vimeo_dnt_html( '<iframe class="cmplz-iframe" data-src-cmplz="https://player.vimeo.com/video/9?h=b" src="about:blank"></iframe>' ), '<iframe allowfullscreen allow="autoplay; fullscreen; picture-in-picture" class="cmplz-iframe" src="https://player.vimeo.com/video/9?h=b&dnt=1"></iframe>', 'Vimeo ținut de Complianz: pornește cu dnt=1' );
 // ob_start: doar în aplicație, doar pe paginile ei
 $GLOBALS['ah_test_e_pagina'] = true;
 $_SERVER['REQUEST_URI']      = '/spatiul-meu/';
@@ -878,12 +878,12 @@ verifica( ! in_array( 'astra-theme-css', ah_spa_stiluri_tema( 'sala' ), true ) &
 $GLOBALS['ah_test_e_pagina'] = false;
 egal( ah_spa_fcm_mesaj( 't', 'T', 'x', array() )['message']['android']['notification']['icon'], 'ic_stat_lotus', 'push Android: pictograma albă a aplicației' );
 $js = ah_spa_js();
-foreach ( array( "'backButton'", "'minimizeApp'", 'function inCoada(', 'AHSPA_ALT_CONT', "'createChannel'", 'visibility:0', "title:FT.t", "'ah_ciclu_notif',1", 'mementouriPornite', "cheama('Filesystem','stat'", "cheama('SplashScreen','hide'", 'function intra(', 'Ascultă pe Spotify', 'function confirma(', 'aria-labelledby', 'Tot de la tine:', 'Cursurile, cărțile și meditațiile de pe această adresă apar aici.' ) as $x ) {
+foreach ( array( "'backButton'", "'minimizeApp'", 'function inCoada(', 'AHSPA_ALT_CONT', "'createChannel'", 'visibility:c[3]', "title:as?ASC.t:FT.t", "'ah_ciclu_notif',1", 'mementouriPornite', "cheama('Filesystem','stat'", "cheama('SplashScreen','hide'", 'function intra(', 'Ascultă pe Spotify', 'function confirma(', 'aria-labelledby', 'Tot de la tine:', 'Cursurile, cărțile și meditațiile de pe această adresă apar aici.' ) as $x ) {
 	verifica( false !== strpos( $js, $x ), 'puntea conține ' . $x );
 }
 verifica( false === strpos( $js, 'window.confirm' ) && false === strpos( $js, 'Menstruația ta ar putea' ), 'puntea: fără window.confirm și fără „menstruație” pe ecranul blocat' );
 $dev = ah_spa_js_devreme();
-verifica( false !== strpos( $dev, "'ahspa_cine'" ) && false !== strpos( $dev, '/^(ahsp_|ahspx_|ahct_|ah_ciclu_v1$)/' ) && strlen( $dev ) < 1200, 'partea devreme: amprenta contului și curățarea cheilor, mică' );
+verifica( false !== strpos( $dev, "'ahspa_cine'" ) && false !== strpos( $dev, '/^(ahsp_|ahspx_|ahct_|ah_ciclu_v1$)/' ) && strlen( $dev ) < 3600, 'partea devreme: amprenta contului și curățarea cheilor, mică (cu soarele, 2.4.0)' );
 
 /* ---------- 17. 2.3.0: amprenta contului din baza de date (H2) ---------- */
 $c1 = ah_spa_cine( 'Ana@Exemplu.ro ' );
@@ -908,7 +908,7 @@ egal( array( $cfg['cine'], $cfg['cine_vechi'] ), array( $c2, array( ah_spa_cine_
 egal( ah_spa_cfg( 'sp', '' )['cine_vechi'], array(), 'AH_SPA fără cont: fără amprente' );
 $dev = ah_spa_js_devreme();
 verifica( false !== strpos( $dev, '(S.cine_vechi||[]).indexOf(v)<0' ), 'partea devreme: o amprentă veche a aceluiași cont nu șterge nimic' );
-verifica( false !== strpos( $dev, "getItem('ahspx_seara')===null" ) && false !== strpos( $dev, 'prefers-color-scheme: dark' ), 'partea devreme: seara după telefon, doar fără alegerea ei' );
+verifica( false !== strpos( $dev, "else if(x===null)n=!!(window.matchMedia" ) && false !== strpos( $dev, "x=L.getItem('ahspx_seara')" ) && false !== strpos( $dev, 'prefers-color-scheme: dark' ), 'partea devreme: seara după telefon, doar fără alegerea ei (ahspx_seara) și fără Setări › Aspect' );
 $GLOBALS['ah_test_e_pagina'] = false;
 
 /* ---------- 18. rutele private fără cache (H3) ---------- */
@@ -929,7 +929,7 @@ egal( ah_spa_r_push_sterge( new WP_REST_Request( array(), array( 'token' => 'fcm
 ah_spa_r_push_sterge( new WP_REST_Request( array( 'X-AH-App' => '1' ), array( 'token' => 'fcmT:' . str_repeat( 'a', 60 ) ), array(), '/ah-spa/v1/push/sterge', 'POST' ) );
 egal( (int) $GLOBALS['wpdb']->get_var( 'SELECT COUNT(*) FROM wp_ah_spa_push' ), 1, 'push/sterge: tokenul scos, celălalt rămâne' );
 $js = ah_spa_js();
-foreach ( array( "api('push/sterge',{metoda:'POST'", "S.api_el+'push/sterge'", "'X-AH-SPP':'1'", 'r.status===404||r.status===405', 'if(S.el||!S.api_el)return;', 'getTimezoneOffset()', "asculta('App','resume'", "PREF.pune('ah_sterge'", 'function stergereRamasa(', "PUSH.opreste(true)", 'function acelasi(c)', 'aria-valuetext', "role','status'", 'Atinge ca s-o ștergi.', 'Codul are 6 cifre.', 'Nu am putut verifica codul acum. Mai încearcă puțin.', 'Trimite-mi un cod nou', "setAttribute('inert'", "e.key==='Escape'", "type=\"button\" class=\"rand spa-b\" role=\"switch\"", 'Ciclul ei', "h.setAttribute('tabindex','-1')" ) as $x ) {
+foreach ( array( "api('push/sterge',{metoda:'POST'", "S.api_el+'push/sterge'", "'X-AH-SPP':'1'", 'r.status===404||r.status===405', 'if(S.el||!S.api_el)return;', 'getTimezoneOffset()', "asculta('App','resume'", "PREF.pune('ah_sterge'", 'function stergereRamasa(', "PUSH.opreste(true)", 'function acelasi(c)', 'aria-valuetext', "role','status'", 'Atinge ca s-o ștergi.', 'Atinge ca să le ștergi.', 'Codul are 6 cifre.', 'Nu am putut verifica codul acum. Mai încearcă puțin.', 'Trimite-mi un cod nou', "setAttribute('inert'", "e.key==='Escape'", "type=\"button\" class=\"rand spa-b\" role=\"switch\"", 'Ciclul ei', "h.setAttribute('tabindex','-1')" ) as $x ) {
 	verifica( false !== strpos( $js, $x ), 'puntea 2.3.0 conține ' . $x );
 }
 verifica( false === strpos( $js, 'curataLocal(false)' ), 'puntea: o pagină fără cont nu mai curăță telefonul (curataLocal(false))' );
@@ -1007,6 +1007,247 @@ egal( ah_spa_cron_oprite( time() + 27 * 3600 ), array( 'ah_spa_tick' => 27 ), 'c
 update_option( 'ah_spp_ultima_rulare', time() - 40 * 3600 );
 egal( ah_spa_cron_oprite(), array(), 'cron: cronul lui contează doar cu fragmentul lui activ' );
 delete_option( 'ah_spp_ultima_rulare' );
+
+/* ---------- 25. 2.4.0: Setările aplicației — preferințele push (POST /preferinte) ---------- */
+$wpdb->query( 'DELETE FROM wp_ah_spa_push' );
+$wpdb->query( 'DELETE FROM wp_ah_spa_amanate' );
+$GLOBALS['ah_test_transients'] = array();
+$cere = function ( $ruta, $corp, $antet = true ) { return call_user_func( $ruta, new WP_REST_Request( $antet ? array( 'X-AH-App' => '1' ) : array(), $corp, array(), '/ah-spa/v1/x', 'POST' ) ); };
+$tokA = 'fcmA:' . str_repeat( 'a', 60 );
+$tokB = 'fcmB:' . str_repeat( 'b', 60 );
+$GLOBALS['ah_test_email'] = 'ana@exemplu.ro';
+$PR = array( 'cat' => array( 'meditatii' => true, 'intalniri' => true, 'inreg' => false ), 'sunet' => 'clopotel', 'liniste' => array( 'on' => true, 'de' => '22:00', 'pana' => '08:00' ), 'ecran' => 'ascuns', 'insigna' => true );
+$r = $cere( 'ah_spa_r_push', array( 'token' => $tokA, 'platforma' => 'ios', 'versiune' => '2.4.0', 'disp' => 'd1', 'prefs' => $PR ) );
+egal( $r->get_status(), 200, 'push 2.4: tokenul cu Setările lui' );
+egal( json_decode( (string) $wpdb->get_var( "SELECT prefs FROM wp_ah_spa_push WHERE token_h = '" . hash( 'sha256', $tokA ) . "'" ), true ), ah_spa_valideaza_prefs( $PR )['prefs'], 'push 2.4: prefs păstrate pe rândul tokenului (JSON)' );
+$r = $cere( 'ah_spa_r_push', array( 'token' => $tokB, 'platforma' => 'android', 'versiune' => '2.4.0', 'prefs' => array( 'sunet' => 'trompetă' ) ) );
+egal( array( $r->get_status(), $wpdb->get_var( "SELECT prefs FROM wp_ah_spa_push WHERE token_h = '" . hash( 'sha256', $tokB ) . "'" ) ), array( 200, null ), 'push: prefs nevalide ignorate, tokenul se leagă oricum (implicit = ca înainte)' );
+$wpdb->query( "UPDATE wp_ah_spa_push SET email = 'ioana@exemplu.ro' WHERE token_h = '" . hash( 'sha256', $tokB ) . "'" );
+// autentificarea și antetul
+$GLOBALS['ah_test_email'] = '';
+egal( $cere( 'ah_spa_r_preferinte', array( 'token' => $tokA, 'prefs' => $PR ) )->get_status(), 403, 'preferințe: fără cont, 403' );
+$GLOBALS['ah_test_email'] = 'ana@exemplu.ro';
+egal( $cere( 'ah_spa_r_preferinte', array( 'token' => $tokA, 'prefs' => $PR ), false )->get_status(), 403, 'preferințe: fără antetul X-AH-App, 403' );
+// al cui e tokenul: doar al ei
+egal( array( $cere( 'ah_spa_r_preferinte', array( 'token' => $tokB, 'prefs' => array( 'insigna' => true ) ) )->get_status(), $wpdb->get_var( "SELECT prefs FROM wp_ah_spa_push WHERE token_h = '" . hash( 'sha256', $tokB ) . "'" ) ), array( 404, null ), 'preferințe: tokenul altei cliente — 404, neatins' );
+egal( $cere( 'ah_spa_r_preferinte', array( 'token' => 'fcmX:' . str_repeat( 'x', 60 ), 'prefs' => $PR ) )->get_status(), 404, 'preferințe: token necunoscut — 404 (puntea îl retrimite)' );
+// validarea
+foreach ( array(
+	'sunet necunoscut'      => array( 'sunet' => 'trompetă' ),
+	'ora nu e din 30 în 30' => array( 'liniste' => array( 'on' => true, 'de' => '22:15', 'pana' => '08:00' ) ),
+	'ora 24:00'             => array( 'liniste' => array( 'on' => true, 'de' => '24:00', 'pana' => '08:00' ) ),
+	'categorie text'        => array( 'cat' => array( 'meditatii' => 'da' ) ),
+	'ecran necunoscut'      => array( 'ecran' => 'jumatate' ),
+	'insigna text'          => array( 'insigna' => 'poate' ),
+	'prefs nu e obiect'     => 'clopotel',
+) as $nume => $x ) {
+	egal( $cere( 'ah_spa_r_preferinte', array( 'token' => $tokA, 'prefs' => $x ) )->get_status(), 400, 'preferințe: ' . $nume . ' — 400' );
+}
+egal( $cere( 'ah_spa_r_preferinte', array( 'prefs' => $PR ) )->get_status(), 400, 'preferințe: fără token — 400' );
+$r = $cere( 'ah_spa_r_preferinte', array( 'token' => $tokA, 'prefs' => array( 'sunet' => 'fara', 'ecran' => 'tot', 'necunoscut' => 1 ) ) );
+egal( array( $r->get_status(), $r->get_data()['prefs']['sunet'], $r->get_data()['prefs']['cat']['inreg'], isset( $r->get_data()['prefs']['necunoscut'] ) ), array( 200, 'fara', true, false ), 'preferințe: salvate; ce lipsește = implicit, cheile necunoscute ignorate' );
+egal( $r->get_headers()['Cache-Control'] ?? '', 'no-store, private, max-age=0', 'preferințe: fără cache' );
+$GLOBALS['ah_test_transients'] = array();
+$n = 0;
+for ( $i = 0; $i < 61; $i++ ) { $n = $cere( 'ah_spa_r_preferinte', array( 'token' => $tokA, 'prefs' => $PR ) )->get_status(); }
+egal( $n, 429, 'preferințe: cel mult 60 pe oră' );
+$GLOBALS['ah_test_transients'] = array();
+egal( ah_spa_prefs( null ), null, 'prefs: rând fără Setări = null (aplicație veche, totul ca înainte)' );
+egal( ah_spa_prefs( '{"stricat' ), ah_spa_prefs_implicite(), 'prefs: JSON stricat = implicite' );
+// insigna: golită la deschidere (cine are tokenul)
+$wpdb->query( "UPDATE wp_ah_spa_push SET necitite = 4" );
+egal( $cere( 'ah_spa_r_insigna', array( 'token' => $tokA ), false )->get_status(), 403, 'insigna: fără antet, 403' );
+egal( $cere( 'ah_spa_r_insigna', array( 'token' => $tokA ) )->get_status(), 200, 'insigna: golită' );
+egal( array_map( 'intval', $wpdb->get_col( 'SELECT necitite FROM wp_ah_spa_push ORDER BY id' ) ), array( 0, 4 ), 'insigna: doar pe telefonul acela' );
+
+/* ---------- 26. orele de liniște, categoria, canalul, sunetul, insigna, textul ascuns ---------- */
+$tz  = new DateTimeZone( 'Europe/Bucharest' );
+$ora = function ( $s ) use ( $tz ) { return ( new DateTimeImmutable( $s, $tz ) )->getTimestamp(); };
+$L   = array( 'liniste' => array( 'on' => true, 'de' => '22:00', 'pana' => '08:00' ) ) + ah_spa_prefs_implicite();
+egal( ah_spa_liniste_pana( $L, $ora( '2026-11-19 21:59' ) ), 0, 'liniște: 21:59, încă nu' );
+egal( ah_spa_liniste_pana( $L, $ora( '2026-11-19 22:00' ) ), $ora( '2026-11-20 08:00' ), 'liniște: 22:00 → până mâine la 08:00' );
+egal( ah_spa_liniste_pana( $L, $ora( '2026-11-20 03:10' ) ), $ora( '2026-11-20 08:00' ), 'liniște: 03:10 → până la 08:00' );
+egal( ah_spa_liniste_pana( $L, $ora( '2026-11-20 08:00' ) ), 0, 'liniște: 08:00, s-a terminat' );
+egal( ah_spa_liniste_pana( $L, $ora( '2026-03-28 23:00' ) ), $ora( '2026-03-29 08:00' ), 'liniște în noaptea trecerii la ora de vară: capătul e 08:00 ora de vară' );
+egal( $ora( '2026-03-29 08:00' ) - $ora( '2026-03-28 23:00' ), 8 * 3600, 'ora de vară: noaptea are o oră mai puțin' );
+egal( ah_spa_liniste_pana( $L, $ora( '2026-10-25 02:30' ) ), $ora( '2026-10-25 08:00' ), 'liniște în noaptea trecerii la ora de iarnă: capătul e 08:00 ora de iarnă' );
+egal( ah_spa_liniste_pana( array( 'liniste' => array( 'on' => true, 'de' => '13:00', 'pana' => '15:30' ) ) + ah_spa_prefs_implicite(), $ora( '2026-11-19 14:00' ) ), $ora( '2026-11-19 15:30' ), 'liniște în aceeași zi (13:00–15:30)' );
+egal( ah_spa_liniste_pana( array( 'liniste' => array( 'on' => false, 'de' => '22:00', 'pana' => '08:00' ) ) + ah_spa_prefs_implicite(), $ora( '2026-11-19 23:00' ) ), 0, 'liniște oprită' );
+egal( ah_spa_liniste_pana( array( 'liniste' => array( 'on' => true, 'de' => '08:00', 'pana' => '08:00' ) ) + ah_spa_prefs_implicite(), $ora( '2026-11-19 23:00' ) ), 0, 'liniște cu început = sfârșit: nimic' );
+$noapte = $ora( '2026-11-19 23:30' );
+egal( ah_spa_push_decizie( 'meditatie', $L, $noapte ), array( 'fel' => 'amana', 'la' => $ora( '2026-11-20 08:00' ), 'liniste' => true ), 'meditație nouă noaptea: ținută până la 08:00' );
+egal( ah_spa_push_decizie( 'inreg', $L, $noapte )['fel'], 'amana', 'înregistrare gata noaptea: ținută' );
+egal( ah_spa_push_decizie( 'intalnire', $L, $noapte ), array( 'fel' => 'trimite', 'la' => 0, 'liniste' => true ), '„începe în 15 minute” noaptea: pleacă, fără sunet' );
+egal( ah_spa_push_decizie( 'meditatie', $L, $ora( '2026-11-19 12:00' ) ), array( 'fel' => 'trimite', 'la' => 0, 'liniste' => false ), 'ziua: pleacă normal' );
+$C = $L; $C['cat']['meditatii'] = false;
+egal( ah_spa_push_decizie( 'meditatie', $C, $ora( '2026-11-19 12:00' ) )['fel'], 'sari', 'categoria oprită: nimic' );
+egal( ah_spa_push_decizie( 'proba', $C, $noapte )['fel'], 'trimite', 'proba din setări: pleacă oricum' );
+egal( ah_spa_push_decizie( 'meditatie', null, $noapte )['fel'], 'trimite', 'fără Setări (aplicație veche): ca înainte' );
+// mesajul FCM: fără opțiuni exact cel de dinainte (îl folosește și „Pentru el”)
+$m0 = ah_spa_fcm_mesaj( 'tok', 'T', 'X', array( 'url' => 'u' ) );
+egal( $m0, array( 'message' => array( 'token' => 'tok', 'notification' => array( 'title' => 'T', 'body' => 'X' ), 'data' => array( 'url' => 'u' ), 'android' => array( 'priority' => 'high', 'notification' => array( 'color' => '#964E46', 'icon' => 'ic_stat_lotus' ) ), 'apns' => array( 'payload' => array( 'aps' => array( 'sound' => 'default' ) ) ) ) ), 'FCM: fără opțiuni, mesajul de dinainte (neschimbat pentru ah-sp-partener.php)' );
+egal( ah_spa_fcm_mesaj( 'tok', 'T', 'X', array( 'url' => 'u' ), array() ), $m0, 'FCM: opțiuni goale = la fel' );
+$m1 = ah_spa_fcm_mesaj( 'tok', 'Ziua 2', 'Înregistrarea te așteaptă', array( 'url' => 'u' ), ah_spa_push_optiuni( $L + array(), false, 2 ) );
+egal( array( $m1['message']['notification'], $m1['message']['android']['notification']['channel_id'] ?? '', $m1['message']['apns']['payload']['aps']['badge'] ?? null ), array( array( 'title' => 'Ziua 2', 'body' => 'Înregistrarea te așteaptă' ), '', null ), 'FCM: Setări fără sunet ales (sunet gol) — canal neatins, fără insignă' );
+$P2 = array( 'sunet' => 'clopotel', 'ecran' => 'ascuns', 'insigna' => true ) + ah_spa_prefs_implicite();
+$m2 = ah_spa_fcm_mesaj( 'tok', 'O meditație nouă', 'Respirația inimii', array( 'url' => 'u' ), ah_spa_push_optiuni( $P2, false, 2 ) );
+egal( $m2['message']['notification'], array( 'title' => 'Adela Haru', 'body' => 'Ai un mesaj nou.' ), 'FCM: ecranul blocat „Doar Adela Haru” — textul adevărat nu pleacă' );
+egal( array( $m2['message']['android']['notification']['channel_id'], $m2['message']['android']['notification']['sound'], $m2['message']['apns']['payload']['aps']['sound'] ), array( 'ah_clopotel', 'clopotel', 'clopotel.caf' ), 'FCM: clopoțelul (canal, Android 7, iOS)' );
+egal( array( $m2['message']['apns']['payload']['aps']['badge'], $m2['message']['android']['notification']['notification_count'] ), array( 3, 3 ), 'FCM: insigna = necitite + 1' );
+$m3 = ah_spa_fcm_mesaj( 'tok', 'Ne vedem în 15 minute', 'x', array(), ah_spa_push_optiuni( array( 'sunet' => 'implicit' ) + ah_spa_prefs_implicite(), true, 0 ) );
+egal( array( $m3['message']['android']['notification']['channel_id'], isset( ( (array) $m3['message']['apns']['payload']['aps'] )['sound'] ), wp_json_encode( $m3['message']['apns']['payload']['aps'] ) ), array( 'ah_liniste', false, '{}' ), 'FCM: în orele de liniște — canalul ah_liniste, fără sunet pe iPhone (aps = {})' );
+$m4 = ah_spa_fcm_mesaj( 'tok', 'T', 'X', array(), ah_spa_push_optiuni( array( 'sunet' => 'implicit' ) + ah_spa_prefs_implicite(), false, 0 ) );
+egal( array( $m4['message']['android']['notification']['channel_id'], $m4['message']['android']['notification']['sound'], $m4['message']['apns']['payload']['aps']['sound'] ), array( 'ah_implicit', 'default', 'default' ), 'FCM: sunetul telefonului' );
+
+/* ---------- 27. lotul cu Setările: categoria, liniștea (ținute, apoi trimise), textul ascuns, insigna ---------- */
+update_option( 'ah_spa_fcm', wp_json_encode( array( 'project_id' => 'adela', 'client_email' => 'push@adela.iam.gserviceaccount.com', 'private_key' => $pem ) ) );
+set_transient( 'ah_spa_fcm_at_' . md5( 'push@adela.iam.gserviceaccount.com' ), 'at-proba', 3000 );
+$wpdb->query( 'DELETE FROM wp_ah_spa_push' );
+$wpdb->query( 'DELETE FROM wp_ah_spa_stat' );
+$acumL = time();
+$tzL   = new DateTimeZone( 'Europe/Bucharest' );
+$hL    = (int) ( new DateTimeImmutable( '@' . $acumL ) )->setTimezone( $tzL )->format( 'G' );
+// liniștea „acum”: o fereastră care cuprinde ora de acum (și una care n-o cuprinde)
+$deL   = sprintf( '%02d:00', $hL ); $panaL = sprintf( '%02d:00', ( $hL + 2 ) % 24 );
+$altL  = sprintf( '%02d:00', ( $hL + 3 ) % 24 ); $alt2 = sprintf( '%02d:00', ( $hL + 5 ) % 24 );
+$rand = function ( $e, $tok, $pr, $pl = 'android' ) use ( $wpdb ) { $wpdb->insert( 'wp_ah_spa_push', array( 'email' => $e, 'token' => $tok, 'token_h' => hash( 'sha256', $tok ), 'platforma' => $pl, 'versiune' => '2.4.0', 'prefs' => null === $pr ? null : wp_json_encode( $pr ), 'necitite' => 0, 'creat' => 'x', 'vazut' => 'x' ) ); };
+$rand( 'v1@exemplu.ro', 'tokVechi', null );                                                                                             // aplicație veche: ca înainte
+$rand( 'v2@exemplu.ro', 'tokFaraMed', array( 'cat' => array( 'meditatii' => false ) ) + ah_spa_prefs_implicite() );                    // a oprit meditațiile
+$rand( 'v3@exemplu.ro', 'tokLiniste', array( 'liniste' => array( 'on' => true, 'de' => $deL, 'pana' => $panaL ), 'sunet' => 'clopotel' ) + ah_spa_prefs_implicite() ); // e în liniște acum
+$rand( 'v4@exemplu.ro', 'tokAscuns', array( 'ecran' => 'ascuns', 'insigna' => true, 'sunet' => 'fara', 'liniste' => array( 'on' => true, 'de' => $altL, 'pana' => $alt2 ) ) + ah_spa_prefs_implicite(), 'ios' );
+$GLOBALS['ah_test_http'] = array(); $GLOBALS['ah_test_http_raspuns'] = null;
+delete_option( 'ah_spa_lucrari' ); delete_transient( 'ah_spa_lot_lacat' );
+ah_spa_lucrare_noua( 'meditatie', array( 'id' => 501 ), 'O meditație nouă în Inner Temple', 'Respirația inimii', $sp . '#meditatii' );
+ah_spa_lot();
+$trimise = function () { $o = array(); foreach ( $GLOBALS['ah_test_http'] as $x ) { if ( false !== strpos( $x[0], 'fcm.googleapis.com' ) ) { $m = json_decode( $x[1]['body'], true )['message']; $o[ $m['token'] ] = $m; } } return $o; };
+$T = $trimise();
+egal( array_keys( $T ), array( 'tokVechi', 'tokAscuns' ), 'lot: categoria oprită = nimic; în liniște = ținută; restul pleacă' );
+egal( $T['tokVechi']['notification'], array( 'title' => 'O meditație nouă în Inner Temple', 'body' => 'Respirația inimii' ), 'lot: aplicația veche primește ca înainte' );
+verifica( ! isset( $T['tokVechi']['android']['notification']['channel_id'] ) && 'default' === $T['tokVechi']['apns']['payload']['aps']['sound'], 'lot: aplicația veche — fără canal, sunetul de dinainte' );
+egal( array( $T['tokAscuns']['notification']['title'], $T['tokAscuns']['notification']['body'], $T['tokAscuns']['apns']['payload']['aps']['badge'] ?? null, isset( $T['tokAscuns']['apns']['payload']['aps']['sound'] ) ), array( 'Adela Haru', 'Ai un mesaj nou.', 1, false ), 'lot: textul ascuns, insigna 1, fără sunet (ales „Fără sunet”)' );
+egal( (int) $wpdb->get_var( "SELECT necitite FROM wp_ah_spa_push WHERE token = 'tokAscuns'" ), 1, 'lot: necitite crește după o trimitere reușită' );
+$am = $wpdb->get_results( 'SELECT token_h, trimite, titlu FROM wp_ah_spa_amanate', ARRAY_A );
+egal( array( count( $am ), $am[0]['token_h'] ?? '', $am[0]['titlu'] ?? '' ), array( 1, hash( 'sha256', 'tokLiniste' ), 'O meditație nouă în Inner Temple' ), 'lot: ținută pentru telefonul în liniște (fără adresă: amprenta tokenului)' );
+verifica( (int) $am[0]['trimite'] > $acumL && (int) $am[0]['trimite'] <= $acumL + 2 * 3600, 'lot: ținută până la capătul liniștii' );
+egal( (int) $wpdb->get_var( "SELECT SUM(n) FROM wp_ah_spa_stat WHERE ev = 'notificare_trimisa' AND obiect = 'meditatii'" ), 2, 'statistici: notificările trimise, pe categorie' );
+// o a doua lucrare identică (republicată) nu se ține de două ori
+ah_spa_amana( array( 'token_h' => hash( 'sha256', 'tokLiniste' ) ), array( 'tip' => 'meditatie', 'titlu' => 'O meditație nouă în Inner Temple', 'text' => 'Respirația inimii', 'url' => '' ), $acumL + 60 );
+egal( (int) $wpdb->get_var( 'SELECT COUNT(*) FROM wp_ah_spa_amanate' ), 1, 'ținute: același text pe același telefon o singură dată' );
+// înainte de capăt: nimic; după: pleacă, cu clopoțelul (liniștea s-a terminat), apoi dispare din listă
+$GLOBALS['ah_test_http'] = array();
+egal( ah_spa_amanate_trimite( $acumL ), 0, 'ținute: înainte de capătul liniștii, nimic' );
+egal( ah_spa_amanate_trimite( $acumL + 2 * 3600 + 60 ), 1, 'ținute: după capăt, pleacă' );
+$T = $trimise();
+egal( array( array_keys( $T ), $T['tokLiniste']['android']['notification']['channel_id'] ?? '' ), array( array( 'tokLiniste' ), 'ah_clopotel' ), 'ținute: trimise cu sunetul ales' );
+egal( (int) $wpdb->get_var( 'SELECT COUNT(*) FROM wp_ah_spa_amanate' ), 0, 'ținute: scoase după trimitere' );
+// categoria oprită între timp: nu mai pleacă; tokenul scos: pleacă din listă
+ah_spa_amana( array( 'token_h' => hash( 'sha256', 'tokFaraMed' ) ), array( 'tip' => 'meditatie', 'titlu' => 'x', 'text' => 'y', 'url' => '' ), $acumL );
+ah_spa_amana( array( 'token_h' => hash( 'sha256', 'tokNuMaiE' ) ), array( 'tip' => 'inreg', 'titlu' => 'x', 'text' => 'y', 'url' => '' ), $acumL );
+$GLOBALS['ah_test_http'] = array();
+egal( array( ah_spa_amanate_trimite( $acumL + 10 ), count( $trimise() ), (int) $wpdb->get_var( 'SELECT COUNT(*) FROM wp_ah_spa_amanate' ) ), array( 0, 0, 0 ), 'ținute: categoria oprită între timp / telefon scos — nimic, lista goală' );
+// întâlnirea în liniște: pleacă pe loc, fără sunet
+$GLOBALS['ah_test_http'] = array();
+function ah_respira_inreg_destinatare_2() {}
+delete_option( 'ah_spa_lucrari' ); delete_transient( 'ah_spa_lot_lacat' );
+ah_spa_lucrare_noua( 'proba', array( 'email' => 'v3@exemplu.ro' ), 'Probă', 'x', $sp );
+ah_spa_lot();
+$T = $trimise();
+egal( array( array_keys( $T ), $T['tokLiniste']['android']['notification']['channel_id'] ?? '' ), array( array( 'tokLiniste' ), 'ah_clopotel' ), 'proba: pleacă și în liniște, cu sunetul ales' );
+egal( ah_spa_push_optiuni( json_encode( array( 'liniste' => array( 'on' => true, 'de' => $deL, 'pana' => $panaL ) ) + ah_spa_prefs_implicite() ), true, 0 )['canal'], 'ah_liniste', 'întâlnirea în liniște: canalul ah_liniste' );
+// push/sterge și ștergerea contului scot și ce era ținut
+ah_spa_amana( array( 'token_h' => hash( 'sha256', 'tokLiniste' ) ), array( 'tip' => 'meditatie', 'titlu' => 'a', 'text' => 'b', 'url' => '' ), $acumL + 99 );
+ah_spa_sterge_cont( 'v3@exemplu.ro' );
+egal( (int) $wpdb->get_var( 'SELECT COUNT(*) FROM wp_ah_spa_amanate' ), 0, 'ștergerea contului: și notificările ținute' );
+delete_option( 'ah_spa_fcm' );
+
+/* ---------- 28. statisticile: POST /stat, renunțarea, limita, contoarele, unicele, curățenia ---------- */
+$wpdb->query( 'DELETE FROM wp_ah_spa_stat' ); $wpdb->query( 'DELETE FROM wp_ah_spa_unice' ); delete_option( 'ah_spa_stat_secrete' );
+$GLOBALS['ah_test_transients'] = array();
+$GLOBALS['ah_test_email'] = '';
+egal( $cere( 'ah_spa_r_stat', array( 'ev' => 'deschidere', 'platforma' => 'ios', 'versiune' => '2.4.0' ) )->get_status(), 403, 'stat: fără cont, 403 (limita e pe cont)' );
+$GLOBALS['ah_test_email'] = 'Ana@Exemplu.ro';
+egal( $cere( 'ah_spa_r_stat', array( 'ev' => 'deschidere' ), false )->get_status(), 403, 'stat: fără antet, 403' );
+egal( $cere( 'ah_spa_r_stat', array( 'ev' => 'ceva' ) )->get_status(), 400, 'stat: eveniment necunoscut, 400' );
+egal( $cere( 'ah_spa_r_stat', array( 'ev' => 'el_deschidere' ) )->get_status(), 400, 'stat: el_deschidere doar de pe server' );
+egal( $cere( 'ah_spa_r_stat', array( 'ev' => 'meditatie_pornita', 'obiect' => 'ana@exemplu.ro' ) )->get_status(), 400, 'stat: obiectul doar un id (nu text liber)' );
+egal( $cere( 'ah_spa_r_stat', array( 'ev' => 'sectiune', 'obiect' => 'comenzi' ) )->get_status(), 400, 'stat: secțiune necunoscută, 400' );
+foreach ( array( array( 'deschidere', '', 'ios' ), array( 'deschidere', '', 'ios' ), array( 'deschidere', '', 'android' ), array( 'meditatie_pornita', '501', 'ios' ), array( 'meditatie_pornita', '501', 'ios' ), array( 'meditatie_terminata', '501', 'ios' ), array( 'notificare_deschisa', 'meditatii', 'ios' ), array( 'sectiune', 'ciclu', 'ios' ), array( 'ciclu_deschis', '', 'ios' ), array( 'descarcare', '501', 'android' ), array( 'video_pornit', 'sala', 'ios' ) ) as $x ) {
+	$cere( 'ah_spa_r_stat', array( 'ev' => $x[0], 'obiect' => $x[1], 'platforma' => $x[2], 'versiune' => '2.4.0' ) );
+}
+egal( (int) $wpdb->get_var( "SELECT n FROM wp_ah_spa_stat WHERE ev = 'deschidere' AND platforma = 'ios' AND versiune = '2.4.0'" ), 2, 'stat: contorul zilei (deschideri iPhone)' );
+egal( (int) $wpdb->get_var( "SELECT n FROM wp_ah_spa_stat WHERE ev = 'meditatie_pornita' AND obiect = '501'" ), 2, 'stat: meditația pornită, pe id' );
+egal( $wpdb->get_col( 'SELECT zi FROM wp_ah_spa_unice' ), array( wp_date( 'Y-m-d' ) ), 'stat: o singură amprentă pe zi pentru ea' );
+$tot = wp_json_encode( array( $wpdb->get_results( 'SELECT * FROM wp_ah_spa_stat', ARRAY_A ), $wpdb->get_results( 'SELECT * FROM wp_ah_spa_unice', ARRAY_A ), get_option( 'ah_spa_jurnal' ) ) );
+verifica( false === stripos( $tot, 'ana@' ) && false === strpos( $tot, md5( 'ana@exemplu.ro' ) ) && false === strpos( $tot, '127.0.0' ), 'stat: nicio adresă, amprentă md5 sau IP în tabele' );
+verifica( ! preg_match( '/' . preg_quote( ah_spa_cine( 'ana@exemplu.ro' ), '/' ) . '/', $tot ), 'stat: amprenta nu e cea a punții (nu se pot lega)' );
+$GLOBALS['ah_test_email'] = 'ioana@exemplu.ro';
+$cere( 'ah_spa_r_stat', array( 'ev' => 'deschidere', 'platforma' => 'android', 'versiune' => '2.3.0' ) );
+egal( array( ah_spa_stat_activi( 1 ), ah_spa_stat_activi( 30 ) ), array( 2, 2 ), 'stat: două utilizatoare active azi' );
+// renunțarea: puntea nu trimite nimic (verificat în harnaș); serverul nu ține nimic despre ea
+// limita pe cont
+$GLOBALS['ah_test_transients'] = array();
+$n = 0;
+for ( $i = 0; $i <= AH_SPA_STAT_ORA; $i++ ) { $n = $cere( 'ah_spa_r_stat', array( 'ev' => 'sectiune', 'obiect' => 'acasa' ) )->get_status(); }
+egal( $n, 429, 'stat: cel mult ' . AH_SPA_STAT_ORA . ' pe oră, pe cont' );
+egal( (int) $wpdb->get_var( "SELECT SUM(n) FROM wp_ah_spa_stat WHERE ev = 'sectiune' AND obiect = 'acasa'" ), AH_SPA_STAT_ORA, 'stat: peste limită nu se numără' );
+$GLOBALS['ah_test_transients'] = array();
+// funcția publică și cârligul (pagina „Pentru el” fără să-i schimbăm fragmentul)
+verifica( ah_spa_stat_inc( 'el_deschidere', 'android', '2.4.0' ) && in_array( array( 'ah_spa_stat_inc', 10, 4 ), $GLOBALS['ah_test_hooks']['ah_spa_stat'] ?? array(), true ), 'stat: ah_spa_stat_inc + do_action( ah_spa_stat ) pentru „Pentru el”' );
+verifica( ! ah_spa_stat_inc( 'el_deschidere', 'android', '2.4.0', 'x@y' ) && ! ah_spa_stat_inc( 'nimic' ), 'stat: ah_spa_stat_inc refuză obiecte și evenimente necunoscute' );
+// unicele peste schimbarea lunii: amprenta veche devine cea nouă (fără dublură în „30 de zile”)
+$wpdb->query( 'DELETE FROM wp_ah_spa_unice' ); delete_option( 'ah_spa_stat_secrete' );
+$t1 = $ora( '2026-10-28 12:00' ); $t2 = $ora( '2026-11-03 12:00' );
+ah_spa_stat_activa( 'maria@exemplu.ro', $t1 ); ah_spa_stat_activa( 'elena@exemplu.ro', $t1 );
+ah_spa_stat_activa( 'maria@exemplu.ro', $t2 );
+egal( array( ah_spa_stat_activi( 30, $t2 ), ah_spa_stat_activi( 7, $t2 ), ah_spa_stat_activi( 1, $t2 ) ), array( 2, 2, 1 ), 'unice: peste schimbarea lunii, aceeași persoană numărată o dată' );
+egal( array_keys( get_option( 'ah_spa_stat_secrete' ) ), array( '2026-10', '2026-11' ), 'unice: un secret pe lună' );
+// curățenia: după 35 de zile amprentele și secretul vechi pleacă; contoarele după 13 luni
+$wpdb->insert( 'wp_ah_spa_stat', array( 'zi' => '2025-10-01', 'ev' => 'deschidere', 'platforma' => 'ios', 'versiune' => '1.0.0', 'obiect' => '', 'n' => 5 ) );
+$wpdb->insert( 'wp_ah_spa_stat', array( 'zi' => '2026-01-10', 'ev' => 'deschidere', 'platforma' => 'ios', 'versiune' => '1.0.0', 'obiect' => '', 'n' => 5 ) );
+ah_spa_stat_curata( $ora( '2026-12-10 12:00' ), true );
+egal( array( (int) $wpdb->get_var( 'SELECT COUNT(*) FROM wp_ah_spa_unice' ), array_keys( (array) get_option( 'ah_spa_stat_secrete' ) ) ), array( 0, array() ), 'curățenia: amprentele > 35 de zile șterse, secretele fără rânduri (octombrie, noiembrie) șterse' );
+egal( $wpdb->get_col( "SELECT zi FROM wp_ah_spa_stat WHERE zi < '2026-06-01' ORDER BY zi" ), array( '2026-01-10' ), 'curățenia: contoarele mai vechi de 13 luni șterse' );
+ah_spa_stat_activa( 'maria@exemplu.ro', $t2 + 3 * DAY_IN_SECONDS );
+ah_spa_stat_curata( $t2 + 4 * DAY_IN_SECONDS, true );
+egal( (int) $wpdb->get_var( 'SELECT COUNT(*) FROM wp_ah_spa_unice' ), 1, 'curățenia: amprentele recente rămân' );
+update_option( 'ah_spa_stat_curatat', wp_date( 'Y-m-d' ) );
+$wpdb->insert( 'wp_ah_spa_stat', array( 'zi' => '2020-01-01', 'ev' => 'deschidere', 'platforma' => 'ios', 'versiune' => '1.0.0', 'obiect' => '', 'n' => 1 ) );
+ah_spa_stat_curata();
+egal( (int) $wpdb->get_var( "SELECT COUNT(*) FROM wp_ah_spa_stat WHERE zi = '2020-01-01'" ), 1, 'curățenia: o dată pe zi (a doua rulare a zilei nu mai face nimic)' );
+$wpdb->query( "DELETE FROM wp_ah_spa_stat WHERE zi = '2020-01-01'" );
+verifica( false !== strpos( ah_spa_js(), "if(!v.stat)return;" ) && false !== strpos( ah_spa_js(), "S.api+'stat'" ), 'puntea: statisticile pleacă doar cu „Statistici anonime” pornit' );
+egal( ah_spa_ruta_privata( '/ah-spa/v1/stat' ) && ah_spa_ruta_privata( '/ah-spa/v1/preferinte' ) && ah_spa_ruta_privata( '/ah-spa/v1/insigna' ), true, 'rutele noi: fără cache' );
+
+/* ---------- 29. Setări › Aplicația mobilă › Statistici (pagina, graficul, CSV) ---------- */
+$GLOBALS['ah_test_posts'][501] = array( 'post_type' => 'ah_meditatie', 'post_status' => 'publish', 'post_title' => 'Respirația inimii' );
+$GLOBALS['ah_test_admin'] = true;
+$_GET['tab'] = 'statistici';
+ob_start(); ah_spa_pagina_setari(); $pag = ob_get_clean();
+unset( $_GET['tab'] );
+foreach ( array( 'Utilizatoare active', 'Deschideri pe zi', '<svg class="ahspa-grafic"', 'role="img"', '<title id="ahspa-gt">', 'Tabelul deschiderilor', 'iPhone și Android', 'Versiunile folosite', 'Android 2.3.0', 'Telefoane cu notificări', 'Deschise, pe categorie', 'Meditațiile pornite cel mai des', '1. Respirația inimii', 'Meditațiile ascultate până la capăt', 'Meditații descărcate', 'Ciclul meu deschis', 'Pagina „Pentru el” deschisă', 'Videouri pornite', 'action=ah_spa_stat_csv', 'nav-tab-active" aria-current="page">Statistici' ) as $x ) {
+	verifica( false !== strpos( $pag, $x ), 'pagina Statistici conține ' . $x );
+}
+verifica( false === stripos( $pag, '@exemplu.ro' ), 'pagina Statistici: fără adrese' );
+$R = ah_spa_stat_raport();
+egal( array( count( $R['deschideri'] ), $R['deschideri'][ wp_date( 'Y-m-d' ) ], $R['platforme']['ios'] ?? 0, $R['pornite'][0]['n'] ?? 0, $R['terminate'][0]['titlu'] ?? '', $R['descarcari'], $R['el'] >= 1 ), array( 30, 4, 2, 2, 'Respirația inimii', 1, true ), 'raportul: 30 de zile, deschiderile de azi (3 ale ei, 1 a Ioanei), iPhone, top meditații, descărcări, „Pentru el”' );
+egal( $R['notificari']['rata']['meditatii']['deschise'], 1, 'raportul: notificările deschise pe categorie' );
+$csv = ah_spa_stat_csv();
+verifica( 0 === strpos( $csv, "zi,eveniment,platforma,versiune,obiect,n\n" ) && false !== strpos( $csv, ',deschidere,ios,2.4.0,,2' ) && false === strpos( $csv, '@' ), 'CSV: antetul și contoarele, fără adrese' );
+ob_start(); ah_spa_pagina_setari(); $pag2 = ob_get_clean();
+verifica( false !== strpos( $pag2, 'nav-tab-active" aria-current="page">Setări' ) && false !== strpos( $pag2, 'name="action" value="ah_spa_setari"' ), 'fila Setări rămâne cum era' );
+$GLOBALS['ah_test_admin'] = false;
+$sv = ah_spa_stat_svg( array( '2026-11-18' => 0, '2026-11-19' => 4 ) );
+verifica( 1 === substr_count( $sv, '<path' ) && 2 === substr_count( $sv, '<title>' ) && false !== strpos( $sv, '19.11: 4' ), 'graficul: o bară pe zi cu valoare, fiecare zi cu titlu (hover)' );
+
+/* ---------- 30. Vimeo: allow și allowfullscreen; puntea 2.4.0 ---------- */
+egal( ah_spa_vimeo_permisiuni( '<iframe src="https://player.vimeo.com/video/1?dnt=1" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen>' ), '<iframe src="https://player.vimeo.com/video/1?dnt=1" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen>', 'Vimeo: un iframe complet rămâne neschimbat' );
+egal( ah_spa_vimeo_permisiuni( "<iframe src='https://player.vimeo.com/video/1' allow='encrypted-media'>" ), "<iframe allowfullscreen src='https://player.vimeo.com/video/1' allow=\"encrypted-media; autoplay; fullscreen; picture-in-picture\">", 'Vimeo: allow completat (ce era rămâne)' );
+$js = ah_spa_js();
+foreach ( array( "cheama('AhApp','widget'", "cheama('AhApp','biometrie')", "cheama('AhApp','autentifica',{motiv:'Deschide Ciclul meu'})", "cheama('AhApp','insigna',{n:0})", "cheama('AhApp','tema',{seara:on})", "cheama('Network','getStatus')", "connectionType!=='cellular'", "'ah_clopotel'", "'ah_ciclu_clopotel'", "'clopotel.caf'", "'clopotel.wav'", "'ah_fara_sunet'", "api('preferinte'", "api('insigna'", 'schedule:{on:{hour:', 'Mementoul zilnic de meditație', 'Ore de liniște', 'Pe ecranul blocat', 'Insignă pe iconiță', 'După apus și răsărit', 'Ecranul principal', 'Descarcă doar pe Wi-Fi', 'Spațiu folosit', 'Temporizator de somn', 'Statistici anonime', 'Scrie-ne', 'Evaluează aplicația', "'picture-in-picture'", "localStorage.setItem('ahspx_seara'" ) as $x ) {
+	verifica( false !== strpos( $js, $x ), 'puntea 2.4.0 conține ' . $x );
+}
+egal( ah_spa_cfg( 'sp', 'ana@exemplu.ro' )['notif_zi'], 41100, 'configurația: id-ul mementoului zilnic' );
+verifica( false !== strpos( ah_spa_js_devreme(), 'window.AHSPA_SOARE=' ) && false !== strpos( ah_spa_js_devreme(), "getItem('ahspa_aspect')" ) && false !== strpos( ah_spa_js_devreme(), "getItem('ahspa_bio')==='1'" ), 'partea devreme: aspectul (soarele) și lacătul înaintea primei desenări' );
 
 echo "\n" . $GLOBALS['ok'] . ' teste trecute, ' . $GLOBALS['rau'] . " picate.\n";
 exit( $GLOBALS['rau'] ? 1 : 0 );

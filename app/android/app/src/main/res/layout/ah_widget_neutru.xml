@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- starea neutră (mod „nimic”, date vechi, previzualizarea din lista de widgeturi): doar lotusul și „Adela Haru” -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/ah_w_radacina"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/ah_widget_fundal"
+    android:clipToOutline="true"
+    android:gravity="center"
+    android:orientation="vertical"
+    android:padding="14dp">
+
+    <ImageView
+        android:id="@+id/ah_w_semn"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:importantForAccessibility="no"
+        android:src="@drawable/ah_widget_lotus" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:fontFamily="serif"
+        android:text="@string/ah_widget_semnatura"
+        android:textColor="@color/ah_text"
+        android:textSize="16sp" />
+</LinearLayout>

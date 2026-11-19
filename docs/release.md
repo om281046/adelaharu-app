@@ -24,6 +24,16 @@ se lansează la fel, separat, **după** modulul aplicație (pasul 10, aceeași r
 Ce adaugă echipa pe site (meditații, cursuri, înregistrări) apare singur în aplicație, **fără versiune nouă**.
 O versiune nouă a aplicației e nevoie doar când se schimbă partea de telefon.
 
+**Fragmentul 2.4.0 și aplicația** (19 nov.): Setările aplicației în „Mai mult” (notificări pe categorii, sunet,
+ore de liniște, ecranul blocat, insignă, mementoul zilnic, aspectul după apus și răsărit, widgetul, Wi-Fi, temporizatorul
+de somn, Ciclul meu cu Face ID, Despre) și statisticile proprii (Setări › Aplicația mobilă › Statistici). Fragmentul
+merge și cu aplicațiile de dinainte: ce cere partea nativă nouă (widgetul, Face ID, clopoțelul, insigna, bara de stare)
+apare doar pe build-ul nou; restul (categoriile, liniștea, ecranul blocat, aspectul, statisticile) merge și pe cel vechi.
+Paginile de pe site: paragrafele noi din Politica de confidențialitate („Setările aplicației”, „Statistici anonime”,
+`docs/store/privacy-policy-addendum.md`) se publică **înainte** de activarea 2.4.0; în App Store Connect, la App Privacy,
+Product Interaction primește scopul **Analytics** (`docs/store/privacy-answers.md`), la Google Data safety scopul
+„Analiză”.
+
 **Fragmentul 2.3.0 și aplicația** (review 18 nov., runda 2): fragmentul merge și cu aplicațiile construite înainte
 (`DELETE /push` rămâne). Partea nativă nouă (iPhone: un 5xx al site-ului deschide pagina offline cu „Site-ul e în lucru”;
 Android: motivul erorii pentru pagina offline, refacerea ecranului când procesul WebView e oprit, `minWebViewVersion` 90;
@@ -237,7 +247,7 @@ push pe iPhone” (`push_ios`) și scoateți push-ul din notele Apple și din fi
 `store/listing.md`). Cu `push_ios` bifat, verificarea din workflow cere `aps-environment` = `production`, pachetul
 `firebase-ios-sdk`, faza care copiază plist-ul și **fișierul** plist (valid): fără secret, încărcarea în TestFlight
 cade (fără încărcare, doar avertisment). La fel pe Android, cu `push_android` și `GOOGLE_SERVICES_JSON`.
-Proba: un telefon real cu build din TestFlight, Mai mult › Aplicația › Notificări, apoi „Probă” din Setări › Aplicația
+Proba: un telefon real cu build din TestFlight, Mai mult › Notificări, apoi „Probă” din Setări › Aplicația
 mobilă (tokenul trimis e FCM, de forma `…:APA91b…`; un token de 64 de cifre hexa ar însemna că Firebase nu a pornit).
 
 ### Contul de serviciu pentru Google Play (încărcarea automată a versiunilor)
@@ -296,6 +306,11 @@ Pagina de setări apare doar când fragmentul e activ, deci le completați imedi
 | Probă | adresa voastră | trimite o notificare de probă telefoanelor acelei adrese (trebuie să fi intrat în aplicație și să fi permis notificările) |
 | Contul de recenzie (în fragment din 18 nov., seara: `ah-sp-aplicatie.php` 2.1.0, secțiunea 9, cu teste; de verificat pe build-ul din TestFlight / testul intern) | adresa și codul fix (`docs/review-account.md`) | ca Apple și Google să poată intra fără email. Din 2.2.0: după 20 de coduri greșite se **oprește singur** și vine un email la Emailul echipei; îl porniți din nou de aici (bifa „Pornește din nou contul de recenzie” sau un cod nou) |
 
+**Fila „Statistici”** (2.4.0, sus pe aceeași pagină): utilizatoare active (azi, 7, 30 de zile), deschideri pe zi
+(grafic + tabel), iPhone / Android, versiunile folosite, telefoanele cu notificări și ce au ales, notificările
+deschise pe categorie, meditațiile pornite și ascultate până la capăt, descărcările, Ciclul meu, pagina „Pentru el”,
+videourile; butonul „Descarcă tot (CSV)”. Doar numere, fără adrese. Contoarele se șterg singure după 13 luni.
+
 Sub formular sunt linkurile de verificat (`apple-app-site-association`, `assetlinks.json`, `/app/intra`, `config`):
 fiecare trebuie să se deschidă fără eroare. Tot acolo e jurnalul (ultimele rânduri).
 
@@ -352,7 +367,7 @@ scrie pe site altceva decât ar scrie o clientă (intrare, ciclu, notificări).
 3. Inner Temple: „Descarcă” la o meditație; mod avion; redeschideți aplicația: apare pagina „Nu avem internet acum”
    cu faza de azi și meditația descărcată; o ascultați; blocați ecranul: titlul, poza și butoanele apar pe ecranul
    blocat, sunetul continuă. „Șterge descărcarea” o scoate.
-4. Ciclul: în „Mai mult” › „Aplicația” porniți „Mementourile ciclului” și permiteți notificările; puneți prima zi
+4. Ciclul: în „Mai mult” › „Notificări” porniți „Mementourile ciclului” și permiteți notificările; puneți prima zi
    în Ciclul meu (programatorul poate muta data ca să vedeți o notificare a doua zi). Apoi: Web Inspector /
    `chrome://inspect` › ștergeți `localStorage` (cum face iOS după zile fără folosire) › redeschideți: ciclul
    trebuie să fie tot acolo, refăcut din copia de pe telefon, iar mementourile programate (**18 nov.: încă nu**, vezi
@@ -364,7 +379,7 @@ scrie pe site altceva decât ar scrie o clientă (intrare, ciclu, notificări).
 6. Un video Vimeo dintr-o lecție și din explicațiile meditațiilor pornește în aplicație.
 7. Linkul personal din emailul Spațiului meu (`?cont=…`), atins pe telefon, deschide **aplicația**, deja în cont.
 8. Zoom, WhatsApp, Spotify / Apple Podcasts se deschid în aplicațiile lor; întoarcerea vă aduce în aplicație.
-9. „Mai mult” › „Aplicația” › „Șterge contul” pe contul de recenzie. Intrați din nou cu codul fix: conținutul
+9. „Mai mult” › „Confidențialitate” › „Șterge contul” pe contul de recenzie. Intrați din nou cu codul fix: conținutul
    cumpărat (cursul, Inner Temple, cartea) apare din nou, pentru că vine din comenzi, dar ciclul, notițele,
    telefoanele și notificările nu mai sunt. Exact asta spun notele pentru Apple (recenzorii fac și ei proba asta).
    Dacă „Pentru el” e activ: invitați o adresă de probă, deschideți linkul ei pe alt telefon (se deschide aplicația,
@@ -427,6 +442,35 @@ scrie pe site altceva decât ar scrie o clientă (intrare, ciclu, notificări).
     ce ea alege din comutator, alegerea ei rămâne.
 29. **Android cu WebView vechi** (sub 90, de ex. un emulator API 28 fără actualizări): aplicația deschide pagina
     „Telefonul are nevoie de o actualizare” (Capacitor nu încarcă site-ul sub `android.minWebViewVersion`).
+
+**De verificat pe telefon, în plus, de la 2.4.0** (fragmentul 2.4.0 + build-ul cu partea nativă nouă; harnașul le
+probează pe imitații):
+30. **Sunetul**: o notificare de probă (Setări › Aplicația mobilă › Probă) cu fiecare alegere din Mai mult › Notificări ›
+    Sunet: Clopoțel (sunetul nostru, iPhone și Android), Sunetul telefonului, Fără sunet (fără sunet și fără vibrație; pe
+    Android canalul `ah_liniste` are un fișier de sunet inexistent, singurul fel prin care Capacitor face un canal mut:
+    **dacă totuși sună, spuneți-ne**). Pe iPhone, mementoul ciclului cu „Fără sunet” nu sună. Pe Android, în Setările
+    telefonului › Aplicații › Adela Haru › Notificări apar canalele „Notificări”, „…cu clopoțel”, „…fără sunet” și cele ale ciclului.
+31. **Ore de liniște** (ex. de acum până peste 30 de minute): o meditație nouă publicată în timpul ei sosește după capăt
+    (cronul la 5 minute); o întâlnire care începe în 15 minute sosește la timp, fără sunet.
+32. **Pe ecranul blocat: „Doar Adela Haru”**: push-ul și mementourile arată „Adela Haru / Ai un mesaj nou.”; atingerea
+    deschide totuși secțiunea potrivită.
+33. **Insigna**: cu ea pornită, două notificări ⇒ 2 pe iconiță (iPhone; pe Android, după lansator); la deschiderea
+    aplicației, 0.
+34. **Mementoul zilnic de meditație**: la ora aleasă, o notificare; după schimbarea orei, doar una (cea nouă).
+35. **Aspect › După apus și răsărit**: seara (după apus, București) Spațiul meu trece singur în culorile de seară, în
+    cel mult un minut, și bara de stare se schimbă; „Ca telefonul” urmează tema telefonului.
+36. **Widgetul**: din galeria de widgeturi; arată meditația zilei (titlu, copertă), apoi „Faza ciclului de azi” după
+    alegere; atingerea deschide aplicația în secțiunea potrivită; după ieșirea din cont, widgetul e gol.
+37. **Ciclul meu cu Face ID / amprenta**: pornit, la redeschiderea aplicației direct pe Ciclul meu nu se vede nimic din
+    ciclu înainte de deblocare (nici o clipă); „Anulează” la Face ID lasă ecranul închis cu „Deblochează”; după mai mult
+    de un minut în fundal se închide din nou; cu Face ID refuzat de sistem, codul telefonului merge.
+38. **Temporizatorul de somn**: 10 minute cu ecranul blocat ⇒ meditația se oprește. Pe iPhone volumul unei pagini nu
+    se poate micșora din JavaScript, deci acolo sunetul se oprește fără stingere; pe Android se stinge în ultimele 10 s.
+39. **Descarcă doar pe Wi-Fi**: pe date mobile, „Descarcă” întreabă întâi; pe Wi-Fi, nu.
+40. **Statistici**: după câteva deschideri, Setări › Aplicația mobilă › Statistici arată numerele; cu „Statistici
+    anonime” oprit, în Web Inspector nu mai pleacă nicio cerere `/ah-spa/v1/stat`.
+41. **Vimeo**: în sala de curs, butonul de ecran întreg al playerului merge (allow="fullscreen" pus de punte), cu rotirea.
+
 
 ## 10. Lansarea, în ordine
 
