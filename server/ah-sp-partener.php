@@ -1770,6 +1770,10 @@ function ah_spp_template_redirect() {
 	header( 'X-Robots-Tag: noindex, nofollow', true );
 	header( 'Content-Type: text/html; charset=utf-8' );
 	header( 'Referrer-Policy: no-referrer' );
+	// statistici (modulul aplicație, dacă e activ): doar un număr pe zi și platformă, fără nimic despre el sau despre ea
+	if ( function_exists( 'ah_spa_stat_inc' ) && function_exists( 'ah_spp_din_cookie' ) && ah_spp_din_cookie() ) {
+		ah_spa_stat_inc( 'el_deschidere', function_exists( 'ah_spa_platforma' ) ? ah_spa_platforma() : '' );
+	}
 	echo ah_spp_pagina_el( ah_spp_cfg_el( $x['mesaj'] ) ); // phpcs:ignore
 	exit;
 }
